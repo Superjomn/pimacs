@@ -21,6 +21,27 @@ def Lisp_ListOp : Lisp_Op<"list"> {
   let regions = (region SizedRegion<1>:$body);
 }
 
+def Lisp_CallOp : Lisp_Op<"call"> {
+    let summary = "call op";
+    let arguments = (ins StrAttr:$callee, Variadic<Value>:$inputs);
+    let results = (outs Value:$output);
+}
+
+def Lisp_ConstantOp : Lisp_Op<"constant"> {
+    let summary = "constant op";
+    let description = [{
+        Create a constant.
+    }];
+    let arguments = (ins AnyAttr:$value);
+    let results = (outs Value:$output);
+}
+
+//def List_MakeSymbolOp : Lisp_Op<"make_symbol"> {
+    ///let summary = "Create a symbol";
+    ///let arguments = (ins StrAttr:$name);
+    ///let results = (outs Symbol:$symbol);
+//}
+
 def Lisp_ReturnOp : Lisp_Op<"ret", [HasParent<"ListOp">, Terminator, SameOperandsAndResultType]> {
     let summary = "return operation";
     let description = [{ }];
