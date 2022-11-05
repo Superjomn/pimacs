@@ -1,0 +1,4 @@
+#ifndef PYIMACS_LISP_ATTR_DEFS
+#define PYIMACS_LISP_ATTR_DEFS
+
+#endif

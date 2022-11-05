@@ -1,0 +1,148 @@
+cmake_minimum_required(VERSION 3.6)
+include(ExternalProject)
+
+set(CMAKE_CXX_STANDARD 17)
+
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
+project(pyimacs)
+include(CTest)
+if(NOT WIN32)
+  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+endif()
+
+if(NOT CMAKE_BUILD_TYPE)
+  message(STATUS "Default build type: Debug")
+  set(CMAKE_BUILD_TYPE "Debug")
+endif()
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/pyimacs)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -D__STDC_FORMAT_MACROS  -fPIC -std=gnu++17 -fvisibility=hidden -fvisibility-inlines-hidden")
+if(APPLE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET 11.6)
+endif()
+
+##########
+# LLVM
+##########
+if (NOT MLIR_DIR)
+  if(NOT LLVM_LIBRARY_DIR)
+    if(WIN32)
+      find_package(LLVM 13 REQUIRED COMPONENTS nvptx amdgpu)
+
+      include_directories(${LLVM_INCLUDE_DIRS})
+      separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+      add_definitions(${LLVM_DEFINITIONS_LIST})
+
+      llvm_map_components_to_libnames(LLVM_LIBRARIES support core
+      )
+    else()
+      find_package(LLVM 11 REQUIRED)
+    endif()
+    message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+    if(APPLE)
+      set(CMAKE_OSX_DEPLOYMENT_TARGET "10.14")
+    endif()
+  # sometimes we don't want to use llvm-config, since it may have been downloaded for some specific linux distros
+  else()
+    set(LLVM_LDFLAGS "-L${LLVM_LIBRARY_DIR}")
+    set(LLVM_LIBRARIES
+      libLLVMMIRParser.a
+      libLLVMGlobalISel.a
+      libLLVMSelectionDAG.a
+      libLLVMipo.a
+      libLLVMInstrumentation.a
+      libLLVMVectorize.a
+      libLLVMLinker.a
+      libLLVMIRReader.a
+      libLLVMAsmParser.a
+      libLLVMFrontendOpenMP.a
+      libLLVMAsmPrinter.a
+      libLLVMDebugInfoDWARF.a
+      libLLVMCodeGen.a
+      libLLVMTarget.a
+      libLLVMScalarOpts.a
+      libLLVMInstCombine.a
+      libLLVMAggressiveInstCombine.a
+      libLLVMTransformUtils.a
+      libLLVMBitWriter.a
+      libLLVMAnalysis.a
+      libLLVMProfileData.a
+      libLLVMObject.a
+      libLLVMTextAPI.a
+      libLLVMBitReader.a
+      libLLVMAMDGPUAsmParser.a
+      libLLVMMCParser.a
+      libLLVMAMDGPUDesc.a
+      libLLVMAMDGPUUtils.a
+      libLLVMMC.a
+      libLLVMDebugInfoCodeView.a
+      libLLVMDebugInfoMSF.a
+      libLLVMCore.a
+      libLLVMRemarks.a
+      libLLVMBitstreamReader.a
+      libLLVMBinaryFormat.a
+      libLLVMAMDGPUInfo.a
+      libLLVMSupport.a
+      libLLVMDemangle.a
+      libLLVMPasses.a
+      libLLVMAnalysis.a
+      libLLVMTransformUtils.a
+      libLLVMScalarOpts.a
+      libLLVMTransformUtils.a
+      libLLVMipo.a
+      libLLVMObjCARCOpts.a
+      libLLVMCoroutines.a
+      libLLVMAnalysis.a
+    )
+  endif()
+  set (MLIR_DIR ${LLVM_LIBRARY_DIR}/cmake/mlir)
+endif()
+
+# if(TRITON_BUILD_PYTHON_MODULE)
+#     message(STATUS "Adding Python module")
+#     set(PYTHON_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/python/src)
+#     include_directories("." ${PYTHON_SRC_PATH})
+#     if (PYTHON_INCLUDE_DIRS)
+#       include_directories(${PYTHON_INCLUDE_DIRS})
+#     else()
+#       find_package(Python3 REQUIRED COMPONENTS Development)
+#       include_directories(${Python3_INCLUDE_DIRS})
+#       link_directories(${Python3_LIBRARY_DIRS})
+#       link_libraries(${Python3_LIBRARIES})
+#       add_link_options(${Python3_LINK_OPTIONS})
+#     endif()
+#     set(PYTHON_SRC ${PYTHON_SRC_PATH}/main.cc ${PYTHON_SRC_PATH}/triton.cc)
+# endif()
+
+# MLIR
+find_package(MLIR REQUIRED CONFIG PATHS ${MLIR_DIR})
+
+list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
+list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+
+include(TableGen) # required by AddMLIR
+include(AddLLVM)
+include(AddMLIR)
+
+# include external libs
+set(THIRD_PARTY_PATH "${CMAKE_BINARY_DIR}/3rds")
+include(cmake/core.cmake)
+include(cmake/external/gflags.cmake)
+include(cmake/external/glog.cmake)
+include(cmake/external/pybind11.cmake)
+
+# Disable warnings that show up in external code (gtest;pybind11)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-covered-switch-default")
+
+include_directories(${MLIR_INCLUDE_DIRS})
+include_directories(${LLVM_INCLUDE_DIRS})
+
+include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_BINARY_DIR})
+
+add_subdirectory(pyimacs)
+
+get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
+get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
