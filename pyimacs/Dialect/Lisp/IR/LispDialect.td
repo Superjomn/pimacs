@@ -13,6 +13,10 @@ def Lisp_Dialect : Dialect {
     let description = [{ }];
 
     let dependentDialects = [ ];
+
+    let extraClassDeclaration = [{
+        void registerTypes();
+    }];
 }
 
 include "pyimacs/Dialect/Lisp/IR/LispTypes.td"

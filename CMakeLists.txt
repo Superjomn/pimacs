@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.6)
 include(ExternalProject)
+#cmake_policy("CMP0116)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -127,10 +128,10 @@ include(AddLLVM)
 include(AddMLIR)
 
 # include external libs
-set(THIRD_PARTY_PATH "${CMAKE_BINARY_DIR}/3rds")
+set(THIRD_PARTY_PATH ${CMAKE_BINARY_DIR}/thirds)
 include(cmake/core.cmake)
-include(cmake/external/gflags.cmake)
-include(cmake/external/glog.cmake)
+#include(cmake/external/gflags.cmake)
+#include(cmake/external/glog.cmake)
 include(cmake/external/pybind11.cmake)
 
 # Disable warnings that show up in external code (gtest;pybind11)
@@ -141,6 +142,7 @@ include_directories(${LLVM_INCLUDE_DIRS})
 
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_BINARY_DIR})
+include_directories(${CMAKE_BINARY_DIR})
 
 add_subdirectory(pyimacs)
 

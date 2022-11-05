@@ -21,4 +21,14 @@ def Lisp_ListOp : Lisp_Op<"list"> {
   let regions = (region SizedRegion<1>:$body);
 }
 
+def Lisp_ReturnOp : Lisp_Op<"ret", [HasParent<"ListOp">, Terminator, SameOperandsAndResultType]> {
+    let summary = "return operation";
+    let description = [{ }];
+    let arguments = (ins Value:$input);
+    let results = (outs Value:$output);
+
+    //let parser = [{ return mlir::pyimacs::parseReturnOp(parser, result); }];
+    //let printer = [{ return mlir::pyimacs::printReturnOp(p, *this); }];
+}
+
 #endif

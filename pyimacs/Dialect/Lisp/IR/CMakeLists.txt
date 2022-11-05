@@ -11,3 +11,16 @@ mlir_tablegen(Types.h.inc -gen-typedef-decls)
 mlir_tablegen(Types.cpp.inc -gen-typedef-defs)
 
 add_public_tablegen_target(LispTableGen)
+add_mlir_dialect_library(LispIR
+  Dialect.cc
+  Types.cc
+
+  DEPENDS
+  LispTableGen
+
+  LINK_LIBS PUBLIC
+  MLIRIR
+  MLIRArithmetic
+  MLIRSCF
+  MLIRStandard
+)
