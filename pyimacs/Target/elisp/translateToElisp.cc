@@ -7,6 +7,7 @@
 #include "mlir/IR/Operation.h"
 #include "mlir/Support/IndentedOstream.h"
 #include "mlir/Target/Cpp/CppEmitter.h"
+#include "pyimacs/Dialect/Lisp/IR/Dialect.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -44,6 +45,12 @@ struct ElispEmitter {
     ElispEmitter &emitter;
   };
 
+  LogicalResult emitOperands(Operation &op);
+
+  bool hasValueInScope(Value val) const { return valueMapper.count(val); }
+
+  raw_indented_ostream &ostream() { return os; };
+
 private:
   using ValueMapper = llvm::ScopedHashTable<Value, std::string>;
   using BlockMapper = llvm::ScopedHashTable<Block *, std::string>;
@@ -77,10 +84,49 @@ StringRef ElispEmitter::getOrCreateName(Block &block) {
   return *blockMapper.begin(&block);
 }
 
-// Print ops
-static LogicalResult printOperation(ElispEmitter &emitter, scf::IfOp ifOp) {}
+LogicalResult ElispEmitter::emitOperands(mlir::Operation &op) {
+  auto emitOperandName = [&](Value result) -> LogicalResult {
+    if (!hasValueInScope(result))
+      return op.emitOpError() << "operand not in scope";
+    os << getOrCreateName(result);
+    return success();
+  };
 
-static LogicalResult printOperation(ElispEmitter &emitter, arith::AddIOp op) {}
+  auto operands = op.getOperands();
+  for (int i = 0; !operands.empty() && i < op.getOperands().size() - 1; i++) {
+    if (emitOperandName(operands[i]).failed())
+      return failure();
+    os << " ";
+  }
+  if (!operands.empty())
+    if (emitOperandName(operands.back()).failed())
+      return failure();
+
+  return success();
+}
+
+// Print ops
+
+static LogicalResult printOperation(ElispEmitter &emitter, scf::IfOp op) {
+  auto &os = emitter.ostream();
+
+  return success();
+}
+
+static LogicalResult printOperation(ElispEmitter &emitter, scf::ForOp op) {
+  return success();
+}
+static LogicalResult printOperation(ElispEmitter &emitter, pyimacs::CallOp op) {
+  auto &os = emitter.ostream();
+  os << "(";
+  os << op.callee();
+  if (!op.getOperands().empty())
+    os << " ";
+  if (failed(emitter.emitOperands(*op.getOperation())))
+    return failure();
+  os << ")";
+  return success();
+}
 
 } // namespace pyimacs
 } // namespace mlir

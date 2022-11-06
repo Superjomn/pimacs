@@ -1,4 +1,4 @@
-add_mlir_translation_library(PyIMacsElisp
+add_mlir_translation_library(ElispTranslation
         translateToElisp.cc
 
         LINK_COMPONENTS
