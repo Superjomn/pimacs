@@ -24,6 +24,8 @@ if(APPLE)
   set(CMAKE_OSX_DEPLOYMENT_TARGET 11.6)
 endif()
 
+option(PYIMACS_BUILD_PYTHON_MODULE "Build Python binding" ON)
+
 ##########
 # LLVM
 ##########
@@ -101,21 +103,17 @@ if (NOT MLIR_DIR)
   set (MLIR_DIR ${LLVM_LIBRARY_DIR}/cmake/mlir)
 endif()
 
-# if(TRITON_BUILD_PYTHON_MODULE)
-#     message(STATUS "Adding Python module")
-#     set(PYTHON_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/python/src)
-#     include_directories("." ${PYTHON_SRC_PATH})
-#     if (PYTHON_INCLUDE_DIRS)
-#       include_directories(${PYTHON_INCLUDE_DIRS})
-#     else()
-#       find_package(Python3 REQUIRED COMPONENTS Development)
-#       include_directories(${Python3_INCLUDE_DIRS})
-#       link_directories(${Python3_LIBRARY_DIRS})
-#       link_libraries(${Python3_LIBRARIES})
-#       add_link_options(${Python3_LINK_OPTIONS})
-#     endif()
-#     set(PYTHON_SRC ${PYTHON_SRC_PATH}/main.cc ${PYTHON_SRC_PATH}/triton.cc)
-# endif()
+#if("${PYIMACS_BUILD_PYTHON_MODULE}")
+    message(STATUS "Adding Python module")
+    set(PYTHON_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/python/src)
+    include_directories("." ${PYTHON_SRC_PATH})
+    find_package(Python3 REQUIRED COMPONENTS Development)
+    include_directories(${Python3_INCLUDE_DIRS})
+    link_directories(${Python3_LIBRARY_DIRS})
+    link_libraries(${Python3_LIBRARIES})
+    add_link_options(${Python3_LINK_OPTIONS})
+    set(PYTHON_SRC ${PYTHON_SRC_PATH}/pyimacs.cc)
+#endif()
 
 # MLIR
 find_package(MLIR REQUIRED CONFIG PATHS ${MLIR_DIR})
@@ -135,7 +133,8 @@ include(cmake/core.cmake)
 include(cmake/external/pybind11.cmake)
 
 # Disable warnings that show up in external code (gtest;pybind11)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-covered-switch-default")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-covered-switch-default")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-covered-switch-default")
 
 include_directories(${MLIR_INCLUDE_DIRS})
 include_directories(${LLVM_INCLUDE_DIRS})
@@ -148,3 +147,15 @@ add_subdirectory(pyimacs)
 
 get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
+
+add_library(pyimacs SHARED ${PYTHON_SRC})
+target_link_libraries(pyimacs
+        LispIR
+        ElispTranslation
+        pybind
+        ${dialect_libs}
+        ${conversion_libs}
+        MLIRPass
+        MLIRSupport
+        MLIRIR
+        )
