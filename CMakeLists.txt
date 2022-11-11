@@ -159,3 +159,13 @@ target_link_libraries(pyimacs
         MLIRSupport
         MLIRIR
         )
+target_link_options(pyimacs PRIVATE ${LLVM_LDFLAGS})
+
+if(NOT WIN32)
+    set(CMAKE_SHARED_LIBRARY_SUFFIX ".so")
+    # Check if the platform is MacOS
+    if(APPLE)
+        set(PYTHON_LDFLAGS "-undefined dynamic_lookup -flto")
+    endif()
+    target_link_libraries(pyimacs ${PYTHON_LDFLAGS})
+endif()

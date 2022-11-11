@@ -1,4 +1,4 @@
-from pyimacs._C.libpyimacs.pyimacs import ir
+from pyimacs._C import ir
 
 from . import core as pl
 
