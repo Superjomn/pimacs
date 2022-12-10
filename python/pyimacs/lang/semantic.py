@@ -1,6 +1,8 @@
-from pyimacs._C import ir
+from pyimacs._C.libpyimacs import pyimacs
 
 from . import core as pl
+
+ir = pyimacs.ir
 
 
 def add(a: pl.Value, b: pl.Value, builder: ir.builder) -> pl.Value:

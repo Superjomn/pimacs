@@ -328,5 +328,10 @@ LogicalResult translateToElisp(Operation *op, llvm::raw_ostream &os) {
   return emitter.emitOperation(*op);
 }
 
+LogicalResult translateToElisp(ModuleOp *op, raw_ostream &os) {
+  ElispEmitter emitter(os);
+  return printOperation(emitter, *op);
+}
+
 } // namespace pyimacs
 } // namespace mlir

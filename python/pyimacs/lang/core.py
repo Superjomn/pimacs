@@ -1,5 +1,8 @@
+from dataclasses import dataclass
 from enum import Enum
 from typing import *
+
+from pyimacs._C.libpyimacs.pyimacs import ir
 
 
 class TypeKind(Enum):
@@ -11,6 +14,11 @@ class TypeKind(Enum):
     VOID = 5
 
 
+@dataclass(init=True,
+           repr=True,
+           eq=True,
+           unsafe_hash=True,
+           order=True)
 class DataType:
     name2kind = {
         'int': TypeKind.INT,
@@ -21,8 +29,10 @@ class DataType:
         'void': TypeKind.VOID,
     }
 
-    def __int__(self, name: str):
-        self.dtype = DataType.name2kind.get(name)
+    name: str
+
+    def dtype(self):
+        return DataType.name2kind.get(self.name)
 
     @property
     def is_int(self):
@@ -39,6 +49,16 @@ class DataType:
     @property
     def is_object(self):
         return self.dtype == TypeKind.OBJECT
+
+    def to_ir(self, builder: ir.builder) -> ir.type:
+        dic = {
+            "void": builder.get_void_ty(),
+            "int": builder.get_int64_ty(),
+            "float": builder.get_double_ty(),
+            "string": builder.get_string_ty(),
+        }
+        assert self.name in dic
+        return dic[self.name]
 
 
 Void = DataType("void")
@@ -66,3 +86,14 @@ def to_value(x, builder):
         return Value(builder.get_float32(x), Float)
     if isinstance(x, Value):
         return x
+
+
+class function_type(DataType):
+    def __init__(self, ret_types: List[DataType], param_types: List[DataType]):
+        self.ret_types = ret_types
+        self.param_types = param_types
+
+    def to_ir(self, builder: ir.builder):
+        ir_param_types = [ty.to_ir(builder) for ty in self.param_types]
+        ret_types = [ret_type.to_ir(builder) for ret_type in self.ret_types]
+        return builder.get_function_ty(ir_param_types, ret_types)

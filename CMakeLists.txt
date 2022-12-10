@@ -159,6 +159,7 @@ target_link_libraries(pyimacs
         MLIRSupport
         MLIRIR
         )
+add_dependencies(pyimacs LispTableGen)
 target_link_options(pyimacs PRIVATE ${LLVM_LDFLAGS})
 
 if(NOT WIN32)

@@ -1,1 +1,1 @@
-from libpyimacs import *
+from .libpyimacs import *

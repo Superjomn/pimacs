@@ -1,2 +1,2 @@
-from core import *
-from semantic import *
+from .core import *
+from .semantic import *

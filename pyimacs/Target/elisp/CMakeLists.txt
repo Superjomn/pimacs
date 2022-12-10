@@ -10,3 +10,4 @@ add_mlir_translation_library(ElispTranslation
         MLIRSupport
         MLIRTargetLLVMIRExport
         )
+add_dependencies(ElispTranslation LispTableGen)

@@ -7,6 +7,8 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
+#include "pyimacs/Dialect/Lisp/IR/Types.h"
+#include "pyimacs/Target/elisp/translateToElisp.h"
 
 #include <Python.h>
 #include <cctype>
@@ -32,7 +34,7 @@ void initPyimacsIR(py::module &m) {
   // Borrowed much code from OpenAI/triton triton.cc
   py::class_<mlir::MLIRContext>(m, "context")
       .def(py::init<>())
-      .def("load_triton", [](mlir::MLIRContext &self) {
+      .def("load_pyimacs", [](mlir::MLIRContext &self) {
         self.getOrLoadDialect<mlir::pyimacs::LispDialect>();
       });
 
@@ -55,7 +57,7 @@ void initPyimacsIR(py::module &m) {
              self.replaceAllUsesWith(newValue);
            });
 
-  py::class_<mlir::BlockArgument, mlir::Value>(m, "block_arguement");
+  py::class_<mlir::BlockArgument, mlir::Value>(m, "block_argument");
 
   py::class_<mlir::Region>(m, "region")
       .def("get_parent_region", &mlir::Region::getParentRegion, ret::reference)
@@ -362,6 +364,10 @@ void initBuilder(py::module &m) {
       .def(
           "get_double_ty",
           [](mlir::OpBuilder &self) -> mlir::Type { return self.getF64Type(); })
+      .def("get_string_ty",
+           [](mlir::OpBuilder &self) -> mlir::Type {
+             return mlir::pyimacs::StringType::get(self.getContext());
+           })
       .def("get_block_ty",
            [](mlir::OpBuilder &self, mlir::Type &elementType,
               std::vector<int64_t> &shape) -> mlir::Type {
@@ -376,8 +382,8 @@ void initBuilder(py::module &m) {
       // Ops
       .def("get_or_insert_function",
            [](mlir::OpBuilder &self, mlir::ModuleOp &module,
-              std::string &funcName, mlir::Type &funcType,
-              std::string &visibility) -> mlir::FuncOp {
+              const std::string &funcName, mlir::Type &funcType,
+              const std::string &visibility) -> mlir::FuncOp {
              if (mlir::Operation *funcOperation = module.lookupSymbol(funcName))
                return llvm::dyn_cast<mlir::FuncOp>(funcOperation);
              auto loc = self.getUnknownLoc();
@@ -494,6 +500,16 @@ void initBuilder(py::module &m) {
               ADD_CMP_OP(fcmpOEQ, CmpF, OEQ) ADD_CMP_OP(fcmpONE, CmpF, ONE);
 }
 
+void initTarget(py::module &m) {
+  m.def("to_lisp_code", [](mlir::ModuleOp &op) -> std::string {
+    std::string buf;
+    llvm::raw_string_ostream os(buf);
+    mlir::pyimacs::translateToElisp(&op, os);
+    os.flush();
+    return buf;
+  });
+}
+
 } // namespace pyimacs
 
 void initPyimas(py::module &m) {
@@ -501,6 +517,9 @@ void initPyimas(py::module &m) {
   auto ir = pyimacs.def_submodule("ir");
   pyimacs::initPyimacsIR(ir);
   pyimacs::initBuilder(ir);
+
+  auto target = pyimacs.def_submodule("target");
+  pyimacs::initTarget(target);
 }
 
 PYBIND11_MODULE(libpyimacs, m) {
