@@ -36,6 +36,7 @@ void initPyimacsIR(py::module &m) {
       .def(py::init<>())
       .def("load_pyimacs", [](mlir::MLIRContext &self) {
         self.getOrLoadDialect<mlir::pyimacs::LispDialect>();
+        self.loadAllAvailableDialects();
       });
 
   py::class_<mlir::Type>(m, "type")

@@ -12,7 +12,12 @@ def Lisp_Dialect : Dialect {
 
     let description = [{ }];
 
-    let dependentDialects = [ ];
+    let dependentDialects = [
+        "arith::ArithmeticDialect",
+        "math::MathDialect",
+        "StandardOpsDialect",
+        "scf::SCFDialect",
+    ];
 
     let extraClassDeclaration = [{
         void registerTypes();

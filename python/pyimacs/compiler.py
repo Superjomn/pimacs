@@ -22,7 +22,10 @@ class CodeGenerator(ast.NodeVisitor):
 
         self.function_name = function_name
         self.gscope = gscope
-        self.lscope: Dict[str, Any] = dict()
+        self.lscope: Dict[str, Any] = {
+            'int': int,
+            'float': float,
+        }
         self.local_defs: Dict[str, pyl.Value] = {}
         self.global_uses: Dict[str, pyl.Value] = {}
 
@@ -106,7 +109,9 @@ class CodeGenerator(ast.NodeVisitor):
         arg_names = []
         for arg in node.args:
             arg_names += [self.visit(arg)]
-        kwarg_names = self.visit(node.kwarg)
+        kwarg_names = []
+        if node.kwarg:
+            kwarg_names = self.visit(node.kwarg)
         return arg_names, kwarg_names
 
     def visit_arg(self, node):
@@ -176,6 +181,16 @@ class CodeGenerator(ast.NodeVisitor):
             return node.id
         return self.get_value(node.id)
 
+    def visit_compound_statement(self, stmts):
+        for stmt in stmts:
+            self.last_ret_type = self.visit(stmt)
+            if isinstance(stmt, ast.Return):
+                break
+        return stmts and isinstance(stmt, ast.Return)
+
+    def visit_Pass(self, node: ast.Pass) -> Any:
+        pass
+
     def visit(self, node):
         if node is not None:
             self.last_node = node
@@ -189,6 +204,8 @@ class CodeGenerator(ast.NodeVisitor):
             return super().visit(node)
 
     def generic_visit(self, node: ast.AST) -> Any:
+        if node is None:
+            return None
         typename = type(node).__name__
         raise NotImplementedError(f"Unsupported node: {typename}")
 
@@ -228,7 +245,9 @@ def str_to_ty(name):
         "i": pyl.Int,
         "b": pyl.Bool,
         "s": pyl.String,
+        "void": pyl.Void,
     }
+    assert name in tys
     return tys[name]
 
 
@@ -246,29 +265,40 @@ class CompilationError(Exception):
         return (type(self), (self.src, self.node))
 
 
-def build_pyimacs_ir(fn, signature, specialization):
-    if isinstance(signature, str):
-        signature = {k: v.strip() for k, v in enumerate(signature.split(","))}
+def get_function_type_from_signature(signature: str) -> pyl.FunctionType:
+    '''
+    signature: "i,f -> void"
+    '''
+    input, output = signature.split("->")
+    ins = [str_to_ty(ty) for ty in input.strip().split(",")]
+    ous = [str_to_ty(ty) for ty in output.strip().split(",")]
+    return pyl.FunctionType(ret_types=ous, param_types=ins)
+
+
+def build_pyimacs_ir(fn, signature: str, specialization):
+    '''
+    signature: str, "i,f -> v"
+    '''
     context = ir.context()
     context.load_pyimacs()
+
     # create kernel prototype
     def cst_key(i): return fn.arg_names.index(i) if isinstance(i, str) else i
+
     # visit kernel AST
     gscope = fn.__globals__.copy()
     function_name = fn.__name__
-    tys = list(signature.values())
-    arg_types = [str_to_ty(v) for k, v in signature.items()]
 
-    prototype = pyl.function_type(ret_types=[], param_types=arg_types)
+    prototype = get_function_type_from_signature(signature)
     generator = CodeGenerator(context, prototype, gscope=gscope, function_name=function_name,
                               is_kernel=True)
-    try:
-        generator.visit(fn.parse())
-    except Exception as e:
-        node = generator.last_node
-        if node is None or isinstance(e, (NotImplementedError, CompilationError)):
-            raise e
-        raise CompilationError(fn.src, node) from e
+    generator.visit(fn.parse())
+    # try:
+    # except Exception as e:
+    # node = generator.last_node
+    # if node is None or isinstance(e, (NotImplementedError, CompilationError)):
+    # raise e
+    # raise CompilationError(fn.src, node) from e
     ret = generator.module
     # module takes ownership of the context
     ret.context = context

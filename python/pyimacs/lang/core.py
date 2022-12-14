@@ -88,12 +88,14 @@ def to_value(x, builder):
         return x
 
 
-class function_type(DataType):
-    def __init__(self, ret_types: List[DataType], param_types: List[DataType]):
-        self.ret_types = ret_types
-        self.param_types = param_types
+@dataclass(init=True, repr=True)
+class FunctionType(DataType):
+    ret_types: List[DataType]
+    param_types: List[DataType]
+    name: ClassVar[str] = "function_type"
 
     def to_ir(self, builder: ir.builder):
         ir_param_types = [ty.to_ir(builder) for ty in self.param_types]
         ret_types = [ret_type.to_ir(builder) for ret_type in self.ret_types]
+
         return builder.get_function_ty(ir_param_types, ret_types)
