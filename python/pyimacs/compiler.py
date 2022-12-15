@@ -56,7 +56,7 @@ class CodeGenerator(ast.NodeVisitor):
         else:
             ret = pyl.to_value(ret_value, self.builder)
             self.builder.ret([ret.handle])
-            return ret.type
+            return ret.dtype
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
         arg_names, kwarg_names = self.visit(node.args)
@@ -101,6 +101,7 @@ class CodeGenerator(ast.NodeVisitor):
                 fn.reset_type(self.prototype.to_ir(self.builder))
             else:
                 self.prototype.ret_types = [self.last_ret_type]
+                print('prototype', self.prototype)
                 fn.reset_type(self.prototype.to_ir(self.builder))
         if insert_pt:
             self.builder.set_insertion_point_to_end(insert_pt)
@@ -155,10 +156,10 @@ class CodeGenerator(ast.NodeVisitor):
         lhs = self.visit(node.left)
         rhs = self.visit(node.right)
         fn = {
-            ast.Add: '__add__',
-            ast.Sub: '__sub__',
-            ast.Mult: '__mul__',
-            ast.Div: '__truediv__',
+            ast.Add: 'add',
+            ast.Sub: 'sub',
+            ast.Mult: 'mul',
+            ast.Div: 'div',
             ast.FloorDiv: '__floordiv__',
             ast.Mod: '__mod__',
             ast.Pow: '__pow__',
@@ -168,10 +169,7 @@ class CodeGenerator(ast.NodeVisitor):
             ast.BitOr: '__or__',
             ast.BitXor: '__xor__',
         }[type(node.op)]
-        if self.is_value(lhs):
-            return getattr(lhs, fn)(rhs, _builder=self.builder)
-        else:
-            return getattr(lhs, fn)(rhs)
+        return getattr(pyl, fn)(lhs, rhs, builder=self.builder)
 
     def visit_Expr(self, node):
         ast.NodeVisitor.generic_visit(self, node)
@@ -180,6 +178,9 @@ class CodeGenerator(ast.NodeVisitor):
         if type(node.ctx) == ast.Store:
             return node.id
         return self.get_value(node.id)
+
+    def visit_Constant(self, node: ast.Constant) -> Any:
+        return pyl.constant(node.value, self.builder)
 
     def visit_compound_statement(self, stmts):
         for stmt in stmts:
@@ -226,6 +227,7 @@ def compile(fn: JITFunction, **kwargs):
     kwargs["signature"] = signature
 
     mod = translate_ast_to_lispir(fn, signature, specialization=None)
+    print('mod', mod)
     lisp_code = translate_lispir_to_lispcode(mod)
     return lisp_code
 

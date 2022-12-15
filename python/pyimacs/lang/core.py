@@ -31,6 +31,7 @@ class DataType:
 
     name: str
 
+    @property
     def dtype(self):
         return DataType.name2kind.get(self.name)
 

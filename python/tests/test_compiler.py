@@ -8,4 +8,18 @@ def test_empty_kernel():
     def some_fn(a: int):
         pass
 
-    compiler.compile(some_fn, signature="i -> void")
+    code = compiler.compile(some_fn, signature="i -> void")
+    print(code)
+
+
+def test_naive_kernel():
+    @jit
+    def some_fn(a: int):
+        b = (a + 1) * 23
+        return b + 1
+
+    code = compiler.compile(some_fn, signature="i -> i")
+    print(code)
+
+
+test_naive_kernel()

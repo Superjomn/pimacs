@@ -466,7 +466,7 @@ void initBuilder(py::module &m) {
               ADD_BINARY_OP(fsub, SubF)
 
       // int type
-      ADD_BINARY_OP(mul, MulI) ADD_BINARY_OP(udiv, DivUI)
+      ADD_BINARY_OP(mul, MulI) ADD_BINARY_OP(div, DivUI)
           ADD_BINARY_OP(add, AddI) ADD_BINARY_OP(sub, SubI)
 
 #define ADD_CMP_OP(api__, op__, enum__)                                        \

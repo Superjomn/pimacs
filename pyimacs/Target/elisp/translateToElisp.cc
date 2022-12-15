@@ -286,6 +286,28 @@ static LogicalResult printOperation(ElispEmitter &emitter, mlir::ReturnOp op) {
   return success();
 }
 
+#define PRINT_BINARY_OP(node_type__, op__)                                     \
+  static LogicalResult printOperation(ElispEmitter &emitter,                   \
+                                      mlir::arith::node_type__ op) {           \
+    auto &os = emitter.ostream();                                              \
+    if (failed(emitter.emitVariableAssignment(op->getResult(0))))              \
+      return failure();                                                        \
+    os << "(" #op__ " ";                                                       \
+    os << emitter.getOrCreateName(op.getLhs());                                \
+    os << " ";                                                                 \
+    os << emitter.getOrCreateName(op.getRhs());                                \
+    os << "))\n";                                                              \
+    return success();                                                          \
+  }
+PRINT_BINARY_OP(AddIOp, +)
+PRINT_BINARY_OP(AddFOp, +)
+PRINT_BINARY_OP(SubIOp, -)
+PRINT_BINARY_OP(SubFOp, -)
+PRINT_BINARY_OP(MulIOp, *)
+PRINT_BINARY_OP(MulFOp, *)
+PRINT_BINARY_OP(DivSIOp, /)
+PRINT_BINARY_OP(DivFOp, /)
+
 static LogicalResult printOperation(ElispEmitter &emitter,
                                     arith::ConstantOp op) {
   auto &os = emitter.ostream();
@@ -312,12 +334,15 @@ static LogicalResult printOperation(ElispEmitter &emitter, ModuleOp moduleOp) {
 }
 
 LogicalResult ElispEmitter::emitOperation(mlir::Operation &op) {
-  llvm::outs() << "op: " << op << "\n";
   LogicalResult result =
       llvm::TypeSwitch<Operation *, LogicalResult>(&op)
           .Case<CallOp, arith::ConstantOp>(
               [&](auto op) { return printOperation(*this, op); })
           .Case<mlir::ReturnOp, mlir::ModuleOp, mlir::FuncOp>(
+              [&](auto op) { return printOperation(*this, op); })
+          .Case<mlir::arith::AddIOp, mlir::arith::AddFOp, mlir::arith::SubIOp,
+                mlir::arith::SubFOp, mlir::arith::MulIOp, mlir::arith::MulFOp,
+                mlir::arith::DivSIOp, mlir::arith::DivFOp>(
               [&](auto op) { return printOperation(*this, op); });
 
   return result;
