@@ -1,3 +1,4 @@
+import pyimacs.lang as pyl
 from pyimacs.runtime import jit
 
 from pyimacs import compiler
@@ -22,4 +23,29 @@ def test_naive_kernel():
     print(code)
 
 
-test_naive_kernel()
+def test_kernel_with_if():
+    @jit
+    def some_fn(a: int):
+        a = a + 1
+        if True:
+            return a
+        # NOTE: Currently, buggy with the return statements within ifOp, we could resolve it by adding a pass to move
+        # the statements outside the IfOp(wth return) to else region.
+        return a + 1
+
+    code = compiler.compile(some_fn, signature="i -> i")
+    print(code)
+
+
+def test_kernel_external_call():
+    @jit
+    def some_fn():
+        buffer = pyl.Buffer("*a-buffer*")
+        name = buffer.name()
+        return name
+
+    code = compiler.compile(some_fn, signature="void -> s")
+    print(code)
+
+
+test_kernel_external_call()

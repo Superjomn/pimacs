@@ -13,6 +13,7 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/FormatVariadic.h"
 
 namespace mlir {
@@ -190,8 +191,56 @@ LogicalResult ElispEmitter::emitOperands(mlir::Operation &op) {
 // Print ops
 
 static LogicalResult printOperation(ElispEmitter &emitter, scf::IfOp op) {
-  auto &os = emitter.ostream();
+  raw_indented_ostream &os = emitter.ostream();
 
+  os << "(if ";
+  if (failed(emitter.emitOperands(*op.getOperation())))
+    return failure();
+  os.indent();
+  Region &thenRegion = op.getThenRegion();
+  for (Operation &op : thenRegion.getOps()) {
+    // Note: This prints a superfluous semicolon if the terminating yield op has
+    // zero results.
+    if (failed(emitter.emitOperation(op)))
+      return failure();
+  }
+  os << ")\n";
+  os.unindent();
+
+  Region &elseRegion = op.getElseRegion();
+  if (!elseRegion.empty()) {
+    os << "(let* (\n";
+    os.indent();
+
+    for (Operation &op : elseRegion.getOps()) {
+      // Note: This prints a superfluous semicolon if the terminating yield op
+      // has zero results.
+      if (failed(emitter.emitOperation(op)))
+        return failure();
+    }
+
+    os.unindent();
+    os.unindent() << ")";
+  }
+
+  return success();
+}
+
+static LogicalResult printOperation(ElispEmitter &emitter,
+                                    scf::YieldOp yieldOp) {
+  raw_ostream &os = emitter.ostream();
+  Operation &parentOp = *yieldOp.getOperation()->getParentOp();
+
+  if (yieldOp.getNumOperands() != parentOp.getNumResults()) {
+    return yieldOp.emitError("number of operands does not to match the number "
+                             "of the parent op's results");
+  }
+
+  for (auto [res, tmp] :
+       llvm::zip(parentOp.getResults(), yieldOp.getOperands())) {
+    os << "(setq " << emitter.getOrCreateName(res) << " "
+       << emitter.getOrCreateName(tmp);
+  }
   return success();
 }
 
@@ -340,10 +389,17 @@ LogicalResult ElispEmitter::emitOperation(mlir::Operation &op) {
               [&](auto op) { return printOperation(*this, op); })
           .Case<mlir::ReturnOp, mlir::ModuleOp, mlir::FuncOp>(
               [&](auto op) { return printOperation(*this, op); })
+          .Case<scf::IfOp, scf::YieldOp>(
+              [&](auto op) { return printOperation(*this, op); })
           .Case<mlir::arith::AddIOp, mlir::arith::AddFOp, mlir::arith::SubIOp,
                 mlir::arith::SubFOp, mlir::arith::MulIOp, mlir::arith::MulFOp,
                 mlir::arith::DivSIOp, mlir::arith::DivFOp>(
-              [&](auto op) { return printOperation(*this, op); });
+              [&](auto op) { return printOperation(*this, op); })
+          .Default([](Operation *op) {
+            llvm::report_fatal_error(llvm::formatv(
+                "Unsupported Op translation: {0}", op->getName()));
+            return failure();
+          });
 
   return result;
 }

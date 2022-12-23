@@ -1,4 +1,6 @@
 import ast
+import inspect
+import sys
 import warnings
 from typing import *
 
@@ -33,7 +35,7 @@ class CodeGenerator(ast.NodeVisitor):
         if name in self.lscope:
             return self.lscope[name]
         if name in self.gscope:
-            return self.gscope
+            return self.gscope[name]
         raise ValueError(f'{name} is not defined')
 
     def set_value(self, name: str, value) -> None:
@@ -147,8 +149,10 @@ class CodeGenerator(ast.NodeVisitor):
         if not isinstance(values, tuple):
             values = [values]
         for name, value in zip(names, values):
+            if isinstance(value, pyl.ElispClass):
+                pass
             # by default, constexpr are assigned into python variable
-            if not isinstance(value, pyl.Value):
+            elif not isinstance(value, pyl.Value):
                 value = pyl.to_value(value, self.builder)
             self.set_value(name, value)
 
@@ -182,6 +186,56 @@ class CodeGenerator(ast.NodeVisitor):
     def visit_Constant(self, node: ast.Constant) -> Any:
         return pyl.constant(node.value, self.builder)
 
+    def visit_Call(self, node):
+        fn = self.visit(node.func)
+        print('fn', fn)
+        kws = dict()
+        for keyword in node.keywords:
+            kws.update(self.visit(keyword))
+        args = [self.visit(arg) for arg in node.args]
+        if isinstance(fn, pyl.ExternalCallable):
+            # NOTE the builder is injected automatically, which is transparent to user.
+            return fn(args, builder=self.builder)
+        if inspect.isclass(fn) and issubclass(fn, pyl.ElispClass):
+            return fn(args, builder=self.builder)
+        if isinstance(fn, JITFunction):
+            from inspect import getcallargs
+            args = getcallargs(fn.fn, *args, **kws)
+            args = [args[name] for name in fn.arg_names]
+            # generate function def
+            attributes = dict()
+            # generate call
+            arg_vals = [arg.handle for arg in args if arg is not None]
+            arg_types = [arg.type for arg in args if arg is not None]
+            fn_name = fn.__name__
+            # generate function def if necessary
+            if not self.module.has_function(fn_name):
+                prototype = pyl.function_type([], arg_types)
+                gscope = sys.modules[fn.fn.__module__].__dict__
+                generator = CodeGenerator(self.builder.context, prototype, gscope, attributes, module=self.module,
+                                          function_name=fn_name, function_types=self.function_ret_types)
+                generator.visit(fn.parse())
+                callee_ret_type = generator.last_ret_type
+                self.function_ret_types[fn_name] = callee_ret_type
+            else:
+                callee_ret_type = self.function_ret_types[fn_name]
+            symbol = self.module.get_function(fn_name)
+            call_op = self.builder.call(symbol, arg_vals)
+            if call_op.get_num_results() == 0 or callee_ret_type is None:
+                return None
+            elif call_op.get_num_results() == 1:
+                return pyl.Value(call_op.get_result(0), callee_ret_type)
+            else:
+                # should return a tuple of tl.tensor
+                results = []
+                for i in range(call_op.get_num_results()):
+                    results.append(
+                        pyl.Value(call_op.get_result(i), callee_ret_type[i]))
+                return tuple(results)
+            # TODO: Process the builtin fuction, should eval inplace.
+        print('visit_Call: args', args)
+        return fn(*args, **kws)
+
     def visit_compound_statement(self, stmts):
         for stmt in stmts:
             self.last_ret_type = self.visit(stmt)
@@ -191,6 +245,106 @@ class CodeGenerator(ast.NodeVisitor):
 
     def visit_Pass(self, node: ast.Pass) -> Any:
         pass
+
+    def visit_If(self, node):
+        cond = self.visit(node.test)
+        if isinstance(cond, pyl.Value):
+            cond = pyl.bitcast(cond, pyl.Bool, builder=self.builder)
+            with enter_sub_region(self) as sr:
+                liveins, ip_block = sr
+                liveins_copy = liveins.copy()
+                then_block = self.builder.create_block()
+                self.builder.set_insertion_point_to_start(then_block)
+                self.visit_compound_statement(node.body)
+                then_defs = self.local_defs.copy()
+
+                # when need an else block when:
+                # 1. we have an orelse node
+                #   or
+                # 2. the then block defines new variable
+                else_defs = {}
+                if then_defs or node.orelse:
+                    if node.orelse:
+                        self.lscope = liveins
+                        self.local_defs = {}
+                        else_block = self.builder.create_block()
+                        self.builder.set_insertion_point_to_end(else_block)
+                        self.visit_compound_statement(node.orelse)
+                        else_defs = self.local_defs.copy()
+                    else:
+                        # collect else_defs
+                        for name in then_defs:
+                            if name in liveins:
+                                assert self.is_triton_tensor(then_defs[name])
+                                assert self.is_triton_tensor(liveins[name])
+                                else_defs[name] = liveins[name]
+                # collect yields
+                names = []
+                ret_types = []
+                for then_name in then_defs:
+                    for else_name in else_defs:
+                        if then_name == else_name:
+                            if then_defs[then_name].type == else_defs[else_name].type:
+                                names.append(then_name)
+                                ret_types.append(then_defs[then_name].type)
+
+                # defined in else block but not in then block
+                # to find in parent scope and yield them
+                for else_name in else_defs:
+                    if else_name in liveins and else_name not in then_defs:
+                        if else_defs[else_name].type == liveins[else_name].type:
+                            names.append(else_name)
+                            ret_types.append(else_defs[else_name].type)
+                            then_defs[else_name] = liveins_copy[else_name]
+                self.builder.set_insertion_point_to_end(ip_block)
+
+                if then_defs or node.orelse:  # with else block
+                    if_op = self.builder.create_if_op(
+                        [ty.to_ir(self.builder) for ty in ret_types], cond.handle, True)
+                    then_block.merge_block_before(if_op.get_then_block())
+                    self.builder.set_insertion_point_to_end(
+                        if_op.get_then_block())
+                    if len(names) > 0:
+                        self.builder.create_yield_op(
+                            [then_defs[n].handle for n in names])
+                    if not node.orelse:
+                        else_block = if_op.get_else_block()
+                    else:
+                        else_block.merge_block_before(if_op.get_else_block())
+                    self.builder.set_insertion_point_to_end(
+                        if_op.get_else_block())
+                    if len(names) > 0:
+                        self.builder.create_yield_op(
+                            [else_defs[n].handle for n in names])
+                else:  # no else block
+                    if_op = self.builder.create_if_op(
+                        [ty.to_ir(self.builder) for ty in ret_types], cond.handle, False)
+                    then_block.merge_block_before(if_op.get_then_block())
+
+            # update values yielded by IfOp
+            for i, name in enumerate(names):
+                new_tensor = pyl.Value(if_op.get_result(i), ret_types[i])
+                self.lscope[name] = new_tensor
+                self.local_defs[name] = new_tensor
+
+        else:
+            if cond:
+                self.visit_compound_statement(node.body)
+            else:
+                self.visit_compound_statement(node.orelse)
+
+    def visit_IfExp(self, node):
+        cond = self.visit(node.test)
+        if cond.value:
+            return self.visit(node.body)
+        else:
+            return self.visit(node.orelse)
+
+    def visit_Attribute(self, node):
+        print('visit_attr: node.value: ', node.value)
+        lhs = self.visit(node.value)
+        print('lhs: ', lhs)
+        return getattr(lhs, node.attr)
 
     def visit(self, node):
         if node is not None:
@@ -305,3 +459,21 @@ def build_pyimacs_ir(fn, signature: str, specialization):
     # module takes ownership of the context
     ret.context = context
     return ret, generator
+
+
+class enter_sub_region:
+    def __init__(self, generator: CodeGenerator):
+        self.generator = generator
+
+    def __enter__(self):
+        # record lscope & local_defs in the parent scope
+        self.liveins = self.generator.lscope.copy()
+        self.prev_defs = self.generator.local_defs.copy()
+        self.generator.local_defs = {}
+        self.insert_block = self.generator.builder.get_insertion_block()
+        return self.liveins, self.insert_block
+
+    def __exit__(self, *args, **kwargs):
+        self.generator.builder.set_insertion_point_to_end(self.insert_block)
+        self.generator.lscope = self.liveins
+        self.generator.local_defs = self.prev_defs

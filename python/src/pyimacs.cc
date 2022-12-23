@@ -7,6 +7,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
+#include "pyimacs/Dialect/Lisp/IR/Dialect.h"
 #include "pyimacs/Dialect/Lisp/IR/Types.h"
 #include "pyimacs/Target/elisp/translateToElisp.h"
 
@@ -258,6 +259,15 @@ void initBuilder(py::module &m) {
              auto loc = self.getUnknownLoc();
              return self.create<mlir::CallOp>(loc, func, args);
            })
+      .def("extern_call",
+           [](mlir::OpBuilder &self, mlir::Type retType, std::string callee,
+              std::vector<mlir::Value> &args) -> mlir::OpState {
+             auto loc = self.getUnknownLoc();
+             auto calleeAttr =
+                 mlir::StringAttr::get(loc.getContext(), callee.data());
+             return self.create<mlir::pyimacs::CallOp>(loc, retType, calleeAttr,
+                                                       args);
+           })
       // insertion block/point
       .def("set_insertion_point_to_start",
            [](mlir::OpBuilder &self, mlir::Block &block) -> void {
@@ -306,6 +316,14 @@ void initBuilder(py::module &m) {
              return mlir::Value(self.create<mlir::arith::ConstantIntOp>(
                  loc, v, self.getI32Type()));
            })
+      .def("get_string",
+           [](mlir::OpBuilder &self, std::string v) -> mlir::Value {
+             auto loc = self.getUnknownLoc();
+             return mlir::Value(self.create<mlir::arith::ConstantOp>(
+                 loc, mlir::StringAttr::get(self.getContext(), v.data()),
+                 mlir::pyimacs::StringType::get(self.getContext())));
+           })
+
       // .def("get_uint32", &ir::builder::get_int32, ret::reference)
       // .def("get_int64", [](ir::builder *self, int64_t v) { return
       // self->get_int64((uint64_t)v); }, ret::reference) .def("get_uint64",
