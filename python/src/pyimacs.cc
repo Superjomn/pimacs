@@ -30,21 +30,21 @@ namespace py = pybind11;
 namespace pyimacs {
 using ret = py::return_value_policy;
 using namespace pybind11::literals;
+// Borrowed much code from OpenAI/triton triton.cc
 
-void initPyimacsIR(py::module &m) {
-  // Borrowed much code from OpenAI/triton triton.cc
-  py::class_<mlir::MLIRContext>(m, "context")
+void initMLIR(py::module &m) {
+  py::class_<mlir::MLIRContext>(m, "MLIRContext")
       .def(py::init<>())
       .def("load_pyimacs", [](mlir::MLIRContext &self) {
         self.getOrLoadDialect<mlir::pyimacs::LispDialect>();
         self.loadAllAvailableDialects();
       });
 
-  py::class_<mlir::Type>(m, "type")
+  py::class_<mlir::Type>(m, "Type")
       .def("is_integer", &mlir::Type::isInteger)
       .def("is_fp16", &mlir::Type::isF16);
 
-  py::class_<mlir::Value>(m, "value")
+  py::class_<mlir::Value>(m, "Value")
       .def("set_attr",
            [](mlir::Value &self, std::string &name,
               mlir::Attribute &attr) -> void {
@@ -59,14 +59,14 @@ void initPyimacsIR(py::module &m) {
              self.replaceAllUsesWith(newValue);
            });
 
-  py::class_<mlir::BlockArgument, mlir::Value>(m, "block_argument");
+  py::class_<mlir::BlockArgument, mlir::Value>(m, "BlockArgument");
 
-  py::class_<mlir::Region>(m, "region")
+  py::class_<mlir::Region>(m, "Region")
       .def("get_parent_region", &mlir::Region::getParentRegion, ret::reference)
       .def("size", [](mlir::Region &self) { return self.getBlocks().size(); })
       .def("empty", &mlir::Region::empty);
 
-  py::class_<mlir::Block>(m, "block")
+  py::class_<mlir::Block>(m, "Block")
       .def("arg",
            [](mlir::Block &self, int index) -> mlir::BlockArgument {
              return self.getArgument(index);
@@ -78,7 +78,6 @@ void initPyimacsIR(py::module &m) {
       .def("get_parent", &mlir::Block::getParent, ret::reference)
       .def("merge_block_before",
            [](mlir::Block &self, mlir::Block &dst) {
-             // ref: RewriterBase::mergeBlocks()
              if (self.getNumArguments() != 0)
                throw std::runtime_error(
                    "This block has arguments, don't merge");
@@ -101,9 +100,9 @@ void initPyimacsIR(py::module &m) {
         });
       });
 
-  py::class_<mlir::Attribute>(m, "attribute");
-  py::class_<mlir::IntegerAttr, mlir::Attribute>(m, "integer_attr");
-  py::class_<mlir::BoolAttr, mlir::Attribute>(m, "bool_attr");
+  py::class_<mlir::Attribute>(m, "Attribute");
+  py::class_<mlir::IntegerAttr, mlir::Attribute>(m, "IntegerAttr");
+  py::class_<mlir::BoolAttr, mlir::Attribute>(m, "BoolAttr");
 
   // Ops
   py::class_<mlir::OpState>(m, "OpState")
@@ -144,6 +143,48 @@ void initPyimacsIR(py::module &m) {
       .def("verify", [](mlir::OpState &self) -> bool {
         return mlir::succeeded(mlir::verify(self.getOperation()));
       });
+
+  // py::class_<mlir::OpOperand>(m, "OpOperand")
+  //     .def("__len__",
+  //          [](mlir::OpOperand &self) -> int { return self.getOperandNumber(); })
+  //     .def("__getitem__", [](mlir::Operation &self, int i) -> mlir::Value {
+  //       return self.getOperand(i);
+  //     });
+
+  py::class_<mlir::OpResult, mlir::Value>(m, "OpResult")
+      .def("result_number",
+           [](mlir::OpResult &self) { return self.getResultNumber(); });
+
+  class PyOpOperand {
+   public:
+    mlir::OpOperand *data{};
+    PyOpOperand(mlir::OpOperand &op) : data(&op) {}
+  };
+
+  py::class_<PyOpOperand>(m, "OpOperand")
+      .def("operand_number",
+           [](PyOpOperand &self) { self.data->getOperandNumber(); })
+      .def("get", [](PyOpOperand &self) -> mlir::Value { return self.data->get(); })
+      .def("__len__", [](PyOpOperand &self) -> int {
+        return self.data->getOperandNumber();
+      });
+
+  py::class_<mlir::Operation, std::unique_ptr<mlir::Operation, py::nodelete>>(
+      m, "Operation")
+      .def("operands",
+           [](mlir::Operation &self)->std::vector<mlir::Value> {
+             return std::vector<mlir::Value>(self.getOperands().begin(), self.getOperands().end());
+           })
+      .def("name",
+           [](mlir::Operation &self) -> std::string {
+             return self.getName().getStringRef().str();
+           })
+      .def("num_operands",
+           [](mlir::Operation &self) { return self.getNumOperands(); })
+      .def("get_operand", [](mlir::Operation &self, int id) -> PyOpOperand {
+        return PyOpOperand(self.getOpOperand(id));
+      });
+
   // scf Ops
   py::class_<mlir::scf::ForOp, mlir::OpState>(m, "ForOp")
       .def("get_induction_var", &mlir::scf::ForOp::getInductionVar);
@@ -161,7 +202,7 @@ void initPyimacsIR(py::module &m) {
 
   // dynamic_attr is used to transfer ownership of the MLIR context to the
   // module
-  py::class_<mlir::ModuleOp, mlir::OpState>(m, "module", py::dynamic_attr())
+  py::class_<mlir::ModuleOp, mlir::OpState>(m, "Module", py::dynamic_attr())
       .def("dump", &mlir::ModuleOp::dump)
       .def("str",
            [](mlir::ModuleOp &self) -> std::string {
@@ -183,7 +224,10 @@ void initPyimacsIR(py::module &m) {
       .def("get_function",
            [](mlir::ModuleOp &self, std::string &funcName) -> mlir::FuncOp {
              return self.lookupSymbol<mlir::FuncOp>(funcName);
-           });
+           })
+      .def("get_body", [](mlir::ModuleOp &self, int blockId) {
+        return self.getBody(blockId);
+      });
 
   m.def(
       "parse_mlir_module",
@@ -210,9 +254,7 @@ void initPyimacsIR(py::module &m) {
       },
       ret::take_ownership);
 
-  py::class_<mlir::FuncOp, mlir::OpState>(m, "function")
-      // .def_property_readonly("attrs", &ir::function::attrs)
-      // .def("add_attr", &ir::function::add_attr);
+  py::class_<mlir::FuncOp, mlir::OpState>(m, "Function")
       .def("args",
            [](mlir::FuncOp &self, unsigned idx) -> mlir::BlockArgument {
              return self.getArgument(idx);
@@ -236,9 +278,10 @@ void initPyimacsIR(py::module &m) {
   py::class_<mlir::OpBuilder::InsertPoint>(m, "InsertPoint");
 }
 
+
 void initBuilder(py::module &m) {
 
-  py::class_<mlir::OpBuilder>(m, "builder", py::dynamic_attr())
+  py::class_<mlir::OpBuilder>(m, "Builder", py::dynamic_attr())
       .def(py::init<mlir::MLIRContext *>())
       // // getters
       .def_property_readonly("context", &mlir::OpBuilder::getContext,
@@ -464,7 +507,7 @@ void initBuilder(py::module &m) {
              auto loc = self.getUnknownLoc();
              return self.create<mlir::scf::WhileOp>(loc, retTypes, initArgs);
            })
-      .def("create_condtion_op",
+      .def("create_condition_op",
            [](mlir::OpBuilder &self, mlir::Value &cond,
               std::vector<mlir::Value> &args) -> mlir::scf::ConditionOp {
              auto loc = self.getUnknownLoc();
@@ -534,7 +577,7 @@ void initTarget(py::module &m) {
 void initPyimas(py::module &m) {
   py::module pyimacs = m.def_submodule("pyimacs");
   auto ir = pyimacs.def_submodule("ir");
-  pyimacs::initPyimacsIR(ir);
+  pyimacs::initMLIR(ir);
   pyimacs::initBuilder(ir);
 
   auto target = pyimacs.def_submodule("target");
