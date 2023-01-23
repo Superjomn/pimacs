@@ -34,5 +34,5 @@ def test_to_Value(value: Any):
 def create_builder() -> pyl.ir.builder:
     ctx = pyl.ir.context()
     ctx.load_pyimacs()
-    builder = pyl.ir.builder(ctx)
+    builder = pyl.ir.Builder(ctx)
     return builder, ctx

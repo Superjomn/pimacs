@@ -20,7 +20,7 @@ class BinOp:
             lambda builder: builder.create_div)
 
     @staticmethod
-    def bin_op(op_builder: op_builder_t, a: pl.Value, b: pl.Value, builder: ir.builder) -> pl.Value:
+    def bin_op(op_builder: op_builder_t, a: pl.Value, b: pl.Value, builder: ir.Builder) -> pl.Value:
         if a.dtype.is_float:
             return pl.Value(op_builder[0](builder)(a.handle, b.handle), a.dtype)
         if a.dtype.is_int:
@@ -28,23 +28,23 @@ class BinOp:
         raise NotImplementedError()
 
 
-def add(a: pl.Value, b: pl.Value, builder: ir.builder) -> pl.Value:
+def add(a: pl.Value, b: pl.Value, builder: ir.Builder) -> pl.Value:
     return BinOp.bin_op(BinOp.add_, a, b, builder)
 
 
-def sub(a: pl.Value, b: pl.Value, builder: ir.builder) -> pl.Value:
+def sub(a: pl.Value, b: pl.Value, builder: ir.Builder) -> pl.Value:
     return BinOp.bin_op(BinOp.sub_, a, b, builder)
 
 
-def div(a: pl.Value, b: pl.Value, builder: ir.builder) -> pl.Value:
+def div(a: pl.Value, b: pl.Value, builder: ir.Builder) -> pl.Value:
     return BinOp.bin_op(BinOp.div_, a, b, builder)
 
 
-def mul(a: pl.Value, b: pl.Value, builder: ir.builder) -> pl.Value:
+def mul(a: pl.Value, b: pl.Value, builder: ir.Builder) -> pl.Value:
     return BinOp.bin_op(BinOp.mul_, a, b, builder)
 
 
-def constant(v: Any, builder: ir.builder):
+def constant(v: Any, builder: ir.Builder):
     if type(v) is int:
         return pl.Value(builder.get_int32(v), pl.Int)
     if type(v) is float:
@@ -58,7 +58,7 @@ def constant(v: Any, builder: ir.builder):
 
 def bitcast(input: pl.Value,
             dst_ty: pl.DataType,
-            builder: ir.builder) -> pl.Value:
+            builder: ir.Builder) -> pl.Value:
     src_ty = input.dtype
     if src_ty == dst_ty:
         return input
@@ -104,7 +104,7 @@ class Buffer(ElispClass):
     _get_or_create = ExternalCallable(
         func_name="get-buffer-create", num_args=1, return_type=pl.Any, attrs={})
 
-    def __init__(self, elisp_object: Any = None, name: str = None, builder: ir.builder = None):
+    def __init__(self, elisp_object: Any = None, name: str = None, builder: ir.Builder = None):
         self.elisp_object = elisp_object
         if name:
             self.elisp_object = Buffer.get_or_create(name)

@@ -4,7 +4,7 @@ import sys
 import warnings
 from typing import *
 
-import pyimacs._C.libpyimacs.pyimacs as _pyimacs
+import pyimacs._C.libpyimacs2.pyimacs as _pyimacs
 import pyimacs.lang as pyl
 
 from .runtime import JITFunction

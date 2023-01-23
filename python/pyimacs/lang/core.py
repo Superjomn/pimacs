@@ -51,7 +51,7 @@ class DataType:
     def is_object(self):
         return self.dtype == TypeKind.OBJECT
 
-    def to_ir(self, builder: ir.builder) -> ir.type:
+    def to_ir(self, builder: ir.Builder) -> ir.Type:
         dic = {
             "void": builder.get_void_ty(),
             "int": builder.get_int64_ty(),
@@ -95,7 +95,7 @@ class FunctionType(DataType):
     param_types: List[DataType]
     name: ClassVar[str] = "function_type"
 
-    def to_ir(self, builder: ir.builder):
+    def to_ir(self, builder: ir.Builder):
         ir_param_types = [ty.to_ir(builder) for ty in self.param_types]
         ret_types = [ret_type.to_ir(builder) for ret_type in self.ret_types]
 
