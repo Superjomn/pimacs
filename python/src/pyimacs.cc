@@ -32,6 +32,14 @@ using ret = py::return_value_policy;
 using namespace pybind11::literals;
 // Borrowed much code from OpenAI/triton triton.cc
 
+template <typename T> std::string toStr(const T &v) {
+  std::string str;
+  llvm::raw_string_ostream os(str);
+  os << v;
+  os.flush();
+  return str;
+}
+
 void initMLIR(py::module &m) {
   py::class_<mlir::MLIRContext>(m, "MLIRContext")
       .def(py::init<>())
@@ -42,7 +50,8 @@ void initMLIR(py::module &m) {
 
   py::class_<mlir::Type>(m, "Type")
       .def("is_integer", &mlir::Type::isInteger)
-      .def("is_fp16", &mlir::Type::isF16);
+      .def("is_fp16", &mlir::Type::isF16)
+      .def("__str__", &toStr<mlir::Type>);
 
   py::class_<mlir::Value>(m, "Value")
       .def("set_attr",
@@ -57,13 +66,29 @@ void initMLIR(py::module &m) {
       .def("replace_all_uses_with",
            [](mlir::Value &self, mlir::Value &newValue) {
              self.replaceAllUsesWith(newValue);
-           });
+           })
+      .def("__hash__", [](mlir::Value &self) -> size_t {
+        return reinterpret_cast<size_t>(&self);
+      });
 
   py::class_<mlir::BlockArgument, mlir::Value>(m, "BlockArgument");
 
   py::class_<mlir::Region>(m, "Region")
+      .def(py::init<>())
       .def("get_parent_region", &mlir::Region::getParentRegion, ret::reference)
       .def("size", [](mlir::Region &self) { return self.getBlocks().size(); })
+      .def(
+          "blocks",
+          [](mlir::Region &self, int idx) -> mlir::Block * {
+            mlir::Block *ret{};
+            for (auto &b : self.getBlocks()) {
+              ret = &b;
+              if (idx-- == 0)
+                break;
+            }
+            return ret;
+          },
+          ret::reference)
       .def("empty", &mlir::Region::empty);
 
   py::class_<mlir::Block>(m, "Block")
@@ -85,22 +110,55 @@ void initMLIR(py::module &m) {
              self.dropAllUses();
              self.erase();
            })
-      .def("replace_use_in_block_with", [](mlir::Block &self, mlir::Value &v,
-                                           mlir::Value &newVal) {
-        v.replaceUsesWithIf(newVal, [&](mlir::OpOperand &operand) {
-          mlir::Operation *user = operand.getOwner();
-          mlir::Block *currentBlock = user->getBlock();
-          while (currentBlock) {
-            if (currentBlock == &self)
-              return true;
-            // Move up one level
-            currentBlock = currentBlock->getParent()->getParentOp()->getBlock();
-          }
-          return false;
-        });
+      .def("replace_use_in_block_with",
+           [](mlir::Block &self, mlir::Value &v, mlir::Value &newVal) {
+             v.replaceUsesWithIf(newVal, [&](mlir::OpOperand &operand) {
+               mlir::Operation *user = operand.getOwner();
+               mlir::Block *currentBlock = user->getBlock();
+               while (currentBlock) {
+                 if (currentBlock == &self)
+                   return true;
+                 // Move up one level
+                 currentBlock =
+                     currentBlock->getParent()->getParentOp()->getBlock();
+               }
+               return false;
+             });
+           })
+      .def("operations",
+           [](mlir::Block &self) -> std::vector<const mlir::Operation *> {
+             std::vector<const mlir::Operation *> ret;
+             for (auto &op : self.getOperations()) {
+               ret.push_back(&op);
+             }
+             return ret;
+           });
+
+  py::class_<mlir::Attribute>(m, "Attribute")
+      .def("is_int",
+           [](mlir::Attribute &self) { return self.isa<mlir::IntegerAttr>(); })
+      .def("is_float",
+           [](mlir::Attribute &self) { return self.isa<mlir::FloatAttr>(); })
+      .def("is_string",
+           [](mlir::Attribute &self) { return self.isa<mlir::StringAttr>(); })
+      .def("is_bool",
+           [](mlir::Attribute &self) { return self.isa<mlir::BoolAttr>(); })
+      .def("to_int",
+           [](mlir::Attribute &self) -> int64_t {
+             return self.cast<mlir::IntegerAttr>().getInt();
+           })
+      .def("to_float",
+           [](mlir::Attribute &self) -> float {
+             return self.cast<mlir::FloatAttr>().getValueAsDouble();
+           })
+      .def("to_bool",
+           [](mlir::Attribute &self) -> bool {
+             return self.cast<mlir::BoolAttr>().getValue();
+           })
+      .def("to_string", [](mlir::Attribute &self) -> std::string {
+        return self.cast<mlir::StringAttr>().getValue().str();
       });
 
-  py::class_<mlir::Attribute>(m, "Attribute");
   py::class_<mlir::IntegerAttr, mlir::Attribute>(m, "IntegerAttr");
   py::class_<mlir::BoolAttr, mlir::Attribute>(m, "BoolAttr");
 
@@ -146,7 +204,8 @@ void initMLIR(py::module &m) {
 
   // py::class_<mlir::OpOperand>(m, "OpOperand")
   //     .def("__len__",
-  //          [](mlir::OpOperand &self) -> int { return self.getOperandNumber(); })
+  //          [](mlir::OpOperand &self) -> int { return self.getOperandNumber();
+  //          })
   //     .def("__getitem__", [](mlir::Operation &self, int i) -> mlir::Value {
   //       return self.getOperand(i);
   //     });
@@ -155,25 +214,21 @@ void initMLIR(py::module &m) {
       .def("result_number",
            [](mlir::OpResult &self) { return self.getResultNumber(); });
 
-  class PyOpOperand {
-   public:
-    mlir::OpOperand *data{};
-    PyOpOperand(mlir::OpOperand &op) : data(&op) {}
-  };
-
-  py::class_<PyOpOperand>(m, "OpOperand")
+  py::class_<mlir::OpOperand>(m, "OpOperand")
       .def("operand_number",
-           [](PyOpOperand &self) { self.data->getOperandNumber(); })
-      .def("get", [](PyOpOperand &self) -> mlir::Value { return self.data->get(); })
-      .def("__len__", [](PyOpOperand &self) -> int {
-        return self.data->getOperandNumber();
+           [](mlir::OpOperand &self) { self.getOperandNumber(); })
+      .def("get",
+           [](mlir::OpOperand &self) -> mlir::Value { return self.get(); })
+      .def("__len__", [](mlir::OpOperand &self) -> int {
+        return self.getOperandNumber();
       });
 
   py::class_<mlir::Operation, std::unique_ptr<mlir::Operation, py::nodelete>>(
       m, "Operation")
       .def("operands",
-           [](mlir::Operation &self)->std::vector<mlir::Value> {
-             return std::vector<mlir::Value>(self.getOperands().begin(), self.getOperands().end());
+           [](mlir::Operation &self) -> std::vector<mlir::Value> {
+             return std::vector<mlir::Value>(self.getOperands().begin(),
+                                             self.getOperands().end());
            })
       .def("name",
            [](mlir::Operation &self) -> std::string {
@@ -181,9 +236,21 @@ void initMLIR(py::module &m) {
            })
       .def("num_operands",
            [](mlir::Operation &self) { return self.getNumOperands(); })
-      .def("get_operand", [](mlir::Operation &self, int id) -> PyOpOperand {
-        return PyOpOperand(self.getOpOperand(id));
-      });
+      .def(
+          "get_operand",
+          [](mlir::Operation &self, int id) -> mlir::OpOperand * {
+            return &self.getOpOperand(id);
+          },
+          ret::reference)
+      .def("get_num_results",
+           [](mlir::Operation &self) -> int { return self.getNumResults(); })
+      .def("get_result",
+           [](mlir::Operation &self, int idx) -> mlir::Value {
+             return self.getResult(idx);
+           })
+      .def("get_attr",
+           [](mlir::Operation &self, const std::string &name)
+               -> mlir::Attribute { return self.getAttr(name); });
 
   // scf Ops
   py::class_<mlir::scf::ForOp, mlir::OpState>(m, "ForOp")
@@ -204,7 +271,7 @@ void initMLIR(py::module &m) {
   // module
   py::class_<mlir::ModuleOp, mlir::OpState>(m, "Module", py::dynamic_attr())
       .def("dump", &mlir::ModuleOp::dump)
-      .def("str",
+      .def("__str__",
            [](mlir::ModuleOp &self) -> std::string {
              std::string str;
              llvm::raw_string_ostream os(str);
@@ -224,6 +291,16 @@ void initMLIR(py::module &m) {
       .def("get_function",
            [](mlir::ModuleOp &self, std::string &funcName) -> mlir::FuncOp {
              return self.lookupSymbol<mlir::FuncOp>(funcName);
+           })
+      .def("get_function_names",
+           [](mlir::ModuleOp &self) -> std::vector<std::string> {
+             std::vector<std::string> ret;
+             self.walk([&](mlir::Operation *op) {
+               if (auto func = llvm::dyn_cast<mlir::FuncOp>(op)) {
+                 ret.push_back(func.sym_name().str());
+               }
+             });
+             return ret;
            })
       .def("get_body", [](mlir::ModuleOp &self, int blockId) {
         return self.getBody(blockId);
@@ -256,14 +333,24 @@ void initMLIR(py::module &m) {
 
   py::class_<mlir::FuncOp, mlir::OpState>(m, "Function")
       .def("args",
-           [](mlir::FuncOp &self, unsigned idx) -> mlir::BlockArgument {
+           [](mlir::FuncOp &self, unsigned idx) -> mlir::Value {
              return self.getArgument(idx);
            })
+      .def("get_name",
+           [](mlir::FuncOp &self) -> std::string {
+             return self.sym_name().str();
+           })
+      .def("num_args",
+           [](mlir::FuncOp &self) -> int { return self.getNumArguments(); })
       .def(
           "add_entry_block",
           [](mlir::FuncOp &self) -> mlir::Block * {
             return self.addEntryBlock();
           },
+          ret::reference)
+      .def(
+          "body",
+          [](mlir::FuncOp &self) -> mlir::Region * { return &self.body(); },
           ret::reference)
       .def(
           "set_arg_attr",
@@ -277,7 +364,6 @@ void initMLIR(py::module &m) {
 
   py::class_<mlir::OpBuilder::InsertPoint>(m, "InsertPoint");
 }
-
 
 void initBuilder(py::module &m) {
 
