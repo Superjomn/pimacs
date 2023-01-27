@@ -36,6 +36,15 @@ def Lisp_ConstantOp : Lisp_Op<"constant"> {
     let results = (outs Value:$output);
 }
 
+def Lisp_GetNullOp: Lisp_Op<"get_null"> {
+  let summary = "get null op";
+  let description = [{
+    Get NULL op.
+  }];
+  let arguments = (ins);
+  let results = (outs Value:$output);
+}
+
 //def List_MakeSymbolOp : Lisp_Op<"make_symbol"> {
     ///let summary = "Create a symbol";
     ///let arguments = (ins StrAttr:$name);

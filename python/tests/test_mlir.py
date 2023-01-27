@@ -1,7 +1,6 @@
 from pyimacs._C.libpyimacs.pyimacs import ir
 from pyimacs.lang.core import *
-
-from .utility import build_mod0
+from utility import build_mod0, init_mod
 
 
 def test_mod_get_function():
@@ -36,7 +35,7 @@ def test_function_declaration_call():
     builder = ir.Builder(ctx)
 
 
-def test_function_declaration_call():
+def test_function_extern_call():
     ctx = ir.MLIRContext()
     ctx.load_pyimacs()
 
@@ -59,3 +58,28 @@ def test_function_declaration_call():
 
     assert mod.has_function("add")
     assert mod.has_function("add_main")
+
+
+def test_object_type():
+    ctx = ir.MLIRContext()
+    ctx.load_pyimacs()
+
+    builder = ir.Builder(ctx)
+    mod = builder.create_module()
+    nil = builder.get_null_as_object()
+    print(nil)
+
+
+def test_function_declaration():
+    mod, builder, ctx = init_mod()
+    func_name = "get-buffer"
+    func_ty = builder.get_function_ty(
+        [builder.get_string_ty()], [builder.get_object_ty()])
+    func = builder.get_or_insert_function(mod, func_name, func_ty, "public")
+    print(func)
+    assert str(func).strip(
+    ) == 'func public @"get-buffer"(!lisp.string) -> !lisp.object'
+    mod.push_back(func)
+
+
+test_function_declaration()
