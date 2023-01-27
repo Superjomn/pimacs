@@ -50,7 +50,17 @@ void initMLIR(py::module &m) {
 
   py::class_<mlir::Type>(m, "Type")
       .def("is_integer", &mlir::Type::isInteger)
-      .def("is_fp16", &mlir::Type::isF16)
+      .def(
+          "is_float",
+          [](mlir::Type &self) -> bool { return self.isF16() || self.isF32(); })
+      .def("is_string",
+           [](mlir::Type &self) {
+             return self.isa<mlir::pyimacs::StringType>();
+           })
+      .def("is_object",
+           [](mlir::Type &self) -> bool {
+             return self.isa<mlir::pyimacs::ObjectType>();
+           })
       .def("__str__", &toStr<mlir::Type>);
 
   py::class_<mlir::Value>(m, "Value")
@@ -477,6 +487,28 @@ void initBuilder(py::module &m) {
              else
                throw std::runtime_error("Not implemented");
            })
+      .def("get_null_as_int",
+           [](mlir::OpBuilder &self) -> mlir::Value {
+             return self.create<mlir::pyimacs::GetNullOp>(
+                 self.getUnknownLoc(), self.getIntegerType(32));
+           })
+      .def("get_null_as_float",
+           [](mlir::OpBuilder &self) -> mlir::Value {
+             return self.create<mlir::pyimacs::GetNullOp>(self.getUnknownLoc(),
+                                                          self.getF32Type());
+           })
+      .def("get_null_as_string",
+           [](mlir::OpBuilder &self) -> mlir::Value {
+             return self.create<mlir::pyimacs::GetNullOp>(
+                 self.getUnknownLoc(),
+                 mlir::pyimacs::StringType::get(self.getContext()));
+           })
+      .def("get_null_as_object",
+           [](mlir::OpBuilder &self) -> mlir::Value {
+             return self.create<mlir::pyimacs::GetNullOp>(
+                 self.getUnknownLoc(),
+                 mlir::pyimacs::ObjectType::get(self.getContext()));
+           })
       .def("get_all_ones_value",
            [](mlir::OpBuilder &self, mlir::Type type) -> mlir::Value {
              auto loc = self.getUnknownLoc();
@@ -517,6 +549,10 @@ void initBuilder(py::module &m) {
       .def("get_string_ty",
            [](mlir::OpBuilder &self) -> mlir::Type {
              return mlir::pyimacs::StringType::get(self.getContext());
+           })
+      .def("get_object_ty",
+           [](mlir::OpBuilder &self) -> mlir::Type {
+             return mlir::pyimacs::ObjectType::get(self.getContext());
            })
       .def("get_block_ty",
            [](mlir::OpBuilder &self, mlir::Type &elementType,

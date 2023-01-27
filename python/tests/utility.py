@@ -18,3 +18,11 @@ def build_mod0():
     eq0 = builder.create_add(arg0, builder.get_int32(32))
     builder.ret([eq0])
     return mod, ctx
+
+
+def init_mod():
+    ctx = ir.MLIRContext()
+    ctx.load_pyimacs()
+    builder = ir.Builder(ctx)
+    mod = builder.create_module()
+    return mod, builder, ctx
