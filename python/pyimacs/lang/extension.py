@@ -1,3 +1,10 @@
+__all__ = [
+    'register_extern',
+    'builder',
+    'ctx',
+    'module',
+]
+
 import functools
 import inspect
 from dataclasses import dataclass
@@ -11,6 +18,10 @@ global_mlir_builder = None
 global_mlir_ctx = None
 global_extern_functions: Dict[str, ir.Function] = {}
 
+
+# Usage:
+# @register_extern("buffer-get")
+# def buffer_get(buf_name: str) -> object: ...
 
 def builder() -> ir.Builder:
     global global_mlir_builder
@@ -40,28 +51,58 @@ def register_extern(func_name: str):
 
 def _register_extern(func: Callable, func_name: str):
     signature = inspect.getfullargspec(func)
-    args = signature.args
+    decl_args = signature.args
+    annotation = signature.annotations
     if not module().has_function(func_name):
-        annotation = signature.annotations
         ''' Register function into module. '''
         # TODO[Superjomn]: Consider tuple later
-        ret_type = dtype_to_mlir_type(annotation['return'], builder())
+        ret_type = [dtype_to_mlir_type(
+            annotation['return'], builder())] if annotation['return'] is not None else []
         # get function type
         in_types = []
         for arg, py_ty in annotation.items():
             if arg == "return":
                 continue
             in_types.append(dtype_to_mlir_type(py_ty, builder()))
-        func_ty = builder().get_function_ty(in_types, [ret_type])
-        builder().get_or_insert_function(module(), func_name, func_ty, "public")
+        func_ty = builder().get_function_ty(in_types, ret_type)
+        func = builder().get_or_insert_function(module(), func_name, func_ty, "public")
+        module().push_back(func)
 
     def arg_to_mlir_value(v: Any):
         if type(v) is str:
-            pass
+            return builder().get_string(v)
+        if type(v) is int:
+            return builder().get_int32(v)
+        if type(v) is float:
+            return builder().get_float32(v)
+        if type(v) is object:
+            return v
+        raise NotImplementedError()
+
+    def arg_to_mlir(arg, type):
+        if arg is None:
+            if type is str:
+                return builder().get_null_as_string()
+            if type is int:
+                return builder().get_null_as_int()
+            if type is float:
+                return builder().get_null_as_float()
+            if type is object:
+                return builder().get_null_as_object()
+            raise NotImplementedError()
+        else:
+            return arg_to_mlir_value(arg)
 
     def fn(*args, **kwargs):
         assert not kwargs, "kwargs is supported yet"
-        return builder().call(module().get_function(func_name), args)
+        mlir_args = []
+        for idx, arg in enumerate(args):
+            py_type = annotation.get(decl_args[idx])
+            mlir_arg = arg_to_mlir(arg, py_type)
+            mlir_args.append(mlir_arg)
+
+        func = module().get_function(func_name)
+        return builder().call(func, mlir_args)
 
     return fn
 
@@ -76,20 +117,3 @@ def dtype_to_mlir_type(dtype: Any, builder: ir.Builder) -> ir.Type:
     if dtype is object:
         return builder.get_object_ty()
     assert NotImplementedError()
-
-
-@dataclass()
-class ExternFunc:
-    func_name: str
-    decl: ir.Function
-
-
-@register_extern("buffer-get")
-def buffer_get(buf_name: str) -> object: ...
-
-
-print(buffer_get)
-print(buffer_get("hello"))
-
-# def _register_extern_function(func_name: str, func_ty: ir.Type, builder: ir.Builder, mod: ir.Module):
-# global_extern_functions[func_name] =
