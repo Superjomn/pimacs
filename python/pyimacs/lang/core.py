@@ -54,9 +54,10 @@ class DataType:
     def to_ir(self, builder: ir.Builder) -> ir.Type:
         dic = {
             "void": builder.get_void_ty(),
-            "int": builder.get_int64_ty(),
+            "int": builder.get_int32_ty(),
             "float": builder.get_double_ty(),
             "string": builder.get_string_ty(),
+            "object": builder.get_object_ty(),
         }
         assert self.name in dic
         return dic[self.name]
@@ -66,6 +67,7 @@ Void = DataType("void")
 Int = DataType("int")
 Float = DataType("float")
 String = DataType("string")
+Object = DataType("object")
 Bool = DataType("bool")
 
 
