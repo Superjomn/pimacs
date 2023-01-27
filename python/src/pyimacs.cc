@@ -382,12 +382,14 @@ void initBuilder(py::module &m) {
              auto loc = self.getUnknownLoc();
              self.create<mlir::ReturnOp>(loc, vals);
            })
-      .def("call",
-           [](mlir::OpBuilder &self, mlir::FuncOp &func,
-              std::vector<mlir::Value> &args) -> mlir::OpState {
-             auto loc = self.getUnknownLoc();
-             return self.create<mlir::CallOp>(loc, func, args);
-           })
+      .def(
+          "call",
+          [](mlir::OpBuilder &self, mlir::FuncOp &func,
+             std::vector<mlir::Value> &args) -> mlir::Operation * {
+            auto loc = self.getUnknownLoc();
+            return self.create<mlir::CallOp>(loc, func, args);
+          },
+          ret::reference)
       .def("extern_call",
            [](mlir::OpBuilder &self, mlir::Type retType, std::string callee,
               std::vector<mlir::Value> &args) -> mlir::OpState {
