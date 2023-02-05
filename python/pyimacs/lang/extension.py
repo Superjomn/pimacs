@@ -3,6 +3,7 @@ __all__ = [
     'builder',
     'ctx',
     'module',
+    'Ext',
 ]
 
 import functools
@@ -11,7 +12,7 @@ from dataclasses import dataclass
 from typing import *
 
 from pyimacs.lang.core import DataType, Object
-from pyimacs.lang.semantic import *
+from pyimacs.lang.semantic import ir, pl
 
 global_mlir_module = None
 global_mlir_builder = None
@@ -69,6 +70,13 @@ def _register_extern(func: Callable, func_name: str):
         module().push_back(func)
 
     def arg_to_mlir_value(v: Any):
+        if type(v) is pl.Value:
+            v = v.handle
+        if type(v) is ir.Value:
+            return v
+        if type(v) is ir.Operation:
+            return v.to_value()
+
         if type(v) is str:
             return builder().get_string(v)
         if type(v) is int:
@@ -77,7 +85,8 @@ def _register_extern(func: Callable, func_name: str):
             return builder().get_float32(v)
         if type(v) is object:
             return v
-        raise NotImplementedError()
+
+        raise NotImplementedError(f"{v} of type {type(v)} is not supported")
 
     def arg_to_mlir(arg, type):
         if arg is None:
@@ -89,7 +98,7 @@ def _register_extern(func: Callable, func_name: str):
                 return builder().get_null_as_float()
             if type is object:
                 return builder().get_null_as_object()
-            raise NotImplementedError()
+            raise NotImplementedError(f"{arg} of {type}")
         else:
             return arg_to_mlir_value(arg)
 
@@ -117,3 +126,10 @@ def dtype_to_mlir_type(dtype: Any, builder: ir.Builder) -> ir.Type:
     if dtype is object:
         return builder.get_object_ty()
     assert NotImplementedError()
+
+
+class Ext:
+    '''
+    Placeholder to mark the externsion classes. All the inherient class's method will be evaluated in compile time.
+    '''
+    pass

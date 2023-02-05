@@ -2,10 +2,13 @@ import ast
 import inspect
 import sys
 import warnings
+from pprint import pprint
 from typing import *
 
+import astpretty
 import pyimacs._C.libpyimacs.pyimacs as _pyimacs
 import pyimacs.lang as pyl
+import pyimacs.lang.extension as pyl_ext
 
 from .runtime import JITFunction
 
@@ -14,9 +17,9 @@ target = _pyimacs.target
 
 
 class CodeGenerator(ast.NodeVisitor):
-    def __init__(self, context: ir.context, prototype, function_name: str, gscope: Dict[str, Any], module=None,
+    def __init__(self, context: ir.MLIRContext, prototype, function_name: str, gscope: Dict[str, Any], module=None,
                  is_kernel=True, function_types={}):
-        self.builder = ir.builder(context)
+        self.builder = ir.Builder(context)
         self.module = self.builder.create_module() if module is None else module
         self.function_types = function_types
         self.prototype = prototype
@@ -103,7 +106,6 @@ class CodeGenerator(ast.NodeVisitor):
                 fn.reset_type(self.prototype.to_ir(self.builder))
             else:
                 self.prototype.ret_types = [self.last_ret_type]
-                print('prototype', self.prototype)
                 fn.reset_type(self.prototype.to_ir(self.builder))
         if insert_pt:
             self.builder.set_insertion_point_to_end(insert_pt)
@@ -132,6 +134,7 @@ class CodeGenerator(ast.NodeVisitor):
             names = [names]
         if not isinstance(values, tuple):
             values = [values]
+
         for name, value in zip(names, values):
             if not isinstance(value, pyl.Value):
                 value = pyl.to_tensor(value, self.builder)
@@ -151,6 +154,8 @@ class CodeGenerator(ast.NodeVisitor):
         for name, value in zip(names, values):
             if isinstance(value, pyl.ElispClass):
                 pass
+            elif isinstance(value, pyl_ext.Ext):
+                self.set_value(name, value)
             # by default, constexpr are assigned into python variable
             elif not isinstance(value, pyl.Value):
                 value = pyl.to_value(value, self.builder)
@@ -187,12 +192,32 @@ class CodeGenerator(ast.NodeVisitor):
         return pyl.constant(node.value, self.builder)
 
     def visit_Call(self, node):
-        fn = self.visit(node.func)
-        print('fn', fn)
         kws = dict()
         for keyword in node.keywords:
             kws.update(self.visit(keyword))
         args = [self.visit(arg) for arg in node.args]
+
+        if type(node.func) is ast.Name:
+            func_name = node.func.id
+        elif type(node.func) is ast.Attribute:
+            '''
+            member function call, this is only valid in python mode in compilation time.
+            '''
+            value = self.lscope.get(node.func.value.id)
+            func_name = node.func.attr
+            func = getattr(value, func_name)
+            return func(*args)
+
+        if func_name in self.gscope:
+            '''
+            Calling a global function in compilation time.
+            '''
+            func: Callable = self.gscope[func_name]
+            return func(*args, **kws)
+
+        fn = self.visit(node.func)
+        if isinstance(fn, pyl_ext.Ext):
+            return fn(*args)
         if isinstance(fn, pyl.ExternalCallable):
             # NOTE the builder is injected automatically, which is transparent to user.
             return fn(args, builder=self.builder)
@@ -356,6 +381,8 @@ class CodeGenerator(ast.NodeVisitor):
             warnings.simplefilter("ignore", DeprecationWarning)  # python 3.9
             warnings.simplefilter(
                 "ignore", PendingDeprecationWarning)  # python 3.8
+            if isinstance(node, pyl_ext.Ext):
+                return node
             return super().visit(node)
 
     def generic_visit(self, node: ast.AST) -> Any:
@@ -371,7 +398,7 @@ def compile(fn: JITFunction, **kwargs):
     :param kwargs:
     :return:
     '''
-    ctx = ir.context()
+    ctx = ir.MLIRContext()
     ctx.load_pyimacs()
 
     configs = kwargs.get("configs", None)
@@ -401,9 +428,10 @@ def str_to_ty(name):
         "i": pyl.Int,
         "b": pyl.Bool,
         "s": pyl.String,
+        "str": pyl.String,
         "void": pyl.Void,
     }
-    assert name in tys
+    assert name in tys, f"{name} is not supported"
     return tys[name]
 
 
@@ -435,7 +463,7 @@ def build_pyimacs_ir(fn, signature: str, specialization):
     '''
     signature: str, "i,f -> v"
     '''
-    context = ir.context()
+    context = ir.MLIRContext()
     context.load_pyimacs()
 
     # create kernel prototype

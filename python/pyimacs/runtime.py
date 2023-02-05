@@ -23,8 +23,9 @@ class JITFunction(object):
         self.src = textwrap.dedent(inspect.getsource(fn))
         self.src = self.src[self.src.find("def"):]
         # annotations
+        print(f"fn.annotation: {fn.__annotations__}")
         self.annotations = {self.arg_names.index(
-            name): ty for name, ty in fn.__annotations__.items()}
+            name): ty for name, ty in fn.__annotations__.items() if name != "return"}
 
         self.__annotations__ = fn.__annotations__
         self.__doc__ = fn.__doc__

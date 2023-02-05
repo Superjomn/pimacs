@@ -260,7 +260,10 @@ void initMLIR(py::module &m) {
            })
       .def("get_attr",
            [](mlir::Operation &self, const std::string &name)
-               -> mlir::Attribute { return self.getAttr(name); });
+               -> mlir::Attribute { return self.getAttr(name); })
+      .def("to_value", [](mlir::Operation &self) {
+        return mlir::Value(self.getResult(0));
+      });
 
   // scf Ops
   py::class_<mlir::scf::ForOp, mlir::OpState>(m, "ForOp")
