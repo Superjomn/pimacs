@@ -1,6 +1,6 @@
 from pyimacs._C.libpyimacs.pyimacs import ir
 from pyimacs.lang.core import *
-from utility import build_mod0, init_mod
+from .utility import build_mod0, init_mod
 
 
 def test_mod_get_function():
