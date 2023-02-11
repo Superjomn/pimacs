@@ -30,7 +30,7 @@ jobs:
           LLVM_DIR=$PWD/llvm
           WORKSPACE=$PWD
           cd $LLVM_DIR
-          tar xvf *.tar
+          tar xf *.tar
           ls -l $LLVM_DIR
 
           cd $WORKSPACE

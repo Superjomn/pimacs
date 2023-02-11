@@ -151,7 +151,7 @@ get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 add_library(pyimacs SHARED ${PYTHON_SRC})
 target_link_libraries(pyimacs
         LispIR
-        ElispTranslation
+        #ElispTranslation
         pybind
         ${dialect_libs}
         ${conversion_libs}
