@@ -27,14 +27,17 @@ jobs:
           mkdir -p ./llvm
           wget -P ./llvm/ https://github.com/ptillet/triton-llvm-releases/releases/download/llvm-14.0.6-f28c006a5895/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert.tar.xz --quiet
           xz -d ./llvm/*.xz
-          tar xvf ./llvm/*.tar
-          echo $PWD
-          ls -R $PWD/llvm/
+          LLVM_DIR=$PWD/llvm
+          WORKSPACE=$PWD
+          cd $LLVM_DIR
+          tar xvf *.tar
+          ls -l $LLVM_DIR
 
+          cd $WORKSPACE
           # build
           mkdir build
           cd build
-          cmake .. -DMLIR_DIR=../llvm/
+          cmake .. -DMLIR_DIR=$LLVM_DIR/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert/
           make
           ln -s $PWD/libpyimacs.so ../python/pyimacs/_C/
 
