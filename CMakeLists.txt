@@ -41,7 +41,7 @@ if (NOT MLIR_DIR)
       llvm_map_components_to_libnames(LLVM_LIBRARIES support core
       )
     else()
-      find_package(LLVM 11 REQUIRED)
+      find_package(LLVM 14 REQUIRED)
     endif()
     message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
     if(APPLE)
@@ -151,7 +151,7 @@ get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 add_library(pyimacs SHARED ${PYTHON_SRC})
 target_link_libraries(pyimacs
         LispIR
-        ElispTranslation
+        #ElispTranslation
         pybind
         ${dialect_libs}
         ${conversion_libs}

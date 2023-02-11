@@ -9,7 +9,7 @@
 #include "mlir/Transforms/Passes.h"
 #include "pyimacs/Dialect/Lisp/IR/Dialect.h"
 #include "pyimacs/Dialect/Lisp/IR/Types.h"
-#include "pyimacs/Target/elisp/translateToElisp.h"
+//#include "pyimacs/Target/elisp/translateToElisp.h"
 
 #include <Python.h>
 #include <cctype>
@@ -690,13 +690,13 @@ void initBuilder(py::module &m) {
 }
 
 void initTarget(py::module &m) {
-  m.def("to_lisp_code", [](mlir::ModuleOp &op) -> std::string {
-    std::string buf;
-    llvm::raw_string_ostream os(buf);
-    mlir::pyimacs::translateToElisp(&op, os);
-    os.flush();
-    return buf;
-  });
+  // m.def("to_lisp_code", [](mlir::ModuleOp &op) -> std::string {
+  //   std::string buf;
+  //   llvm::raw_string_ostream os(buf);
+  //   mlir::pyimacs::translateToElisp(&op, os);
+  //   os.flush();
+  //   return buf;
+  // });
 }
 
 } // namespace pyimacs
