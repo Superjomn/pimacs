@@ -32,7 +32,8 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DMLIR_DIR=~/llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert/
+          ls -R /home/root/llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert/
+          cmake .. -DMLIR_DIR=/home/root/llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert/
           make
           ln -s $PWD/libpyimacs.so ../python/pyimacs/_C/
 
