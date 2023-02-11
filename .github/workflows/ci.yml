@@ -24,18 +24,17 @@ jobs:
       - name: Build
         run: |
           # Download llvm
-          mkdir -p ~/llvm
-          wget -P ~/llvm/ https://github.com/ptillet/triton-llvm-releases/releases/download/llvm-14.0.6-f28c006a5895/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert.tar.xz --quiet
-          xz -d ~/llvm/*.xz
-          tar xf ~/llvm/*.tar
+          mkdir -p ./llvm
+          wget -P ./llvm/ https://github.com/ptillet/triton-llvm-releases/releases/download/llvm-14.0.6-f28c006a5895/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert.tar.xz --quiet
+          xz -d ./llvm/*.xz
+          tar xf ./llvm/*.tar
           echo $PWD
-          ls ~/llvm
 
           # build
           mkdir build
           cd build
-          ls -R ~/llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert
-          cmake .. -DMLIR_DIR=~/llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert/
+          ls -R ../llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert
+          cmake .. -DMLIR_DIR=../llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert/
           make
           ln -s $PWD/libpyimacs.so ../python/pyimacs/_C/
 
