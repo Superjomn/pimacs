@@ -29,11 +29,11 @@ jobs:
           xz -d ./llvm/*.xz
           tar xf ./llvm/*.tar
           echo $PWD
+          ls -R $PWD/llvm/
 
           # build
           mkdir build
           cd build
-          ls -R ../llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert
           cmake .. -DMLIR_DIR=../llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert/
           make
           ln -s $PWD/libpyimacs.so ../python/pyimacs/_C/
