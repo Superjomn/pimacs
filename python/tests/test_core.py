@@ -31,8 +31,8 @@ def test_to_Value(value: Any):
     pyl.to_value(value, builder)
 
 
-def create_builder() -> pyl.ir.builder:
-    ctx = pyl.ir.context()
+def create_builder() -> pyl.ir.Builder:
+    ctx = pyl.ir.MLIRContext()
     ctx.load_pyimacs()
     builder = pyl.ir.Builder(ctx)
     return builder, ctx

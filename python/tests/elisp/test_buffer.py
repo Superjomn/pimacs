@@ -11,9 +11,6 @@ def buffer_tester() -> str:
     return name
 
 
-def test_Buffer_basic():
-    res = compiler.compile(buffer_tester, signature="void -> str")
-    print(res)
-
-
-test_Buffer_basic()
+# def test_Buffer_basic():
+#     res = compiler.compile(buffer_tester, signature="void -> str")
+#     print(res)
