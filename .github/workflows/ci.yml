@@ -23,18 +23,18 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Download LLVM
         run: |
-        mkdir -p ~/llvm
-        wget -P ~/llvm/ https://github.com/ptillet/triton-llvm-releases/releases/download/llvm-14.0.6-f28c006a5895/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert.tar.xz
-        xz -d ~/llvm/*.xz
-        tar xvf ~/llvm/.tar
+          mkdir -p ~/llvm
+          wget -P ~/llvm/ https://github.com/ptillet/triton-llvm-releases/releases/download/llvm-14.0.6-f28c006a5895/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert.tar.xz
+          xz -d ~/llvm/*.xz
+          tar xvf ~/llvm/.tar
 
       - name: Build
         run: |
-        mkdir build
-        cd build
-        cmake .. -DLLVM_DIR=~/llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert
-        make
-        ln -s $PWD/libpyimacs.so ../python/pyimacs/_C/
+          mkdir build
+          cd build
+          cmake .. -DLLVM_DIR=~/llvm/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert
+          make
+          ln -s $PWD/libpyimacs.so ../python/pyimacs/_C/
 
       - name: Lint with flake8
         run: |
