@@ -13,15 +13,15 @@ target_link_libraries(pyimacs-opt PRIVATE
   MLIRTransforms
 )
 
-add_llvm_executable(pyimacs-translate translate.cc PARTIAL_SOURCES_INTENDED)
-llvm_update_compile_flags(pyimacs-opt)
-target_link_libraries(pyimacs-translate PRIVATE
-        ${dialect_libs}
-        ${conversion_libs}
-        LispIR
-        # MLIR core
-        MLIROptLib
-        MLIRPass
-        MLIRTransforms
-        ElispTranslation
-        )
+# add_llvm_executable(pyimacs-translate translate.cc PARTIAL_SOURCES_INTENDED)
+# llvm_update_compile_flags(pyimacs-opt)
+# target_link_libraries(pyimacs-translate PRIVATE
+#         ${dialect_libs}
+#         ${conversion_libs}
+#         LispIR
+#         # MLIR core
+#         MLIROptLib
+#         MLIRPass
+#         MLIRTransforms
+#         ElispTranslation
+#         )
