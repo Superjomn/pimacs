@@ -32,7 +32,7 @@ class SymbolTable:
         return var
 
 
-class Translator:
+class MlirToAstTranslator:
     '''
     Translate from MLIR to Elisp AST
     '''
