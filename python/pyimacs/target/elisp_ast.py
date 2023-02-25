@@ -11,19 +11,35 @@ class Dumper:
         self.io = io
         self.indent = 0
         self.indent_unit = 4
+        # True since the first line should not indent by default.
+        self._indent_processed = True
 
-    def do_indent(self, indent: int) -> None:
-        self.indent += self.indent_unit
+    def do_indent(self, indent: int = 1) -> None:
+        self.indent += indent
 
-    def undo_indent(self, indent: int) -> None:
-        self.indent -= self.indent_unit
+    def undo_indent(self, indent: int = 1) -> None:
+        self.indent -= indent
+
+    def put(self, s: str) -> None:
+        ''' Simply put the a string to the IO. '''
+        self.io.write(s)
 
     def print(self, s: str) -> None:
-        self.io.write(" " * self.indent + s)
+        ''' Smart print with indent considered.
+        Note, if a line break is needed, use println instead. Never use something like print('\n').
+        '''
+        if not self._indent_processed:
+            self.put(self.indent * self.indent_unit * " ")
+            self._indent_processed = True
+        self.put(s)
 
-    def println(self, s: str) -> None:
-        self.print(s)
-        self.print('\n')
+    def println(self, s: str = "") -> None:
+        ''' Print with a tailing line break. '''
+        if s:
+            self.print(s + "\n")
+        else:
+            self.put("\n")
+        self._indent_processed = False
 
 
 class Node:
@@ -32,8 +48,10 @@ class Node:
         pass
 
     def __str__(self) -> str:
-        dumper = Dumper(StrIO())
-        return self.dump(dumper)
+        io = StrIO()
+        dumper = Dumper(io)
+        self.dump(dumper)
+        return io.content
 
 
 @dataclass()
@@ -56,11 +74,11 @@ class Token(Node):
     def dump(self, dumper: Dumper) -> None:
         if self.is_symbol:
             assert type(self.symbol) is str
-            dumper.print(self.symbol)
+            dumper.put(self.symbol)
         elif type(self.symbol) is str:
-            dumper.print(f'"{self.symbol}"')
+            dumper.put(f'"{self.symbol}"')
         else:
-            dumper.print(self.symbol)
+            dumper.put(self.symbol)
 
 
 class Symbol(Token):
@@ -74,21 +92,23 @@ class Var(Node):
     default: Any = None
 
     def dump(self, dumper: Dumper) -> None:
-        dumper.print(self.name)
+        dumper.put(self.name)
 
 
-class Expr(abc.ABC):
-    ''' A (...) expression '''
+class Expr(abc.ABC, Node):
+    ''' Base class of all the expressios. '''
     @property
     @abc.abstractclassmethod
     def symbols(self) -> List[Any]:
         raise NotImplementedError()
 
     def dump(self, dumper: Dumper) -> None:
-        dumper.print(f"( {' '.join([str(s) for s in self.symbols])} )")
+        dumper.print(f"({' '.join([str(s) for s in self.symbols])})")
 
 
 class Expression(Expr):
+    ''' An expression, it will dumped like (a b c) '''
+
     def __init__(self, *symbols: List[Any]):
         self._symbols = symbols
 
@@ -99,6 +119,7 @@ class Expression(Expr):
 
 @dataclass()
 class LetExpr(Expr):
+    ''' Let expression. '''
     vars: List[Var]
     body: List[Expr]
 
@@ -107,14 +128,16 @@ class LetExpr(Expr):
         return [Symbol("let"), Expression(*self.vars), Expression(*self.body)]
 
     def dump(self, dumper: Dumper) -> None:
-        dumper.println("(let* ")
+        dumper.println("(let*")
         dumper.do_indent()
-        def repr_var(
-            var): return f"({var.name} {var.default})" if var.default else var.name
+
+        def repr_var(var):
+            return f"({str(var)} {var.default})" if var.default is not None else str(var)
         dumper.println(f"({' '.join([repr_var(v) for v in self.vars])})")
         for b in self.body:
+            dumper.print("")
             b.dump(dumper)
-            dumper.println
+            dumper.println()
         dumper.undo_indent()
         dumper.println(")")
 
@@ -134,34 +157,32 @@ class Function(Node):
         dumper.println(")")
 
 
+@dataclass
 class Call(Expr):
-    def __init__(self, name: str, args: List[Var]):
-        self.symbols = [name, *args]
+    func: Symbol
+    args: List[Var]
 
-    def dump(self, dumper: Dumper) -> None:
-        dumper.print("(")
-        for s in self.symbols[:-1]:
-            s.dump(dumper)
-            dumper.print(" ")
-        self.symbols[-1].dump(dumper)
-        dumper.print(")")
+    @property
+    def symbols(self):
+        return [self.func, *self.args]
 
 
+@dataclass
 class IfElse(Node):
     cond: Var
     then_body: LetExpr
     else_body: LetExpr
 
     def dump(self, dumper: Dumper) -> None:
-        dumper.println("(if")
-        dumper.do_indent()
+        dumper.print(f"(if ")
         self.cond.dump(dumper)
         dumper.println()
+        dumper.do_indent()
         self.then_body.dump(dumper)
         dumper.println()
         self.else_body.dump(dumper)
         dumper.undo_indent()
-        dumper.println(")")
+        dumper.print(")")
 
 
 class While:
@@ -185,5 +206,6 @@ class StrIO:
     def write(self, c: str) -> None:
         self._content += c
 
+    @property
     def content(self) -> str:
         return self._content

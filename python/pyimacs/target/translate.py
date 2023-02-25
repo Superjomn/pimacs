@@ -90,7 +90,7 @@ class MlirToAstTranslator:
         let = ast.LetExpr(vars=let_args, body=body)
         return let
 
-    def visit_Operation(self, op: ir.Operation) -> ast.Expr:
+    def visit_Operation(self, op: ir.Operation) -> ast.Expression:
         if op.name() in ("arith.addi", "arith.addf",
                          "arith.subi", "arith.subf",
                          "arith.muli", "arith.mulf",
@@ -112,25 +112,25 @@ class MlirToAstTranslator:
         "arith.divs": "/", "arith.divf": "/",
     }
 
-    def visit_binary(self, op: ir.Operation) -> ast.Expr:
+    def visit_binary(self, op: ir.Operation) -> ast.Expression:
         assert op.num_operands() == 2
         lhs = op.get_operand(0).get()
         rhs = op.get_operand(1).get()
-        return ast.Expr([ast.Token(self.bin_op[op.name()]), self.symbol_table.get(lhs), self.symbol_table.get(rhs)])
+        return ast.Expression([ast.Token(self.bin_op[op.name()]), self.symbol_table.get(lhs), self.symbol_table.get(rhs)])
 
-    def visit_Ret(self, op: ir.Operation) -> ast.Expr:
+    def visit_Ret(self, op: ir.Operation) -> ast.Expression:
         if op.num_operands() == 0:
-            return ast.Expr()
+            return ast.Expression()
         # TODO[Superjomn]: Unify Var to Expr
         if op.num_operands() == 1:
             return self.get_or_set_value(op.get_operand(0))
 
-    def visit_Region(self, op: ir.Region) -> ast.Expr:
+    def visit_Region(self, op: ir.Region) -> ast.Expression:
         blocks = []
         for i in range(op.size()):
             block = op.blocks(i)
             blocks.append(self.visit(block))
-        return ast.Expr(blocks)
+        return ast.Expression(blocks)
 
     def visit_Constant(self, op: ir.Operation):
         value = op.get_attr("value")
@@ -144,8 +144,8 @@ class MlirToAstTranslator:
             value = value.to_string()
         return self.setq(op.get_result(0), value)
 
-    def setq(self, var: ir.Value, val: Any) -> ast.Expr:
-        return ast.Expr([ast.Token("setq"), self.symbol_table.get(var), val])
+    def setq(self, var: ir.Value, val: Any) -> ast.Expression:
+        return ast.Expression([ast.Token("setq"), self.symbol_table.get(var), val])
 
 
 @dataclass(init=True)
