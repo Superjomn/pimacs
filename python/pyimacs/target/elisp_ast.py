@@ -78,7 +78,7 @@ class Token(Node):
         elif type(self.symbol) is str:
             dumper.put(f'"{self.symbol}"')
         else:
-            dumper.put(self.symbol)
+            dumper.put(str(self.symbol))
 
 
 class Symbol(Token):
@@ -103,13 +103,22 @@ class Expr(abc.ABC, Node):
         raise NotImplementedError()
 
     def dump(self, dumper: Dumper) -> None:
-        dumper.print(f"({' '.join([str(s) for s in self.symbols])})")
+        dumper.print("(")
+        n = len(self.symbols)
+        for id, sym in enumerate(self.symbols):
+            sym.dump(dumper)
+            if id != n-1:
+                dumper.put(" ")
+        dumper.print(")")
 
 
 class Expression(Expr):
     ''' An expression, it will dumped like (a b c) '''
 
     def __init__(self, *symbols: List[Any]):
+        for x in symbols:
+            assert isinstance(x, Node), f"{x} is not a AST node"
+
         self._symbols = symbols
 
     @property

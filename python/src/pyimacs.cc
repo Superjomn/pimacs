@@ -65,7 +65,7 @@ void initMLIR(py::module &m) {
 
   py::class_<mlir::Value>(m, "Value")
       .def("set_attr",
-           [](mlir::Value &self, std::string &name,
+           [](mlir::Value &self, const std::string &name,
               mlir::Attribute &attr) -> void {
              if (mlir::Operation *definingOp = self.getDefiningOp())
                definingOp->setAttr(name, attr);
@@ -77,8 +77,15 @@ void initMLIR(py::module &m) {
            [](mlir::Value &self, mlir::Value &newValue) {
              self.replaceAllUsesWith(newValue);
            })
-      .def("__hash__", [](mlir::Value &self) -> size_t {
-        return reinterpret_cast<size_t>(&self);
+      .def("__hash__",
+           [](mlir::Value &self) -> size_t {
+             return std::hash<std::string>{}(toStr(self));
+           })
+      .def("__str__",
+           [](mlir::Value &self) -> std::string { return toStr(self); })
+      .def("__repr__", [](mlir::Value &self) -> std::string {
+        return "<Value " +
+               std::to_string(std::hash<std::string>{}(toStr(self))) + ">";
       });
 
   py::class_<mlir::BlockArgument, mlir::Value>(m, "BlockArgument");
@@ -254,15 +261,23 @@ void initMLIR(py::module &m) {
           ret::reference)
       .def("get_num_results",
            [](mlir::Operation &self) -> int { return self.getNumResults(); })
-      .def("get_result",
-           [](mlir::Operation &self, int idx) -> mlir::Value {
-             return self.getResult(idx);
-           })
+      .def(
+          "get_result",
+          [](mlir::Operation &self, int idx) -> mlir::Value {
+            return self.getResult(idx);
+          },
+          ret::reference)
       .def("get_attr",
            [](mlir::Operation &self, const std::string &name)
                -> mlir::Attribute { return self.getAttr(name); })
-      .def("to_value", [](mlir::Operation &self) {
-        return mlir::Value(self.getResult(0));
+      .def("to_value",
+           [](mlir::Operation &self) { return mlir::Value(self.getResult(0)); })
+      .def("__str__", [](mlir::Operation &self) -> std::string {
+        std::string buf;
+        llvm::raw_string_ostream os(buf);
+        os << self;
+        os.flush();
+        return buf;
       });
 
   // scf Ops

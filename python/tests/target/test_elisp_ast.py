@@ -7,7 +7,7 @@ def test_let():
     assert str(a) == "a"
     b = Var("b", default=1)
 
-    add = Expression("+", a, b)
+    add = Expression(Symbol("+"), a, b)
     assert str(add) == "(+ a b)", str(add)
 
     let = LetExpr(vars=[a, b], body=[add])
