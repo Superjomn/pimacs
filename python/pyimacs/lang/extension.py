@@ -47,27 +47,35 @@ def ctx() -> ir.MLIRContext:
 
 
 def register_extern(func_name: str):
+    ''' Register an external function into the module. This would help in MLIR call. '''
     return functools.partial(_register_extern, func_name=func_name)
 
 
+@dataclass
+class Signature:
+    ''' Record signature and some other meta information for an external function. '''
+    elisp_func_name: str  # the corresponding elisp function name
+    signature: inspect.FullArgSpec
+    file_name: str
+    lineno: str
+
+    @staticmethod
+    def get_func_id(signature: "Signature"):
+        ''' Generate a unique id for the function. '''
+        return f"{signature.elisp_func_name}_{signature.file_name}:{signature.lineno}"
+
+
+# Holds all the signatures for the extern functions.
+# A map from func_id to Signature.
+func_signature_registry: Dict[str, Signature] = dict()
+
+
 def _register_extern(func: Callable, func_name: str):
-    signature = inspect.getfullargspec(func)
-    decl_args = signature.args
-    annotation = signature.annotations
-    if not module().has_function(func_name):
-        ''' Register function into module. '''
-        # TODO[Superjomn]: Consider tuple later
-        ret_type = [dtype_to_mlir_type(
-            annotation['return'], builder())] if annotation['return'] is not None else []
-        # get function type
-        in_types = []
-        for arg, py_ty in annotation.items():
-            if arg == "return":
-                continue
-            in_types.append(dtype_to_mlir_type(py_ty, builder()))
-        func_ty = builder().get_function_ty(in_types, ret_type)
-        func = builder().get_or_insert_function(module(), func_name, func_ty, "public")
-        module().push_back(func)
+    signature = Signature(func_name, inspect.getfullargspec(
+        func), inspect.getfile(func), inspect.getsourcelines(func)[1])
+    func_id = Signature.get_func_id(signature)
+
+    func_signature_registry[func_id] = signature
 
     def arg_to_mlir_value(v: Any):
         if type(v) is pl.Value:
@@ -102,8 +110,40 @@ def _register_extern(func: Callable, func_name: str):
         else:
             return arg_to_mlir_value(arg)
 
+    def register_to_module(signature: inspect.FullArgSpec, module: ir.Module, builder: ir.Builder):
+        annotation = signature.annotations
+        if not module.has_function(func_name):
+            ''' Register function into module. '''
+            # TODO[Superjomn]: Consider tuple later
+            ret_type = [dtype_to_mlir_type(
+                annotation['return'], builder)] if annotation['return'] is not None else []
+            # get function type
+            in_types = []
+            for arg, py_ty in annotation.items():
+                if arg == "return":
+                    continue
+                in_types.append(dtype_to_mlir_type(py_ty, builder))
+            func_ty = builder.get_function_ty(in_types, ret_type)
+            func = builder.get_or_insert_function(
+                module, func_name, func_ty, "public")
+            module.push_back(func)
+
     def fn(*args, **kwargs):
-        assert not kwargs, "kwargs is supported yet"
+        assert module(), "module() need to be set before calling extern function."
+        assert builder(), "builder() need to be set before calling extern function."
+        assert not kwargs, "kwargs is not supported in extern function yet."
+
+        func_id = fn.__doc__
+        assert func_id
+
+        signature = func_signature_registry.get(func_id).signature
+        assert signature
+        annotation = signature.annotations
+        decl_args = signature.args
+
+        if not module().has_function(func_name):
+            register_to_module(signature, module(), builder())
+
         mlir_args = []
         for idx, arg in enumerate(args):
             py_type = annotation.get(decl_args[idx])
@@ -112,6 +152,8 @@ def _register_extern(func: Callable, func_name: str):
 
         func = module().get_function(func_name)
         return builder().call(func, mlir_args)
+    # We put the func_id into the docstring of the function to make it possible to obtain the signature later.
+    fn.__doc__ = Signature.get_func_id(signature)
 
     return fn
 
