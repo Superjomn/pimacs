@@ -208,8 +208,6 @@ class CodeGenerator(ast.NodeVisitor):
             '''
             member function call, this is only valid in python mode in compilation time.
             '''
-            print('id', node.func.value.id)
-            print('gscore', self.gscope.get(node.func.value.id))
             value = self.get(node.func.value.id)
             assert value
             func_name = node.func.attr
@@ -266,7 +264,6 @@ class CodeGenerator(ast.NodeVisitor):
                         pyl.Value(call_op.get_result(i), callee_ret_type[i]))
                 return tuple(results)
             # TODO: Process the builtin fuction, should eval inplace.
-        print('visit_Call: args', args)
         return fn(*args, **kws)
 
     def visit_compound_statement(self, stmts):
@@ -374,9 +371,7 @@ class CodeGenerator(ast.NodeVisitor):
             return self.visit(node.orelse)
 
     def visit_Attribute(self, node):
-        print('visit_attr: node.value: ', node.value)
         lhs = self.visit(node.value)
-        print('lhs: ', lhs)
         return getattr(lhs, node.attr)
 
     def visit(self, node):
