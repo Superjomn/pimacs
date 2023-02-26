@@ -189,7 +189,8 @@ class IfElse(Node):
         dumper.do_indent()
         self.then_body.dump(dumper)
         dumper.println()
-        self.else_body.dump(dumper)
+        if self.else_body:
+            self.else_body.dump(dumper)
         dumper.undo_indent()
         dumper.print(")")
 

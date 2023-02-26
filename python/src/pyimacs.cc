@@ -272,6 +272,10 @@ void initMLIR(py::module &m) {
                -> mlir::Attribute { return self.getAttr(name); })
       .def("to_value",
            [](mlir::Operation &self) { return mlir::Value(self.getResult(0)); })
+      .def("to_if_op",
+           [](mlir::Operation &self) {
+             return llvm::cast<mlir::scf::IfOp>(self);
+           })
       .def("__str__", [](mlir::Operation &self) -> std::string {
         std::string buf;
         llvm::raw_string_ostream os(buf);

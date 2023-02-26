@@ -152,9 +152,7 @@ class CodeGenerator(ast.NodeVisitor):
         if not isinstance(values, tuple):
             values = [values]
         for name, value in zip(names, values):
-            if isinstance(value, pyl.ElispClass):
-                pass
-            elif isinstance(value, pyl_ext.Ext):
+            if isinstance(value, pyl_ext.Ext):
                 self.set_value(name, value)
             # by default, constexpr are assigned into python variable
             elif not isinstance(value, pyl.Value):
@@ -191,6 +189,13 @@ class CodeGenerator(ast.NodeVisitor):
     def visit_Constant(self, node: ast.Constant) -> Any:
         return pyl.constant(node.value, self.builder)
 
+    def get(self, id: str) -> Any:
+        ''' Get a symbol from local or global scope. '''
+        if id in self.lscope:
+            return self.lscope[id]
+        if id in self.gscope:
+            return self.gscope[id]
+
     def visit_Call(self, node):
         kws = dict()
         for keyword in node.keywords:
@@ -203,7 +208,8 @@ class CodeGenerator(ast.NodeVisitor):
             '''
             member function call, this is only valid in python mode in compilation time.
             '''
-            value = self.lscope.get(node.func.value.id)
+            value = self.get(node.func.value.id)
+            assert value
             func_name = node.func.attr
             func = getattr(value, func_name)
             return func(*args)
@@ -258,7 +264,6 @@ class CodeGenerator(ast.NodeVisitor):
                         pyl.Value(call_op.get_result(i), callee_ret_type[i]))
                 return tuple(results)
             # TODO: Process the builtin fuction, should eval inplace.
-        print('visit_Call: args', args)
         return fn(*args, **kws)
 
     def visit_compound_statement(self, stmts):
@@ -366,9 +371,7 @@ class CodeGenerator(ast.NodeVisitor):
             return self.visit(node.orelse)
 
     def visit_Attribute(self, node):
-        print('visit_attr: node.value: ', node.value)
         lhs = self.visit(node.value)
-        print('lhs: ', lhs)
         return getattr(lhs, node.attr)
 
     def visit(self, node):
