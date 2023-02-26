@@ -24,6 +24,16 @@ global_extern_functions: Dict[str, ir.Function] = {}
 # @register_extern("buffer-get")
 # def buffer_get(buf_name: str) -> object: ...
 
+def set_global_builder(builder: ir.Builder):
+    global global_mlir_builder
+    global_mlir_builder = builder
+
+
+def set_global_module(module: ir.Module):
+    global global_mlir_module
+    global_mlir_module = module
+
+
 def builder() -> ir.Builder:
     global global_mlir_builder
     if not global_mlir_builder:
@@ -151,7 +161,8 @@ def _register_extern(func: Callable, func_name: str):
             mlir_args.append(mlir_arg)
 
         func = module().get_function(func_name)
-        return builder().call(func, mlir_args)
+        # NOTE: Only one result is supported now.
+        return builder().call(func, mlir_args).get_result(0)
     # We put the func_id into the docstring of the function to make it possible to obtain the signature later.
     fn.__doc__ = Signature.get_func_id(signature)
 
