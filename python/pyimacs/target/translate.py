@@ -55,7 +55,8 @@ class MlirToAstTranslator:
         funcs = []
         for func_name in mod.get_function_names():
             func = self.visit_Function(mod.get_function(func_name))
-            funcs.append(func)
+            if func is not None:
+                funcs.append(func)
         return funcs
 
     def get_or_set_value(self, var: ir.Value) -> ast.Var:
@@ -65,6 +66,10 @@ class MlirToAstTranslator:
         return ret
 
     def visit_Function(self, op: ir.Function) -> ast.Function:
+        if op.body().size() == 0:
+            # get an Func declaration, do nothing
+            return None
+
         with SymbolTableGuard(self.symbol_table) as s:
             name = op.get_name()
             arg_vars = []
@@ -119,6 +124,8 @@ class MlirToAstTranslator:
             return self.visit_Ret(op)
         if op.name() == "scf.if":
             return self.visit_If(op)
+        if op.name() == "std.call":
+            return self.visit_Call(op)
 
         raise NotImplementedError(op.name())
 
@@ -185,6 +192,14 @@ class MlirToAstTranslator:
             else_block = self.visit_Block(else_block)
 
         return ast.IfElse(cond, then_block, else_block)
+
+    def visit_Call(self, op: ir.Operation):
+        callee = op.to_call_op().get_callee()
+        args = []
+        for arg in op.operands():
+            args.append(self.symbol_table.get(arg))
+        call = ast.Call(ast.Symbol(callee), args)
+        return self.setq(op.get_result(0), call)
 
     def setq(self, var: ir.Value, val: Any) -> ast.Expression:
         return ast.Expression(ast.Symbol("setq"), self.symbol_table.get(var), val)

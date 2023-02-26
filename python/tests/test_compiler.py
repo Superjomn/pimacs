@@ -1,5 +1,5 @@
 import pyimacs.lang as pyl
-from pyimacs.elisp.buffer import Buffer
+from pyimacs.elisp.buffer import Buffer, buffer_get
 from pyimacs.runtime import jit
 
 from pyimacs import compiler
@@ -83,6 +83,29 @@ def test_kernel_with_if():
 )
     '''
     assert code.strip() == target.strip()
+
+
+def test_external_call():
+
+    @jit
+    def some_fn():
+        return buffer_get("hello")
+
+    code = compiler.compile(some_fn, signature="void -> o")
+    target = '''
+(defun some_fn (arg0)
+    (let*
+        (arg1 arg2)
+        (setq arg1 "hello")
+        (setq arg2 (buffer-get arg1))
+        arg2
+    )
+)
+    '''
+    assert code.strip() == target.strip()
+
+
+test_external_call()
 
 
 # def test_kernel_external_call():

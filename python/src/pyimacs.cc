@@ -276,6 +276,8 @@ void initMLIR(py::module &m) {
            [](mlir::Operation &self) {
              return llvm::cast<mlir::scf::IfOp>(self);
            })
+      .def("to_call_op",
+           [](mlir::Operation &self) { return llvm::cast<mlir::CallOp>(self); })
       .def("__str__", [](mlir::Operation &self) -> std::string {
         std::string buf;
         llvm::raw_string_ostream os(buf);
@@ -287,6 +289,16 @@ void initMLIR(py::module &m) {
   // scf Ops
   py::class_<mlir::scf::ForOp, mlir::OpState>(m, "ForOp")
       .def("get_induction_var", &mlir::scf::ForOp::getInductionVar);
+
+  py::class_<mlir::CallOp, mlir::OpState>(m, "CallOp")
+      .def("get_callee",
+           [](mlir::CallOp &self) -> std::string {
+             return self.getCallee().str();
+           })
+      .def("operands", [](mlir::CallOp &self) -> std::vector<mlir::Value> {
+        return std::vector<mlir::Value>(self.getOperands().begin(),
+                                        self.getOperands().end());
+      });
 
   py::class_<mlir::scf::IfOp, mlir::OpState>(m, "IfOp")
       .def("get_then_block", &mlir::scf::IfOp::thenBlock, ret::reference)
@@ -594,7 +606,10 @@ void initBuilder(py::module &m) {
               const std::string &visibility) -> mlir::FuncOp {
              if (mlir::Operation *funcOperation = module.lookupSymbol(funcName))
                return llvm::dyn_cast<mlir::FuncOp>(funcOperation);
+
              auto loc = self.getUnknownLoc();
+             mlir::OpBuilder::InsertionGuard guard(self);
+             self.setInsertionPoint(module);
              if (auto funcTy = funcType.dyn_cast<mlir::FunctionType>()) {
                mlir::ArrayRef<mlir::NamedAttribute> attrs = {
                    mlir::NamedAttribute(self.getStringAttr("sym_visibility"),

@@ -58,6 +58,10 @@ class CodeGenerator(ast.NodeVisitor):
             return None
         if isinstance(ret_value, tuple):
             assert NotImplementedError()
+        elif isinstance(ret_value, ir.Operation):
+            self.builder.ret([ret_value.get_result(0)])
+        elif isinstance(ret_value, ir.Value):
+            self.builder.ret([ret_value])
         else:
             ret = pyl.to_value(ret_value, self.builder)
             self.builder.ret([ret.handle])
@@ -202,6 +206,13 @@ class CodeGenerator(ast.NodeVisitor):
             kws.update(self.visit(keyword))
         args = [self.visit(arg) for arg in node.args]
 
+        # TODO[Superjomn]: Consider to remove the singleton for parallel compilation.
+        from pyimacs.lang.extension import (set_global_builder,
+                                            set_global_module)
+        set_global_module(self.module)
+        set_global_builder(self.builder)
+
+        # custom function, not a JIT function, we need to call it in python mode.
         if type(node.func) is ast.Name:
             func_name = node.func.id
         elif type(node.func) is ast.Attribute:
@@ -434,6 +445,7 @@ def str_to_ty(name):
         "f": pyl.Float,
         "i": pyl.Int,
         "b": pyl.Bool,
+        "o": pyl.Object,
         "s": pyl.String,
         "str": pyl.String,
         "void": pyl.Void,
