@@ -35,16 +35,12 @@ def set_global_module(module: ir.Module):
 
 
 def builder() -> ir.Builder:
-    global global_mlir_builder
-    if not global_mlir_builder:
-        global_mlir_builder = ir.Builder(ctx())
+    assert global_mlir_builder, "Builder is not set."
     return global_mlir_builder
 
 
 def module() -> ir.Module:
-    global global_mlir_module
-    if not global_mlir_module:
-        global_mlir_module = builder().create_module()
+    assert global_mlir_module, "Module is not set."
     return global_mlir_module
 
 
