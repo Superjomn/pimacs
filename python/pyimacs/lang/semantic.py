@@ -88,33 +88,3 @@ class ExternalCallable:
             arg, pl.Value) else arg for arg in args]
         print('args', args)
         return builder.extern_call(self.return_type.to_ir(builder), self.func_name, args)
-
-
-# class ElispClass(object):
-#     pass
-
-
-# class Buffer(ElispClass):
-#     _current_buffer = ExternalCallable(
-#         func_name="current-buffer", return_type=pl.Any, attrs={})
-#     _get_buffer = ExternalCallable(
-#         func_name="get-buffer", return_type=pl.Any, attrs={})
-#     _get_name = ExternalCallable(
-#         func_name="buffer-name", return_type=pl.String, num_args=1, attrs={})
-#     _get_or_create = ExternalCallable(
-#         func_name="get-buffer-create", num_args=1, return_type=pl.Any, attrs={})
-
-#     def __init__(self, elisp_object: Any = None, name: str = None, builder: ir.Builder = None):
-#         self.elisp_object = elisp_object
-#         if name:
-#             self.elisp_object = Buffer.get_or_create(name)
-
-#         assert builder
-#         self.builder = builder
-
-#     def name(self):
-#         return Buffer._get_name(self.elisp_object, builder=self.builder)
-
-#     @staticmethod
-#     def get_or_create(name: str) -> "Buffer":
-#         return Buffer(elisp_object=Buffer._get_or_create(name))
