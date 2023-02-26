@@ -130,8 +130,10 @@ def _register_extern(func: Callable, func_name: str):
                     continue
                 in_types.append(dtype_to_mlir_type(py_ty, builder))
             func_ty = builder.get_function_ty(in_types, ret_type)
+
             func = builder.get_or_insert_function(
                 module, func_name, func_ty, "public")
+
             module.push_back(func)
 
     def fn(*args, **kwargs):

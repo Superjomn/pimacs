@@ -92,7 +92,17 @@ def test_external_call():
         return buffer_get("hello")
 
     code = compiler.compile(some_fn, signature="void -> o")
-    print(code)
+    target = '''
+(defun some_fn (arg0)
+    (let*
+        (arg1 arg2)
+        (setq arg1 "hello")
+        (setq arg2 (buffer-get arg1))
+        arg2
+    )
+)
+    '''
+    assert code.strip() == target.strip()
 
 
 test_external_call()

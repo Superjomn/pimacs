@@ -56,7 +56,6 @@ class CodeGenerator(ast.NodeVisitor):
         if ret_value is None:
             self.builder.ret([])
             return None
-        print('ret_value', ret_value, type(ret_value))
         if isinstance(ret_value, tuple):
             assert NotImplementedError()
         elif isinstance(ret_value, ir.Operation):
@@ -202,7 +201,6 @@ class CodeGenerator(ast.NodeVisitor):
             return self.gscope[id]
 
     def visit_Call(self, node):
-        print(f"visit call {node.func.id}")
         kws = dict()
         for keyword in node.keywords:
             kws.update(self.visit(keyword))

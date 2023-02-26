@@ -86,5 +86,4 @@ class ExternalCallable:
 
         args = [arg.handle if isinstance(
             arg, pl.Value) else arg for arg in args]
-        print('args', args)
         return builder.extern_call(self.return_type.to_ir(builder), self.func_name, args)
