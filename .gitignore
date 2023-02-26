@@ -127,3 +127,5 @@ mypy.json
 
 cmake-build-debug
 .idea
+
+__pycache__

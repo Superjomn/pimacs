@@ -96,7 +96,12 @@ class MlirToAstTranslator:
         body = []
 
         for op_ in op.operations():
-            body.append(self.visit_Operation(op_))
+            if op_.name() == 'scf.yield':
+                continue
+            op_ = self.visit_Operation(op_)
+            # ignore the empty Return op
+            if op_ is not None:
+                body.append(op_)
 
         let = ast.LetExpr(vars=let_args, body=body)
         return let
@@ -112,6 +117,8 @@ class MlirToAstTranslator:
             return self.visit_Constant(op)
         if op.name() == "std.return":
             return self.visit_Ret(op)
+        if op.name() == "scf.if":
+            return self.visit_If(op)
 
         raise NotImplementedError(op.name())
 
@@ -137,7 +144,9 @@ class MlirToAstTranslator:
 
     def visit_Ret(self, op: ir.Operation) -> ast.Expression:
         if op.num_operands() == 0:
-            return ast.Expression()
+            # Ignore the empty return. It is always inserted by default incase no return statement is provided in MLIR.
+            # To avoid it break the emitting of IfOp.
+            return None
         # TODO[Superjomn]: Unify Var to Expr
         if op.num_operands() == 1:
             return self.symbol_table.get(op.get_operand(0).get())
@@ -162,6 +171,20 @@ class MlirToAstTranslator:
 
         value = ast.Token(value)
         return self.setq(op.get_result(0), value)
+
+    def visit_If(self, op: ir.Operation):
+        cond = op.get_operand(0)
+        cond = self.symbol_table.get(cond.get())
+
+        if_op = op.to_if_op()
+        then_block = if_op.get_then_block()
+        else_block = if_op.get_else_block()
+
+        then_block = self.visit_Block(then_block)
+        if else_block:
+            else_block = self.visit_Block(else_block)
+
+        return ast.IfElse(cond, then_block, else_block)
 
     def setq(self, var: ir.Value, val: Any) -> ast.Expression:
         return ast.Expression(ast.Symbol("setq"), self.symbol_table.get(var), val)
