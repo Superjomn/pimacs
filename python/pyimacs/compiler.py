@@ -1,5 +1,6 @@
 import ast
 import inspect
+import logging
 import sys
 import warnings
 from pprint import pprint
@@ -42,6 +43,7 @@ class CodeGenerator(ast.NodeVisitor):
         raise ValueError(f'{name} is not defined')
 
     def set_value(self, name: str, value) -> None:
+        assert value is not None
         self.lscope[name] = value
         self.local_defs[name] = value
 
@@ -128,6 +130,7 @@ class CodeGenerator(ast.NodeVisitor):
         return node.arg
 
     def visit_Assign(self, node):
+
         _names = []
         for target in node.targets:
             _names += [self.visit(target)]
@@ -140,27 +143,16 @@ class CodeGenerator(ast.NodeVisitor):
             values = [values]
 
         for name, value in zip(names, values):
-            if not isinstance(value, pyl.Value):
-                value = pyl.to_tensor(value, self.builder)
-            self.set_value(name, value)
-
-    def visit_Assign(self, node):
-        _names = []
-        for target in node.targets:
-            _names += [self.visit(target)]
-        assert len(_names) == 1
-        names = _names[0]
-        values = self.visit(node.value)
-        if not isinstance(names, tuple):
-            names = [names]
-        if not isinstance(values, tuple):
-            values = [values]
-        for name, value in zip(names, values):
+            assert value is not None
             if isinstance(value, pyl_ext.Ext):
                 self.set_value(name, value)
+                continue
             # by default, constexpr are assigned into python variable
             elif not isinstance(value, pyl.Value):
                 value = pyl.to_value(value, self.builder)
+            else:
+                logging.debug(f"Assign {type(value)} {value}")
+
             self.set_value(name, value)
 
     def visit_BinOp(self, node: ast.BinOp) -> Any:

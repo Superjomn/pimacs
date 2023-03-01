@@ -1,3 +1,5 @@
+import logging
+
 import pyimacs.lang as pyl
 from pyimacs.elisp.buffer import Buffer, buffer_get
 from pyimacs.runtime import jit
@@ -105,15 +107,24 @@ def test_external_call():
     assert code.strip() == target.strip()
 
 
-test_external_call()
+def test_kernel_external_call():
+    @jit
+    def some_fn():
+        buffer = Buffer("*a-buffer*")
+        name = buffer.get_name()
+        return name
 
+    code = compiler.compile(some_fn, signature="void -> s")
 
-# def test_kernel_external_call():
-#     @jit
-#     def some_fn():
-#         buffer = Buffer("*a-buffer*")
-#         name = buffer.get_name()
-#         return name
-
-#     code = compiler.compile(some_fn, signature="void -> s")
-#     print(code)
+    target = '''
+ (defun some_fn (arg0)
+    (let*
+        (arg1 arg2 arg3)
+        (setq arg1 "*a-buffer*")
+        (setq arg2 (buffer-get arg1))
+        (setq arg3 (buffer-file-name arg2))
+        arg3
+    )
+)
+    '''
+    assert code.strip() == target.strip()
