@@ -57,17 +57,39 @@ class CodeGenerator(ast.NodeVisitor):
         ret_value = self.visit(node.value)
         if ret_value is None:
             self.builder.ret([])
-            return None
+            return
         if isinstance(ret_value, tuple):
             assert NotImplementedError()
+        if isinstance(ret_value, pyl_ext.Ext):
+            self.builder.ret([ret_value.__handle_return__()])
+            return
         elif isinstance(ret_value, ir.Operation):
             self.builder.ret([ret_value.get_result(0)])
+            return
         elif isinstance(ret_value, ir.Value):
             self.builder.ret([ret_value])
+            return
         else:
             ret = pyl.to_value(ret_value, self.builder)
             self.builder.ret([ret.handle])
-            return ret.dtype
+
+    def visit_Subscript(self, node: ast.Subscript) -> Any:
+        value = self.visit(node.value)
+        slice_ = self.visit(node.slice)
+        if isinstance(slice_, slice):
+            start, stop, step = slice_.start, slice_.stop, slice_.step
+            if step is not None:
+                assert NotImplementedError()
+            if start is None:
+                start = 0
+            if stop is None:
+                stop = len(value)
+            return value[start:stop]
+        else:
+            assert NotImplementedError()
+
+    def visit_Slice(self, node: ast.Slice) -> Any:
+        return slice(self.visit(node.lower), self.visit(node.upper), self.visit(node.step))
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
         arg_names, kwarg_names = self.visit(node.args)
@@ -158,6 +180,24 @@ class CodeGenerator(ast.NodeVisitor):
     def visit_BinOp(self, node: ast.BinOp) -> Any:
         lhs = self.visit(node.left)
         rhs = self.visit(node.right)
+        if isinstance(lhs, pyl_ext.Ext):
+            fn = {
+                ast.Add: '__add__',
+                ast.Sub: '__sub__',
+                ast.Mult: '__mul__',
+                ast.Div: '__div__',
+                ast.FloorDiv: '__floordiv__',
+                ast.Mod: '__mod__',
+                ast.Pow: '__pow__',
+                ast.LShift: '__lshift__',
+                ast.RShift: '__rshift__',
+                ast.BitAnd: '__and__',
+                ast.BitOr: '__or__',
+                ast.BitXor: '__xor__',
+            }[type(node.op)]
+
+            return getattr(lhs, fn)(rhs)
+
         fn = {
             ast.Add: 'add',
             ast.Sub: 'sub',

@@ -187,4 +187,6 @@ class Ext:
     '''
     Placeholder to mark the externsion classes. All the inherient class's method will be evaluated in compile time.
     '''
-    pass
+
+    def __handle_return__(self): ...
+    ''' handler to processing return in compiler. '''
