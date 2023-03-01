@@ -31,6 +31,9 @@ class Buffer(Ext):
     def get_name(self) -> str:
         return buffer_file_name(self._handle)
 
+    def __handle_return__(self):
+        return self._handle
+
 
 @register_extern("buffer-get")
 def buffer_get(name: str) -> object: ...
