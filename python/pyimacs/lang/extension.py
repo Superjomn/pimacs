@@ -159,8 +159,12 @@ def _register_extern(func: Callable, func_name: str):
             mlir_args.append(mlir_arg)
 
         func = module().get_function(func_name)
-        # NOTE: Only one result is supported now.
-        return builder().call(func, mlir_args).get_result(0)
+        called = builder().call(func, mlir_args)
+        if called.get_num_results() == 0:
+            return
+        assert called.get_num_results() == 1, "Only one result is supported now."
+        return called.get_result(0)
+
     # We put the func_id into the docstring of the function to make it possible to obtain the signature later.
     fn.__doc__ = Signature.get_func_id(signature)
 

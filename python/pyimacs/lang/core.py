@@ -89,6 +89,21 @@ def to_value(x, builder):
         return Value(builder.get_float32(x), Float)
     if isinstance(x, Value):
         return x
+    if isinstance(x, str):
+        return Value(builder.get_string(x), String)
+
+    if isinstance(x, ir.Value):
+        v: ir.Value = x
+        type = v.get_type()
+        if type.is_int():
+            return Value(v, Int)
+        elif type.is_float():
+            return Value(v, Float)
+        elif type.is_string():
+            return Value(v, String)
+        elif type.is_object():
+            return Value(v, Object)
+    raise NotImplementedError()
 
 
 @dataclass(init=True, repr=True)

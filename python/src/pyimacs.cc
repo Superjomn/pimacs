@@ -50,6 +50,10 @@ void initMLIR(py::module &m) {
 
   py::class_<mlir::Type>(m, "Type")
       .def("is_integer", &mlir::Type::isInteger)
+      .def("is_int",
+           [](mlir::Type &self) {
+             return self.isInteger(32) || self.isInteger(64);
+           })
       .def(
           "is_float",
           [](mlir::Type &self) -> bool { return self.isF16() || self.isF32(); })
@@ -77,6 +81,8 @@ void initMLIR(py::module &m) {
            [](mlir::Value &self, mlir::Value &newValue) {
              self.replaceAllUsesWith(newValue);
            })
+
+      .def("get_type", &mlir::Value::getType)
       .def("__hash__",
            [](mlir::Value &self) -> size_t {
              return std::hash<std::string>{}(toStr(self));
