@@ -30,17 +30,12 @@ def test_naive_kernel():
         return b + 1
 
     code = compiler.compile(some_fn, signature="i -> i")
+    print(code)
     target = '''
 (defun some_fn (arg0)
     (let*
-        (arg1 arg2 arg3 arg4 arg5 arg6)
-        (setq arg1 1)
-        (setq arg2 (+ arg0 arg1))
-        (setq arg3 23)
-        (setq arg4 (* arg2 arg3))
-        (setq arg5 1)
-        (setq arg6 (+ arg4 arg5))
-        arg6
+        ()
+        (+ (* (+ arg0 1) 23) 1)
     )
 )
     '''
@@ -64,10 +59,7 @@ def test_kernel_with_if():
     target = '''
 (defun some_fn (arg0)
     (let*
-        (arg1 arg2 arg3)
-        (setq arg1 1)
-        (setq arg2 (+ arg0 arg1))
-        (setq arg3 -1)
+        ()
         (if arg3
             (let*
                 ()
@@ -75,10 +67,8 @@ def test_kernel_with_if():
             )
 
             (let*
-                (arg4 arg5)
-                (setq arg4 1)
-                (setq arg5 (+ arg2 arg4))
-                arg5
+                ()
+                (+ (+ arg0 1) 1)
             )
         )
     )
@@ -94,13 +84,12 @@ def test_external_call():
         return buffer_get("hello")
 
     code = compiler.compile(some_fn, signature="void -> o")
+    print(code)
     target = '''
 (defun some_fn (arg0)
     (let*
-        (arg1 arg2)
-        (setq arg1 "hello")
-        (setq arg2 (buffer-get arg1))
-        arg2
+        ()
+        (buffer-get "hello")
     )
 )
     '''
@@ -115,15 +104,13 @@ def test_kernel_external_call():
         return name
 
     code = compiler.compile(some_fn, signature="void -> s")
+    print(code)
 
     target = '''
- (defun some_fn (arg0)
+(defun some_fn (arg0)
     (let*
-        (arg1 arg2 arg3)
-        (setq arg1 "*a-buffer*")
-        (setq arg2 (buffer-get arg1))
-        (setq arg3 (buffer-file-name arg2))
-        arg3
+        ()
+        (buffer-file-name (buffer-get "*a-buffer*"))
     )
 )
     '''

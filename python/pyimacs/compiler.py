@@ -479,9 +479,13 @@ def translate_ast_to_lispir(fn, signature, specialization):
 
 def translate_lispir_to_lispcode(mod: ir.Module) -> str:
     ''' Translate Lisp IR to lisp code. '''
+    from pyimacs.target.elisp_ast_transforms import transform
     from pyimacs.target.translate import MlirToAstTranslator
     translator = MlirToAstTranslator()
     funcs = translator.run(mod)
+    for func in funcs:
+        transform(func)
+
     return "\n\n".join(str(func) for func in funcs)
 
 

@@ -1,6 +1,7 @@
 import abc
+import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import *
 
 # This file defines some speicfic syntax AST for Elisp.
@@ -43,6 +44,10 @@ class Dumper:
 
 
 class Node:
+    # the nodes used this
+    def __init__(self) -> None:
+        self.users = set()
+
     @abc.abstractclassmethod
     def dump(self, dumper: Dumper) -> None:
         pass
@@ -53,14 +58,33 @@ class Node:
         self.dump(dumper)
         return io.content
 
+    def add_user(self, user: "Node") -> None:
+        logging.debug(f"add_user {self} -> {user}")
+        self.users.add(user)
 
-@dataclass()
+    def del_user(self, user: "Node") -> None:
+        self.users.remove(user)
+
+    @property
+    def user_count(self) -> int:
+        return len(self.users)
+
+    def replace_symbol(self, old: Any, new: Any) -> None:
+        raise NotImplementedError()
+
+
+@dataclass
 class Token(Node):
     '''
     Token helps to represent constants(int, float, string, symbol) or variables in elisp.
     '''
     symbol: Any
     is_symbol: bool = False
+
+    def __init__(self, symbol: Any, is_symbol: bool = False):
+        super().__init__()
+        self.symbol = symbol
+        self.is_symbol = is_symbol
 
     def is_int(self) -> bool:
         return type(self.symbol) is int
@@ -80,23 +104,42 @@ class Token(Node):
         else:
             dumper.put(str(self.symbol))
 
+    def replace_symbol(self, old: Any, new: Any) -> None:
+        pass
 
+
+@dataclass
 class Symbol(Token):
     def __init__(self, symbol: str):
         super().__init__(symbol, is_symbol=True)
 
 
-@dataclass()
+@dataclass
 class Var(Node):
     name: str
     default: Any = None
 
+    def __init__(self, name: str, default: Any = None):
+        super().__init__()
+        self.name = name
+        self.default = default
+
     def dump(self, dumper: Dumper) -> None:
         dumper.put(self.name)
+
+    def replace_symbol(self, old: Any, new: Any) -> None:
+        pass
+
+    def __hash__(self) -> int:
+        return hash(self.name)
 
 
 class Expr(abc.ABC, Node):
     ''' Base class of all the expressios. '''
+
+    def __init__(self) -> None:
+        super().__init__()
+
     @property
     @abc.abstractclassmethod
     def symbols(self) -> List[Any]:
@@ -116,14 +159,33 @@ class Expression(Expr):
     ''' An expression, it will dumped like (a b c) '''
 
     def __init__(self, *symbols: List[Any]):
+        super().__init__()
         for x in symbols:
             assert isinstance(x, Node), f"{x} is not a AST node"
 
         self._symbols = symbols
 
+        syms = self._symbols
+        if self.symbols[0] == Symbol("setq"):
+            syms = syms[2:]
+        for sym in syms:
+            sym.add_user(self)
+
     @property
     def symbols(self):
         return self._symbols
+
+    def replace_symbol(self, old: Any, new: Any) -> None:
+        symbols = [x for x in self._symbols]
+        for i, sym in enumerate(symbols):
+            if sym == old:
+                symbols[i] = new
+                if self in old.users:
+                    old.del_user(self)
+                    new.add_user(self)
+            else:
+                sym.replace_symbol(old, new)
+        self._symbols = symbols
 
 
 @dataclass()
@@ -131,6 +193,11 @@ class LetExpr(Expr):
     ''' Let expression. '''
     vars: List[Var]
     body: List[Expr]
+
+    def __init__(self, vars: List[Var], body: List[Expr]):
+        super().__init__()
+        self.vars = vars
+        self.body = body
 
     @property
     def symbols(self) -> List[Any]:
@@ -150,6 +217,16 @@ class LetExpr(Expr):
         dumper.undo_indent()
         dumper.println(")")
 
+    def replace_symbol(self, old: Any, new: Any) -> None:
+        vars = [x for x in filter(lambda x: x != old, self.vars)]
+        if len(vars) == len(self.vars):  # nothing changed
+            return
+        for expr in self.body:
+            expr.replace_symbol(old, new)
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
 
 @dataclass()
 class Function(Node):
@@ -165,15 +242,41 @@ class Function(Node):
         dumper.undo_indent()
         dumper.println(")")
 
+    def replace_symbol(self, old: Any, new: Any) -> None:
+        for expr in self.body:
+            expr.replace_symbol(old, new)
+
 
 @dataclass
 class Call(Expr):
     func: Symbol
     args: List[Var]
 
+    def __init__(self, func: Symbol, args: List[Var]):
+        super().__init__()
+        self.func = func
+        self.args = args
+
+        self.func.add_user(self)
+        for arg in self.args:
+            arg.add_user(self)
+
     @property
     def symbols(self):
         return [self.func, *self.args]
+
+    def replace_symbol(self, old: Any, new: Any) -> None:
+        for id, arg in enumerate(self.args):
+            if arg == old:
+                self.args[id] = new
+                if self in old.users:
+                    old.del_user(self)
+                    new.add_user(self)
+            else:
+                arg.replace_symbol(old, new)
+
+    def __hash__(self) -> int:
+        return super().__hash__()
 
 
 @dataclass
@@ -181,6 +284,18 @@ class IfElse(Node):
     cond: Var
     then_body: LetExpr
     else_body: LetExpr
+
+    def __init__(self, cond: Var, then_body: LetExpr, else_body: LetExpr = None):
+        super().__init__()
+
+        self.cond = cond
+        self.then_body = then_body
+        self.else_body = else_body
+
+        self.cond.add_user(self)
+        self.then_body.add_user(self)
+        if self.else_body:
+            self.else_body.add_user(self)
 
     def dump(self, dumper: Dumper) -> None:
         dumper.print(f"(if ")
@@ -194,10 +309,29 @@ class IfElse(Node):
         dumper.undo_indent()
         dumper.print(")")
 
+    def replace_symbol(self, old: Any, new: Any) -> None:
+        self.cond.replace_symbol(old, new)
+        self.then_body.replace_symbol(old, new)
+        if self.else_body:
+            self.else_body.replace_symbol(old, new)
 
-class While:
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+
+@dataclass
+class While(Node):
     cond: Var
     body: LetExpr
+
+    def __init__(self, cond: Var, body: LetExpr):
+        super().__init__()
+
+        self.cond = cond
+        self.body = body
+
+        self.cond.add_user(self)
+        self.body.add_user(self)
 
     def dump(self, dumper: Dumper) -> None:
         dumper.println("(while")
@@ -207,6 +341,10 @@ class While:
         self.body.dump(dumper)
         dumper.undo_indent()
         dumper.println(")")
+
+    def replace_symbol(self, old: Any, new: Any) -> None:
+        self.cond.replace_symbol(old, new)
+        self.body.replace_symbol(old, new)
 
 
 class StrIO:
