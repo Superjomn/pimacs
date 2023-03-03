@@ -190,3 +190,7 @@ class Ext:
 
     def __handle_return__(self): ...
     ''' handler to processing return in compiler. '''
+
+    def __handle_assign_subscript__(self, key, value):
+        ''' handler to processing: x[key] = v. '''
+        raise NotImplementedError()

@@ -76,6 +76,7 @@ class CodeGenerator(ast.NodeVisitor):
     def visit_Subscript(self, node: ast.Subscript) -> Any:
         value = self.visit(node.value)
         slice_ = self.visit(node.slice)
+        assert isinstance(value, pyl_ext.Ext)
         if isinstance(slice_, slice):
             start, stop, step = slice_.start, slice_.stop, slice_.step
             if step is not None:
@@ -85,8 +86,7 @@ class CodeGenerator(ast.NodeVisitor):
             if stop is None:
                 stop = len(value)
             return value[start:stop]
-        else:
-            assert NotImplementedError()
+        return value[slice_]
 
     def visit_Slice(self, node: ast.Slice) -> Any:
         return slice(self.visit(node.lower), self.visit(node.upper), self.visit(node.step))
@@ -152,22 +152,31 @@ class CodeGenerator(ast.NodeVisitor):
         return node.arg
 
     def visit_Assign(self, node):
-
-        _names = []
+        _targets = []
         for target in node.targets:
-            _names += [self.visit(target)]
-        assert len(_names) == 1
-        names = _names[0]
+            _targets.append(target)
+
+        assert len(_targets) == 1
+        targets = _targets[0]
         values = self.visit(node.value)
-        if not isinstance(names, tuple):
-            names = [names]
+        if not isinstance(targets, tuple):
+            targets = [targets]
         if not isinstance(values, tuple):
             values = [values]
 
-        for name, value in zip(names, values):
+        for target, value in zip(targets, values):
             assert value is not None
+
+            if isinstance(target, ast.Subscript):
+                dst = self.visit(target.value)
+                index = self.visit(target.slice)
+                assert isinstance(dst, pyl_ext.Ext)
+                dst.__handle_assign_subscript__(index, value)
+                continue
+
+            target_ = self.visit(target)
             if isinstance(value, pyl_ext.Ext):
-                self.set_value(name, value)
+                self.set_value(target_, value)
                 continue
             # by default, constexpr are assigned into python variable
             elif not isinstance(value, pyl.Value):
@@ -175,7 +184,7 @@ class CodeGenerator(ast.NodeVisitor):
             else:
                 logging.debug(f"Assign {type(value)} {value}")
 
-            self.set_value(name, value)
+            self.set_value(target_, value)
 
     def visit_BinOp(self, node: ast.BinOp) -> Any:
         lhs = self.visit(node.left)
@@ -416,6 +425,10 @@ class CodeGenerator(ast.NodeVisitor):
     def visit_Attribute(self, node):
         lhs = self.visit(node.value)
         return getattr(lhs, node.attr)
+
+    def visit_Index(self, node: ast.Index):
+        key = node.value
+        return self.visit(key)
 
     def visit(self, node):
         if node is not None:

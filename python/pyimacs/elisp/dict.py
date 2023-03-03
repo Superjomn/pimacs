@@ -22,13 +22,16 @@ class Dict(Ext):
         return ht_get(self.handle, key)
 
     def __setitem__(self, key: str, value: Any) -> None:
-        return ht_set(self.handle, key, value)
+        ht_set(self.handle, key, value)
 
     def get(self, key: str, default: Any = None) -> Any:
         if key in self:
             return ht_get(self.handle, key)
         else:
             return default
+
+    def set(self, key: str, value: object) -> Any:
+        return ht_set(self.handle, key, value)
 
     def keys(self) -> List[str]:
         return ht_keys(self.handle)
@@ -38,6 +41,9 @@ class Dict(Ext):
 
     def __len__(self) -> int:
         return ht_size(self.handle)
+
+    def __handle_assign_subscript__(self, key, value):
+        self.set(key, value)
 
 
 @register_extern("ht-create")

@@ -199,6 +199,8 @@ class MlirToAstTranslator:
         for arg in op.operands():
             args.append(self.symbol_table.get(arg))
         call = ast.Call(ast.Symbol(callee), args)
+        if op.get_num_results() == 0:
+            return call
         return self.setq(op.get_result(0), call)
 
     def setq(self, var: ir.Value, val: Any) -> ast.Expression:
