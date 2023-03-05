@@ -83,8 +83,12 @@ class Token(Node):
 
     def __init__(self, symbol: Any, is_symbol: bool = False):
         super().__init__()
+        while isinstance(symbol, Token):
+            symbol = symbol.symbol
         self.symbol = symbol
         self.is_symbol = is_symbol
+        assert isinstance(symbol, (str, int, float)
+                          ), f"Invalid token {symbol} of type {type(symbol)}"
 
     def is_int(self) -> bool:
         return type(self.symbol) is int
@@ -97,7 +101,6 @@ class Token(Node):
 
     def dump(self, dumper: Dumper) -> None:
         if self.is_symbol:
-            assert type(self.symbol) is str
             dumper.put(self.symbol)
         elif type(self.symbol) is str:
             dumper.put(f'"{self.symbol}"')
@@ -163,7 +166,7 @@ class Expression(Expr):
         for x in symbols:
             assert isinstance(x, Node), f"{x} is not a AST node"
 
-        self._symbols = symbols
+        self._symbols = [*symbols]
 
         syms = self._symbols
         if self.symbols[0] == Symbol("setq"):
@@ -171,11 +174,17 @@ class Expression(Expr):
         for sym in syms:
             sym.add_user(self)
 
+    def append(self, sym: Any) -> None:
+        self._symbols.append(sym)
+        sym.add_user(self)
+
     @property
     def symbols(self):
         return self._symbols
 
     def replace_symbol(self, old: Any, new: Any) -> None:
+        assert old is not None
+        assert new is not None
         symbols = [x for x in self._symbols]
         for i, sym in enumerate(symbols):
             if sym == old:

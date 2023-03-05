@@ -253,6 +253,9 @@ class CodeGenerator(ast.NodeVisitor):
         set_global_module(self.module)
         set_global_builder(self.builder)
 
+        astpretty.pprint("call")
+        astpretty.pprint(node)
+
         # custom function, not a JIT function, we need to call it in python mode.
         if type(node.func) is ast.Name:
             func_name = node.func.id
@@ -264,7 +267,8 @@ class CodeGenerator(ast.NodeVisitor):
             assert value
             func_name = node.func.attr
             func = getattr(value, func_name)
-            return func(*args)
+            print(f'call args: {args}')
+            return func(*args, **kws)
 
         if func_name in self.gscope:
             '''
@@ -324,6 +328,12 @@ class CodeGenerator(ast.NodeVisitor):
             if isinstance(stmt, ast.Return):
                 break
         return stmts and isinstance(stmt, ast.Return)
+
+    def visit_str(self, node):
+        return node
+
+    def visit_keyword(self, node):
+        return {self.visit(node.arg): self.visit(node.value)}
 
     def visit_Pass(self, node: ast.Pass) -> Any:
         pass
@@ -430,6 +440,9 @@ class CodeGenerator(ast.NodeVisitor):
         key = node.value
         return self.visit(key)
 
+    def visit_List(self, node: ast.List):
+        return [self.visit(e) for e in node.elts]
+
     def visit(self, node):
         if node is not None:
             self.last_node = node
@@ -483,6 +496,9 @@ def translate_lispir_to_lispcode(mod: ir.Module) -> str:
     from pyimacs.target.translate import MlirToAstTranslator
     translator = MlirToAstTranslator()
     funcs = translator.run(mod)
+
+    print("\n\n".join(str(func) for func in funcs))
+
     for func in funcs:
         transform(func)
 

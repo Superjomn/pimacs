@@ -449,6 +449,19 @@ void initBuilder(py::module &m) {
              return self.create<mlir::pyimacs::CallOp>(loc, retType, calleeAttr,
                                                        args);
            })
+      .def("make_tuple",
+           [](mlir::OpBuilder &self,
+              std::vector<mlir::Value> &args) -> mlir::OpState {
+             auto loc = self.getUnknownLoc();
+             auto ObjectTy = mlir::pyimacs::ObjectType::get(self.getContext());
+             return self.create<mlir::pyimacs::MakeTupleOp>(loc, ObjectTy,
+                                                            args);
+           })
+      .def("make_symbol",
+           [](mlir::OpBuilder &self, mlir::Value name) -> mlir::OpState {
+             auto loc = self.getUnknownLoc();
+             return self.create<mlir::pyimacs::MakeSymbolOp>(loc, name);
+           })
       // insertion block/point
       .def("set_insertion_point_to_start",
            [](mlir::OpBuilder &self, mlir::Block &block) -> void {

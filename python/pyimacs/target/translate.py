@@ -9,15 +9,18 @@ from pyimacs.target import elisp_ast as ast
 class SymbolTable:
     # value's hash -> Var
     frames: List[Dict[int, ast.Var]] = field(default_factory=list)
+    instant_frames: List[Dict[int, ast.Var]] = field(default_factory=list)
 
     def push(self):
         self.frames.append({})
+        self.instant_frames.append({})
 
     def pop(self):
         self.frames = self.frames[:-1]
+        self.instant_frames = self.instant_frames[:-1]
 
     def cur(self) -> Dict[str, ast.Var]:
-        return self.frames[-1]
+        return self.frames[-1], self.instant_frames[-1]
 
     def get(self, val: ir.Value) -> ast.Var:
         ''' Recursively find the value. '''
@@ -30,10 +33,20 @@ class SymbolTable:
             if hash(var) in frame:
                 return frame[hash(var)]
 
-    def add(self, val: ir.Value, var: Optional[ast.Var] = None) -> ast.Var:
+    def add(self, val: ir.Value, var: Optional[ast.Var] = None, instant_val: Optional[ast.Token] = None) -> ast.Var:
+        print("SymbolTable add", val, var)
         var = var if var else ast.Var("arg%d" % len(self.cur()))
-        self.cur()[hash(val)] = var
+        frame, instant_frame = self.cur()
+        frame[hash(val)] = var
+        if instant_val is not None:
+            instant_frame[hash(val)] = instant_val
+        print('frame:', self.cur())
         return var
+
+    def get_instant_value(self, val: ir.Value) -> Optional[ast.Token]:
+        for frame in reversed(self.instant_frames):
+            if hash(val) in frame:
+                return frame[hash(val)]
 
     @property
     def symbols(self):
@@ -51,6 +64,8 @@ class MlirToAstTranslator:
     def __init__(self):
         self.symbol_table = SymbolTable()
 
+        self._constant_val = None
+
     def run(self, mod: ir.Module) -> List[ast.Function]:
         funcs = []
         for func_name in mod.get_function_names():
@@ -59,10 +74,10 @@ class MlirToAstTranslator:
                 funcs.append(func)
         return funcs
 
-    def get_or_set_value(self, var: ir.Value) -> ast.Var:
+    def get_or_set_value(self, var: ir.Value, instant_val: Optional[Any] = None) -> ast.Var:
         ret = self.symbol_table.get_unsafe(var)
         if ret is None:
-            ret = self.symbol_table.add(var)
+            ret = self.symbol_table.add(var, instant_val=instant_val)
         return ret
 
     def visit_Function(self, op: ir.Function) -> ast.Function:
@@ -95,7 +110,11 @@ class MlirToAstTranslator:
         for op_ in op.operations():
             for idx in range(op_.get_num_results()):
                 res = op_.get_result(idx)
-                var = self.get_or_set_value(res)
+                if op_.name() == "arith.constant":
+                    value = self.get_consant_value(op_)
+                    var = self.get_or_set_value(res, instant_val=value)
+                else:
+                    var = self.get_or_set_value(res)
                 let_args.append(var)
 
         body = []
@@ -126,6 +145,10 @@ class MlirToAstTranslator:
             return self.visit_If(op)
         if op.name() == "std.call":
             return self.visit_Call(op)
+        if op.name() == "lisp.make_tuple":
+            return self.visit_MakeTuple(op)
+        if op.name() == "lisp.make_symbol":
+            return self.visit_MakeSymbol(op)
 
         raise NotImplementedError(op.name())
 
@@ -149,6 +172,20 @@ class MlirToAstTranslator:
         res = ast.Expression(ast.Symbol(self.bin_op[op.name()]), lhs, rhs)
         return self.setq(op.get_result(0), res)
 
+    def visit_MakeTuple(self, op: ir.Operation) -> ast.Expression:
+        assert op.num_operands() > 0
+        res = ast.Expression(ast.Symbol("list"))
+        for i in range(op.num_operands()):
+            res.append(self.symbol_table.get(op.get_operand(i).get()))
+        return self.setq(op.get_result(0), res)
+
+    def visit_MakeSymbol(self, op: ir.Operation) -> ast.Expression:
+        assert op.num_operands() == 1
+        print('op', op)
+        print('value', op.get_operand(0).get())
+        name = self.symbol_table.get_instant_value(op.get_operand(0).get())
+        return ast.Symbol(name)
+
     def visit_Ret(self, op: ir.Operation) -> ast.Expression:
         if op.num_operands() == 0:
             # Ignore the empty return. It is always inserted by default incase no return statement is provided in MLIR.
@@ -166,6 +203,12 @@ class MlirToAstTranslator:
         return ast.Expression(*blocks)
 
     def visit_Constant(self, op: ir.Operation):
+        value = self.get_consant_value(op)
+        value = ast.Token(value)
+
+        return self.setq(op.get_result(0), value)
+
+    def get_consant_value(self, op: ir.Operation):
         value = op.get_attr("value")
         if value.is_float():
             value = value.to_float()
@@ -175,9 +218,7 @@ class MlirToAstTranslator:
             value = value.to_bool()
         else:
             value = value.to_string()
-
-        value = ast.Token(value)
-        return self.setq(op.get_result(0), value)
+        return value
 
     def visit_If(self, op: ir.Operation):
         cond = op.get_operand(0)

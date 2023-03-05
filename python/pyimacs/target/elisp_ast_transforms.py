@@ -90,6 +90,7 @@ class Simplify(Transform):
 
         # replace
         for sym, value in instant_values.items():
+            assert value, f"symbol {sym} has no value"
             users = [x for x in sym.users]
             for user in users:
                 user.replace_symbol(sym, value)
