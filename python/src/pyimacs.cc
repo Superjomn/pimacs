@@ -449,6 +449,33 @@ void initBuilder(py::module &m) {
              return self.create<mlir::pyimacs::CallOp>(loc, retType, calleeAttr,
                                                        args);
            })
+      .def("make_tuple",
+           [](mlir::OpBuilder &self,
+              std::vector<mlir::Value> &args) -> mlir::OpState {
+             auto loc = self.getUnknownLoc();
+             auto ObjectTy = mlir::pyimacs::ObjectType::get(self.getContext());
+             return self.create<mlir::pyimacs::MakeTupleOp>(loc, ObjectTy,
+                                                            args);
+           })
+      .def("make_symbol",
+           [](mlir::OpBuilder &self, mlir::Value name,
+              mlir::Value is_keyword) -> mlir::OpState {
+             auto loc = self.getUnknownLoc();
+             auto value = llvm::dyn_cast<mlir::arith::ConstantOp>(
+                 is_keyword.getDefiningOp());
+             assert(value);
+             auto boolAttr = value.getValue().cast<mlir::BoolAttr>();
+             return self.create<mlir::pyimacs::MakeSymbolOp>(loc, name,
+                                                             boolAttr);
+           })
+      .def("make_symbol",
+           [](mlir::OpBuilder &self, mlir::Value name,
+              bool is_keyword) -> mlir::OpState {
+             auto loc = self.getUnknownLoc();
+             auto boolAttr = mlir::BoolAttr::get(self.getContext(), is_keyword);
+             return self.create<mlir::pyimacs::MakeSymbolOp>(loc, name,
+                                                             boolAttr);
+           })
       // insertion block/point
       .def("set_insertion_point_to_start",
            [](mlir::OpBuilder &self, mlir::Block &block) -> void {

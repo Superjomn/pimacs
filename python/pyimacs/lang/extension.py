@@ -83,39 +83,6 @@ def _register_extern(func: Callable, func_name: str):
 
     func_signature_registry[func_id] = signature
 
-    def arg_to_mlir_value(v: Any):
-        if type(v) is pl.Value:
-            v = v.handle
-        if type(v) is ir.Value:
-            return v
-        if type(v) is ir.Operation:
-            return v.to_value()
-
-        if type(v) is str:
-            return builder().get_string(v)
-        if type(v) is int:
-            return builder().get_int32(v)
-        if type(v) is float:
-            return builder().get_float32(v)
-        if type(v) is object:
-            return v
-
-        raise NotImplementedError(f"{v} of type {type(v)} is not supported")
-
-    def arg_to_mlir(arg, type):
-        if arg is None:
-            if type is str:
-                return builder().get_null_as_string()
-            if type is int:
-                return builder().get_null_as_int()
-            if type is float:
-                return builder().get_null_as_float()
-            if type is object:
-                return builder().get_null_as_object()
-            raise NotImplementedError(f"{arg} of {type}")
-        else:
-            return arg_to_mlir_value(arg)
-
     def register_to_module(signature: inspect.FullArgSpec, module: ir.Module, builder: ir.Builder):
         annotation = signature.annotations
         if not module.has_function(func_name):
@@ -194,3 +161,41 @@ class Ext:
     def __handle_assign_subscript__(self, key, value):
         ''' handler to processing: x[key] = v. '''
         raise NotImplementedError()
+
+
+def _arg_to_mlir_value(v: Any):
+    if type(v) is pl.Value:
+        v = v.handle
+    if type(v) is ir.Value:
+        return v
+    if type(v) is ir.Operation:
+        return v.to_value()
+
+    if type(v) is str:
+        return builder().get_string(v)
+    if type(v) is int:
+        return builder().get_int32(v)
+    if type(v) is float:
+        return builder().get_float32(v)
+    if type(v) is object:
+        return v
+    if type(v) is list or type(v) is tuple:
+        return [_arg_to_mlir_value(e) for e in v]
+
+    raise NotImplementedError(f"{v} of type {type(v)} is not supported")
+
+
+def arg_to_mlir(arg, type=None):
+    if arg is None:
+        assert type is not None, "type is required when arg is None."
+        if type is str:
+            return builder().get_null_as_string()
+        if type is int:
+            return builder().get_null_as_int()
+        if type is float:
+            return builder().get_null_as_float()
+        if type is object:
+            return builder().get_null_as_object()
+        raise NotImplementedError(f"{arg} of {type}")
+    else:
+        return _arg_to_mlir_value(arg)

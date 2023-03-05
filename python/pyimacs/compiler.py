@@ -264,7 +264,7 @@ class CodeGenerator(ast.NodeVisitor):
             assert value
             func_name = node.func.attr
             func = getattr(value, func_name)
-            return func(*args)
+            return func(*args, **kws)
 
         if func_name in self.gscope:
             '''
@@ -324,6 +324,12 @@ class CodeGenerator(ast.NodeVisitor):
             if isinstance(stmt, ast.Return):
                 break
         return stmts and isinstance(stmt, ast.Return)
+
+    def visit_str(self, node):
+        return node
+
+    def visit_keyword(self, node):
+        return {self.visit(node.arg): self.visit(node.value)}
 
     def visit_Pass(self, node: ast.Pass) -> Any:
         pass
@@ -430,6 +436,9 @@ class CodeGenerator(ast.NodeVisitor):
         key = node.value
         return self.visit(key)
 
+    def visit_List(self, node: ast.List):
+        return [self.visit(e) for e in node.elts]
+
     def visit(self, node):
         if node is not None:
             self.last_node = node
@@ -483,6 +492,7 @@ def translate_lispir_to_lispcode(mod: ir.Module) -> str:
     from pyimacs.target.translate import MlirToAstTranslator
     translator = MlirToAstTranslator()
     funcs = translator.run(mod)
+
     for func in funcs:
         transform(func)
 
@@ -524,6 +534,10 @@ def get_function_type_from_signature(signature: str) -> pyl.FunctionType:
     input, output = signature.split("->")
     ins = [str_to_ty(ty) for ty in input.strip().split(",")]
     ous = [str_to_ty(ty) for ty in output.strip().split(",")]
+    if ins == [pyl.Void]:
+        ins = []
+    if ous == [pyl.Void]:
+        ous = []
     return pyl.FunctionType(ret_types=ous, param_types=ins)
 
 
