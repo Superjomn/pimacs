@@ -86,7 +86,7 @@ def test_external_call():
     code = compiler.compile(some_fn, signature="void -> o")
     print(code)
     target = '''
-(defun some_fn (arg0)
+(defun some_fn ()
     (let*
         ()
         (buffer-get "hello")
@@ -107,7 +107,7 @@ def test_kernel_external_call():
     print(code)
 
     target = '''
-(defun some_fn (arg0)
+(defun some_fn ()
     (let*
         ()
         (buffer-file-name (buffer-get "*a-buffer*"))

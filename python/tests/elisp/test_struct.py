@@ -14,8 +14,11 @@ def test_struct_basic():
         jojo = Person.create(name="Jojo", age=20)
         return jojo.name
 
-    code = compile(fn, signature="void->s")
+    code = compile(fn, signature="void -> s")
     print(code)
+
+    target = '''
+    '''
 
 
 test_struct_basic()

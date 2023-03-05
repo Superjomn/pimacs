@@ -106,7 +106,7 @@ def to_value(x, builder):
     raise NotImplementedError()
 
 
-@dataclass(init=True, repr=True)
+@dataclass
 class FunctionType(DataType):
     ret_types: List[DataType]
     param_types: List[DataType]

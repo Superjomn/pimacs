@@ -180,10 +180,7 @@ def _arg_to_mlir_value(v: Any):
     if type(v) is object:
         return v
     if type(v) is list or type(v) is tuple:
-        print('arg_to_mlir_value: v', v)
-        res = [_arg_to_mlir_value(e) for e in v]
-        print('arg_to_mlir_value: converted to', res)
-        return res
+        return [_arg_to_mlir_value(e) for e in v]
 
     raise NotImplementedError(f"{v} of type {type(v)} is not supported")
 

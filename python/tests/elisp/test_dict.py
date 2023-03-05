@@ -17,12 +17,12 @@ def test_dict_basic():
 
     code = compile(fn, signature="void->s")
     target = '''
-(defun fn (arg0)
+(defun fn ()
     (let*
-        (arg1)
-        (setq arg1 (ht-create))
-        (ht-set! arg1 "hello" "world")
-        (ht-get arg1 "hello")
+        (arg0)
+        (setq arg0 (ht-create))
+        (ht-set! arg0 "hello" "world")
+        (ht-get arg0 "hello")
     )
 )
     '''

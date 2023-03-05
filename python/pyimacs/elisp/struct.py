@@ -31,7 +31,7 @@ class Struct(Ext):
         for item in kv:
             # TODO[Superjomn] fixit
             # assert k[i] in self.fields, f"Field {k[i]} not in the fields: {self.fields}"
-            flatten.append(make_symbol(item[0]))
+            flatten.append(make_symbol(item[0], is_keyword=True))
             flatten.append(item[1])
         flatten = _make_tuple(flatten)
         instance = _make_struct(self.name, flatten)

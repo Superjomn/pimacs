@@ -458,9 +458,23 @@ void initBuilder(py::module &m) {
                                                             args);
            })
       .def("make_symbol",
-           [](mlir::OpBuilder &self, mlir::Value name) -> mlir::OpState {
+           [](mlir::OpBuilder &self, mlir::Value name,
+              mlir::Value is_keyword) -> mlir::OpState {
              auto loc = self.getUnknownLoc();
-             return self.create<mlir::pyimacs::MakeSymbolOp>(loc, name);
+             auto value = llvm::dyn_cast<mlir::arith::ConstantOp>(
+                 is_keyword.getDefiningOp());
+             assert(value);
+             auto boolAttr = value.getValue().cast<mlir::BoolAttr>();
+             return self.create<mlir::pyimacs::MakeSymbolOp>(loc, name,
+                                                             boolAttr);
+           })
+      .def("make_symbol",
+           [](mlir::OpBuilder &self, mlir::Value name,
+              bool is_keyword) -> mlir::OpState {
+             auto loc = self.getUnknownLoc();
+             auto boolAttr = mlir::BoolAttr::get(self.getContext(), is_keyword);
+             return self.create<mlir::pyimacs::MakeSymbolOp>(loc, name,
+                                                             boolAttr);
            })
       // insertion block/point
       .def("set_insertion_point_to_start",

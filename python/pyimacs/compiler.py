@@ -93,6 +93,7 @@ class CodeGenerator(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
         arg_names, kwarg_names = self.visit(node.args)
+        print("args", arg_names, kwarg_names)
         # initialize defaults
         for i, default_value in enumerate(node.args.defaults):
             arg_node = node.args.args[-i - 1]
@@ -253,9 +254,6 @@ class CodeGenerator(ast.NodeVisitor):
         set_global_module(self.module)
         set_global_builder(self.builder)
 
-        astpretty.pprint("call")
-        astpretty.pprint(node)
-
         # custom function, not a JIT function, we need to call it in python mode.
         if type(node.func) is ast.Name:
             func_name = node.func.id
@@ -267,7 +265,6 @@ class CodeGenerator(ast.NodeVisitor):
             assert value
             func_name = node.func.attr
             func = getattr(value, func_name)
-            print(f'call args: {args}')
             return func(*args, **kws)
 
         if func_name in self.gscope:
@@ -497,8 +494,6 @@ def translate_lispir_to_lispcode(mod: ir.Module) -> str:
     translator = MlirToAstTranslator()
     funcs = translator.run(mod)
 
-    print("\n\n".join(str(func) for func in funcs))
-
     for func in funcs:
         transform(func)
 
@@ -540,6 +535,10 @@ def get_function_type_from_signature(signature: str) -> pyl.FunctionType:
     input, output = signature.split("->")
     ins = [str_to_ty(ty) for ty in input.strip().split(",")]
     ous = [str_to_ty(ty) for ty in output.strip().split(",")]
+    if ins == [pyl.Void]:
+        ins = []
+    if ous == [pyl.Void]:
+        ous = []
     return pyl.FunctionType(ret_types=ous, param_types=ins)
 
 

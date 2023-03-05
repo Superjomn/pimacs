@@ -36,7 +36,7 @@ def test_string_concat():
     print(code)
 
     target = '''
-(defun fn (arg0)
+(defun fn ()
     (let*
         ()
         (concat "hello" "world")

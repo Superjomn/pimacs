@@ -9,7 +9,7 @@ from pyimacs.target import elisp_ast as ast
 class SymbolTable:
     # value's hash -> Var
     frames: List[Dict[int, ast.Var]] = field(default_factory=list)
-    instant_frames: List[Dict[int, ast.Var]] = field(default_factory=list)
+    instant_frames: List[Dict[int, ast.Token]] = field(default_factory=list)
 
     def push(self):
         self.frames.append({})
@@ -19,8 +19,16 @@ class SymbolTable:
         self.frames = self.frames[:-1]
         self.instant_frames = self.instant_frames[:-1]
 
-    def cur(self) -> Dict[str, ast.Var]:
+    def cur(self) -> Tuple[Dict[str, ast.Var], Dict[str, ast.Var]]:
         return self.frames[-1], self.instant_frames[-1]
+
+    @property
+    def cur_frame(self) -> Dict[str, ast.Var]:
+        return self.frames[-1]
+
+    @property
+    def cur_instant_frame(self) -> Dict[str, ast.Token]:
+        return self.instant_frames[-1]
 
     def get(self, val: ir.Value) -> ast.Var:
         ''' Recursively find the value. '''
@@ -34,13 +42,11 @@ class SymbolTable:
                 return frame[hash(var)]
 
     def add(self, val: ir.Value, var: Optional[ast.Var] = None, instant_val: Optional[ast.Token] = None) -> ast.Var:
-        print("SymbolTable add", val, var)
-        var = var if var else ast.Var("arg%d" % len(self.cur()))
+        var = var if var else ast.Var("arg%d" % len(self.cur_frame))
         frame, instant_frame = self.cur()
         frame[hash(val)] = var
         if instant_val is not None:
             instant_frame[hash(val)] = instant_val
-        print('frame:', self.cur())
         return var
 
     def get_instant_value(self, val: ir.Value) -> Optional[ast.Token]:
@@ -181,10 +187,10 @@ class MlirToAstTranslator:
 
     def visit_MakeSymbol(self, op: ir.Operation) -> ast.Expression:
         assert op.num_operands() == 1
-        print('op', op)
-        print('value', op.get_operand(0).get())
         name = self.symbol_table.get_instant_value(op.get_operand(0).get())
-        return ast.Symbol(name)
+        is_keyword = op.get_attr("is_keyword").to_bool()
+        name = name if not is_keyword else f":{name}"
+        return self.setq(op.get_result(0), ast.Symbol(name))
 
     def visit_Ret(self, op: ir.Operation) -> ast.Expression:
         if op.num_operands() == 0:

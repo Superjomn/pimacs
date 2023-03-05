@@ -13,7 +13,7 @@ class Lisp_Op<string mnemonic, list<Trait> traits=[]> :
     Op<Lisp_Dialect, mnemonic, traits> {
 }
 
-// Tuple is not an elisp concept, leave here temporarily.
+// Tuple is not an elisp concept, left here temporarily.
 def Lisp_MakeTupleOp : Lisp_Op<"make_tuple"> {
     let summary = "make_tuple op";
     let description = [{ Make a tuple. }];
@@ -24,7 +24,7 @@ def Lisp_MakeTupleOp : Lisp_Op<"make_tuple"> {
 def Lisp_MakeSymbolOp : Lisp_Op<"make_symbol"> {
     let summary = "make_symbol op";
     let description = [{ Make a symbol. }];
-    let arguments = (ins String:$name);
+    let arguments = (ins String:$name, BoolAttr:$is_keyword);
     let results = (outs Object:$res);
 }
 
