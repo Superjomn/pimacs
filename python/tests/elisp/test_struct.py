@@ -18,7 +18,12 @@ def test_struct_basic():
     print(code)
 
     target = '''
+(defun fn ()
+    (let*
+        ()
+        (cl-defstruct Person (list name age))
+        (pyimacs-get-field (pyimacs-makestruct "Person" (list :name "Jojo" :age 20)) "name")
+    )
+)
     '''
-
-
-test_struct_basic()
+    assert code.strip() == target.strip()

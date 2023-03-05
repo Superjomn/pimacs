@@ -93,7 +93,6 @@ class CodeGenerator(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
         arg_names, kwarg_names = self.visit(node.args)
-        print("args", arg_names, kwarg_names)
         # initialize defaults
         for i, default_value in enumerate(node.args.defaults):
             arg_node = node.args.args[-i - 1]
