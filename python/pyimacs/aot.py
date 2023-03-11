@@ -8,7 +8,14 @@ import pyimacs.lang as pyl
 ir = pyl.ir
 
 
+_aot_context = ir.MLIRContext()
+
+
 class AOTFunction(object):
+    builder = ir.Builder(_aot_context)
+    # TODO[Superjomn]: To support multiple module?
+    module = builder.create_module()
+
     def __init__(self, fn, do_not_specialize=None):
         self.fn = fn
         self.module = fn.__module__
@@ -40,18 +47,18 @@ class AOTFunction(object):
         assert isinstance(tree.body[0], ast.FunctionDef)
         return tree
 
-    def compile(self) -> str:
+    def compile(self) -> ir.Module:
         ''' Compile the function to lisp code. '''
-        from pyimacs.compiler import compile
-        return compile(self.parse())
+        from pyimacs.compiler import translate_ast_to_lispir
+        return translate_ast_to_lispir(self.fn)
 
     def _make_signature(self, sig_key) -> str:
         signature = ",".join([self._type_of(k) for i, k in enumerate(sig_key)])
         return signature
 
     def __call__(self, *args, **kwargs):
-        raise RuntimeError(
-            "Cannot call @pyimacs.jit outside of the scope of a kernel")
+        assert not kwargs
+        self.builder.call(self.module.get_function(self.fn.__name__), args)
 
     def __repr__(self):
         return f"JITFunction<{self.__module__}:{self.__name__}>"

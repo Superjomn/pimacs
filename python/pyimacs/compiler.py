@@ -19,8 +19,8 @@ target = _pyimacs.target
 
 class CodeGenerator(ast.NodeVisitor):
     def __init__(self, context: ir.MLIRContext, function_name: str, gscope: Dict[str, Any], module=None,
-                 is_kernel=True, function_types={}):
-        self.builder = ir.Builder(context)
+                 builder=None, is_kernel=True, function_types={}):
+        self.builder = builder if builder else ir.Builder(context)
         self.module = self.builder.create_module() if module is None else module
         self.function_types = function_types
         self.is_kernel = is_kernel
@@ -508,7 +508,7 @@ def compile(fn: AOTFunction, **kwargs):
     return lisp_code
 
 
-def translate_ast_to_lispir(fn, specialization):
+def translate_ast_to_lispir(fn, specialization=None):
     mod, _ = build_pyimacs_ir(fn, specialization)
     return mod
 
