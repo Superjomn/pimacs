@@ -1,8 +1,12 @@
 import pytest
-from pyimacs.aot import aot
+from pyimacs.aot import aot, get_context
+from pyimacs.compiler import compile
 from pyimacs.elisp.string import String
+from pyimacs.lang import ir
 
 from pyimacs import compile
+
+ctx = get_context()
 
 
 def test_string_substring():
@@ -11,7 +15,11 @@ def test_string_substring():
         s = String(name)
         s = s[2:3]
         return s
-    code = compile(fn, signature="s->s")
+
+    builder = ir.Builder(ctx)
+    module = builder.create_module()
+
+    code = compile(fn, builder=builder, module=module)
     print(code)
     target = '''
 (defun fn (arg0)
@@ -32,7 +40,10 @@ def test_string_concat():
 
         return a + b
 
-    code = compile(fn, signature="void->s")
+    builder = ir.Builder(ctx)
+    module = builder.create_module()
+
+    code = compile(fn, builder=builder, module=module)
     print(code)
 
     target = '''

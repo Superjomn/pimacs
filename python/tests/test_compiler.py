@@ -1,10 +1,13 @@
 import logging
 
 import pyimacs.lang as pyl
-from pyimacs.aot import aot
+from pyimacs.aot import AOTFunction, aot, get_context
 from pyimacs.elisp.buffer import Buffer, buffer_get
+from pyimacs.lang import ir
 
 from pyimacs import compiler
+
+ctx = get_context()
 
 
 def test_empty_kernel():
@@ -12,7 +15,10 @@ def test_empty_kernel():
     def some_fn(a: int):
         pass
 
-    code = compiler.compile(some_fn)
+    builder = ir.Builder(ctx)
+    module = builder.create_module()
+
+    code = compiler.compile(some_fn, builder=builder, module=module)
     target = '''
 (defun some_fn (arg0)
     (let*
@@ -29,7 +35,10 @@ def test_naive_kernel():
         b = (a + 1) * 23
         return b + 1
 
-    code = compiler.compile(some_fn)
+    builder = ir.Builder(ctx)
+    module = builder.create_module()
+
+    code = compiler.compile(some_fn, builder=builder, module=module)
     print(code)
     target = '''
 (defun some_fn (arg0)
@@ -53,7 +62,11 @@ def test_kernel_with_if():
             # the statements outside the IfOp(wth return) to else region.
             return a + 1
 
-    code = compiler.compile(some_fn)
+    builder = ir.Builder(ctx)
+    module = builder.create_module()
+
+    code = compiler.compile(some_fn, builder=builder, module=module)
+    print(code)
     print(code)
 
     target = '''
@@ -83,7 +96,10 @@ def test_external_call():
     def some_fn() -> object:
         return buffer_get("hello")
 
-    code = compiler.compile(some_fn)
+    builder = ir.Builder(ctx)
+    module = builder.create_module()
+
+    code = compiler.compile(some_fn, builder=builder, module=module)
     print(code)
     target = '''
 (defun some_fn ()
@@ -103,7 +119,10 @@ def test_kernel_external_call():
         name = buffer.get_name()
         return name
 
-    code = compiler.compile(some_fn, signature="s -> s")
+    builder = ir.Builder(ctx)
+    module = builder.create_module()
+
+    code = compiler.compile(some_fn, builder=builder, module=module)
     print(code)
 
     target = '''

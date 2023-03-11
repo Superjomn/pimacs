@@ -9,6 +9,12 @@ ir = pyl.ir
 
 
 _aot_context = ir.MLIRContext()
+_aot_context.load_pyimacs()
+
+
+def get_context() -> ir.MLIRContext:
+    ''' Global MLIRContext. '''
+    return _aot_context
 
 
 class AOTFunction(object):
@@ -30,7 +36,6 @@ class AOTFunction(object):
         self.src = textwrap.dedent(inspect.getsource(fn))
         self.src = self.src[self.src.find("def"):]
         # annotations
-        print(f"fn.annotation: {fn.__annotations__}")
         self.annotations = {self.arg_names.index(
             name): ty for name, ty in fn.__annotations__.items() if name != "return"}
 
@@ -50,7 +55,7 @@ class AOTFunction(object):
     def compile(self) -> ir.Module:
         ''' Compile the function to lisp code. '''
         from pyimacs.compiler import translate_ast_to_lispir
-        return translate_ast_to_lispir(self.fn)
+        return translate_ast_to_lispir(self.fn, module=self.module, builder=self.builder)
 
     def _make_signature(self, sig_key) -> str:
         signature = ",".join([self._type_of(k) for i, k in enumerate(sig_key)])

@@ -20,8 +20,8 @@ target = _pyimacs.target
 class CodeGenerator(ast.NodeVisitor):
     def __init__(self, context: ir.MLIRContext, function_name: str, gscope: Dict[str, Any], module=None,
                  builder=None, is_kernel=True, function_types={}):
-        self.builder = builder if builder else ir.Builder(context)
-        self.module = self.builder.create_module() if module is None else module
+        self.builder = builder or ir.Builder(context)
+        self.module = module or self.builder.create_module()
         self.function_types = function_types
         self.is_kernel = is_kernel
 
@@ -108,10 +108,11 @@ class CodeGenerator(ast.NodeVisitor):
             self.visit(init_node)
 
         signature = get_signature_from_FunctionDef(node)
-        print('signagure', signature)
         prototype = get_function_type_from_signature(signature)
 
         visibility = "public" if self.is_kernel else "private"
+        assert not self.module.has_function(
+            self.function_name), f"Function {self.function_name} is duplicated in the module"
         fn = self.builder.get_or_insert_function(self.module, self.function_name, prototype.to_ir(self.builder),
                                                  visibility)
         self.module.push_back(fn)
@@ -302,7 +303,7 @@ class CodeGenerator(ast.NodeVisitor):
                 prototype = pyl.function_type([], arg_types)
                 gscope = sys.modules[fn.fn.__module__].__dict__
                 generator = CodeGenerator(self.builder.context, prototype, gscope, attributes, module=self.module,
-                                          function_name=fn_name, function_types=self.function_ret_types)
+                                          builder=self.builder, function_name=fn_name, function_types=self.function_ret_types)
                 generator.visit(fn.parse())
                 callee_ret_type = generator.last_ret_type
                 self.function_ret_types[fn_name] = callee_ret_type
@@ -494,22 +495,19 @@ def compile(fn: AOTFunction, **kwargs):
     :param kwargs:
     :return:
     '''
-    ctx = ir.MLIRContext()
-    ctx.load_pyimacs()
+    module = kwargs.get("module", None) or AOTFunction.module
+    builder = kwargs.get("builder", None) or AOTFunction.builder
+    assert module
+    assert builder
 
-    configs = kwargs.get("configs", None)
-    #signature = kwargs["signature"]
-    kwargs["configs"] = configs
-    #kwargs["signature"] = signature
-
-    mod = translate_ast_to_lispir(fn, specialization=None)
+    mod = translate_ast_to_lispir(fn, module=module, builder=builder)
     print('mod', mod)
     lisp_code = translate_lispir_to_lispcode(mod)
     return lisp_code
 
 
-def translate_ast_to_lispir(fn, specialization=None):
-    mod, _ = build_pyimacs_ir(fn, specialization)
+def translate_ast_to_lispir(fn, module=None, builder=None):
+    mod, _ = build_pyimacs_ir(fn, module=module, builder=builder)
     return mod
 
 
@@ -574,7 +572,7 @@ def get_function_type_from_signature(signature: str) -> pyl.FunctionType:
     return pyl.FunctionType(ret_types=ous, param_types=ins)
 
 
-def build_pyimacs_ir(fn, specialization):
+def build_pyimacs_ir(fn, module=None, builder=None):
     '''
     signature: str, "i,f -> v"
     '''
@@ -588,7 +586,7 @@ def build_pyimacs_ir(fn, specialization):
     gscope = fn.__globals__.copy()
     function_name = fn.__name__
 
-    generator = CodeGenerator(context, gscope=gscope, function_name=function_name,
+    generator = CodeGenerator(context, gscope=gscope, function_name=function_name, module=module, builder=builder,
                               is_kernel=True)
     generator.visit(fn.parse())
     # try:
