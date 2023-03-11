@@ -11,7 +11,7 @@ import pyimacs._C.libpyimacs.pyimacs as _pyimacs
 import pyimacs.lang as pyl
 import pyimacs.lang.extension as pyl_ext
 
-from .runtime import AOTFunction
+from .aot import AOTFunction
 
 ir = _pyimacs.ir
 target = _pyimacs.target

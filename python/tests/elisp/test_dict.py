@@ -2,8 +2,8 @@ import ast
 
 import astpretty
 import pytest
+from pyimacs.aot import aot
 from pyimacs.elisp.dict import Dict
-from pyimacs.runtime import aot
 
 from pyimacs import compile
 

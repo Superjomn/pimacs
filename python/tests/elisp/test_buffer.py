@@ -1,5 +1,5 @@
+from pyimacs.aot import aot
 from pyimacs.elisp.buffer import Buffer
-from pyimacs.runtime import aot
 
 from pyimacs import compiler
 

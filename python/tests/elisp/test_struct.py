@@ -1,8 +1,8 @@
 
 import pyimacs.elisp as elisp
 import pytest
+from pyimacs.aot import aot
 from pyimacs.elisp.string import String
-from pyimacs.runtime import aot
 
 from pyimacs import compile
 

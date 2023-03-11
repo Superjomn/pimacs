@@ -1,8 +1,8 @@
 import logging
 
 import pyimacs.lang as pyl
+from pyimacs.aot import aot
 from pyimacs.elisp.buffer import Buffer, buffer_get
-from pyimacs.runtime import aot
 
 from pyimacs import compiler
 
