@@ -7,7 +7,7 @@ from pyimacs import compile
 
 def test_string_substring():
     @jit
-    def fn(name):
+    def fn(name: str) -> str:
         s = String(name)
         s = s[2:3]
         return s
@@ -26,7 +26,7 @@ def test_string_substring():
 
 def test_string_concat():
     @jit
-    def fn():
+    def fn() -> str:
         a = String("hello")
         b = String("world")
 

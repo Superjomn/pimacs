@@ -18,12 +18,11 @@ target = _pyimacs.target
 
 
 class CodeGenerator(ast.NodeVisitor):
-    def __init__(self, context: ir.MLIRContext, prototype, function_name: str, gscope: Dict[str, Any], module=None,
+    def __init__(self, context: ir.MLIRContext, function_name: str, gscope: Dict[str, Any], module=None,
                  is_kernel=True, function_types={}):
         self.builder = ir.Builder(context)
         self.module = self.builder.create_module() if module is None else module
         self.function_types = function_types
-        self.prototype = prototype
         self.is_kernel = is_kernel
 
         self.function_name = function_name
@@ -61,7 +60,8 @@ class CodeGenerator(ast.NodeVisitor):
         if isinstance(ret_value, tuple):
             assert NotImplementedError()
         if isinstance(ret_value, pyl_ext.Ext):
-            self.builder.ret([ret_value.__handle_return__()])
+            return_val = ret_value.__handle_return__()
+            self.builder.ret([return_val])
             return
         elif isinstance(ret_value, ir.Operation):
             self.builder.ret([ret_value.get_result(0)])
@@ -107,8 +107,12 @@ class CodeGenerator(ast.NodeVisitor):
                     target=st_target, value=default_value, annotation=annotation)
             self.visit(init_node)
 
+        signature = get_signature_from_FunctionDef(node)
+        print('signagure', signature)
+        prototype = get_function_type_from_signature(signature)
+
         visibility = "public" if self.is_kernel else "private"
-        fn = self.builder.get_or_insert_function(self.module, self.function_name, self.prototype.to_ir(self.builder),
+        fn = self.builder.get_or_insert_function(self.module, self.function_name, prototype.to_ir(self.builder),
                                                  visibility)
         self.module.push_back(fn)
         entry = fn.add_entry_block()
@@ -116,7 +120,7 @@ class CodeGenerator(ast.NodeVisitor):
         idx = 0
         for i, arg_name in enumerate(arg_names):
             arg_values.append(
-                pyl.Value(fn.args(idx), self.prototype.param_types[idx]))
+                pyl.Value(fn.args(idx), prototype.param_types[idx]))
 
         insert_pt = self.builder.get_insertion_block()
         for arg_name, arg_value in zip(arg_names, arg_values):
@@ -127,14 +131,16 @@ class CodeGenerator(ast.NodeVisitor):
         # finalize function
         if not has_ret:
             self.builder.ret([])
+        '''
         else:
             # update return type
             if isinstance(self.last_ret_type, tuple):
-                self.prototype.ret_types = list(self.last_ret_type)
-                fn.reset_type(self.prototype.to_ir(self.builder))
+                prototype.ret_types = list(self.last_ret_type)
+                fn.reset_type(prototype.to_ir(self.builder))
             else:
-                self.prototype.ret_types = [self.last_ret_type]
-                fn.reset_type(self.prototype.to_ir(self.builder))
+                prototype.ret_types = [self.last_ret_type]
+                fn.reset_type(prototype.to_ir(self.builder))
+        '''
         if insert_pt:
             self.builder.set_insertion_point_to_end(insert_pt)
 
@@ -147,8 +153,8 @@ class CodeGenerator(ast.NodeVisitor):
             kwarg_names = self.visit(node.kwarg)
         return arg_names, kwarg_names
 
-    def visit_arg(self, node):
-        ast.NodeVisitor.generic_visit(self, node)
+    def visit_arg(self, node: ast.arg) -> str:
+        #ast.NodeVisitor.generic_visit(self, node)
         return node.arg
 
     def visit_Assign(self, node):
@@ -460,6 +466,28 @@ class CodeGenerator(ast.NodeVisitor):
         raise NotImplementedError(f"Unsupported node: {typename}")
 
 
+def get_signature_from_FunctionDef(node: ast.FunctionDef) -> str:
+    def annotation_to_str(annotation):
+        if isinstance(annotation, ast.Name):
+            return annotation.id
+        elif isinstance(annotation, ast.Subscript):
+            return annotation.value.id + '[' + annotation.slice.value.id + ']'
+        elif annotation is None:
+            return "void"
+        elif isinstance(annotation, ast.Constant):
+            return "void" if annotation.value is None else annotation.value
+        else:
+            logging.error(f"annotation: {annotation} {type(annotation)}")
+            raise NotImplementedError
+
+    args = [annotation_to_str(arg.annotation) for arg in node.args.args]
+    args = args if args else ["void"]
+
+    ret = [annotation_to_str(node.returns)]
+
+    return ",".join(args) + " -> " + ",".join(ret)
+
+
 def compile(fn: JITFunction, **kwargs):
     '''
     :param fn: An
@@ -470,19 +498,18 @@ def compile(fn: JITFunction, **kwargs):
     ctx.load_pyimacs()
 
     configs = kwargs.get("configs", None)
-    signature = kwargs["signature"]
+    #signature = kwargs["signature"]
     kwargs["configs"] = configs
-    name = fn.__name__
-    kwargs["signature"] = signature
+    #kwargs["signature"] = signature
 
-    mod = translate_ast_to_lispir(fn, signature, specialization=None)
+    mod = translate_ast_to_lispir(fn, specialization=None)
     print('mod', mod)
     lisp_code = translate_lispir_to_lispcode(mod)
     return lisp_code
 
 
-def translate_ast_to_lispir(fn, signature, specialization):
-    mod, _ = build_pyimacs_ir(fn, signature, specialization)
+def translate_ast_to_lispir(fn, specialization):
+    mod, _ = build_pyimacs_ir(fn, specialization)
     return mod
 
 
@@ -503,8 +530,14 @@ def str_to_ty(name):
     tys = {
         "f": pyl.Float,
         "i": pyl.Int,
+        "int": pyl.Int,
+
         "b": pyl.Bool,
+        "bool": pyl.Bool,
+
         "o": pyl.Object,
+        "object": pyl.Object,
+
         "s": pyl.String,
         "str": pyl.String,
         "void": pyl.Void,
@@ -541,7 +574,7 @@ def get_function_type_from_signature(signature: str) -> pyl.FunctionType:
     return pyl.FunctionType(ret_types=ous, param_types=ins)
 
 
-def build_pyimacs_ir(fn, signature: str, specialization):
+def build_pyimacs_ir(fn, specialization):
     '''
     signature: str, "i,f -> v"
     '''
@@ -555,8 +588,7 @@ def build_pyimacs_ir(fn, signature: str, specialization):
     gscope = fn.__globals__.copy()
     function_name = fn.__name__
 
-    prototype = get_function_type_from_signature(signature)
-    generator = CodeGenerator(context, prototype, gscope=gscope, function_name=function_name,
+    generator = CodeGenerator(context, gscope=gscope, function_name=function_name,
                               is_kernel=True)
     generator.visit(fn.parse())
     # try:

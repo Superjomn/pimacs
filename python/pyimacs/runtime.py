@@ -40,6 +40,11 @@ class JITFunction(object):
         assert isinstance(tree.body[0], ast.FunctionDef)
         return tree
 
+    def compile(self) -> str:
+        ''' Compile the function to lisp code. '''
+        from pyimacs.compiler import compile
+        return compile(self.parse())
+
     def _make_signature(self, sig_key) -> str:
         signature = ",".join([self._type_of(k) for i, k in enumerate(sig_key)])
         return signature

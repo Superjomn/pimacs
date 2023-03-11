@@ -12,7 +12,7 @@ def test_empty_kernel():
     def some_fn(a: int):
         pass
 
-    code = compiler.compile(some_fn, signature="i -> void")
+    code = compiler.compile(some_fn)
     target = '''
 (defun some_fn (arg0)
     (let*
@@ -25,11 +25,11 @@ def test_empty_kernel():
 
 def test_naive_kernel():
     @jit
-    def some_fn(a: int):
+    def some_fn(a: int) -> int:
         b = (a + 1) * 23
         return b + 1
 
-    code = compiler.compile(some_fn, signature="i -> i")
+    code = compiler.compile(some_fn)
     print(code)
     target = '''
 (defun some_fn (arg0)
@@ -44,7 +44,7 @@ def test_naive_kernel():
 
 def test_kernel_with_if():
     @jit
-    def some_fn(a: int):
+    def some_fn(a: int) -> int:
         a = a + 1
         if True:
             return a
@@ -53,7 +53,7 @@ def test_kernel_with_if():
             # the statements outside the IfOp(wth return) to else region.
             return a + 1
 
-    code = compiler.compile(some_fn, signature="i -> i")
+    code = compiler.compile(some_fn)
     print(code)
 
     target = '''
@@ -80,10 +80,10 @@ def test_kernel_with_if():
 def test_external_call():
 
     @jit
-    def some_fn():
+    def some_fn() -> object:
         return buffer_get("hello")
 
-    code = compiler.compile(some_fn, signature="void -> o")
+    code = compiler.compile(some_fn)
     print(code)
     target = '''
 (defun some_fn ()
@@ -98,19 +98,19 @@ def test_external_call():
 
 def test_kernel_external_call():
     @jit
-    def some_fn():
-        buffer = Buffer("*a-buffer*")
+    def some_fn(buffer_name: str) -> str:
+        buffer = Buffer(buffer_name)
         name = buffer.get_name()
         return name
 
-    code = compiler.compile(some_fn, signature="void -> s")
+    code = compiler.compile(some_fn, signature="s -> s")
     print(code)
 
     target = '''
-(defun some_fn ()
+(defun some_fn (arg0)
     (let*
         ()
-        (buffer-file-name (buffer-get "*a-buffer*"))
+        (buffer-file-name (buffer-get arg0))
     )
 )
     '''
