@@ -1,10 +1,10 @@
+from pyimacs.aot import aot
 from pyimacs.elisp.buffer import Buffer
-from pyimacs.runtime import jit
 
 from pyimacs import compiler
 
 
-@jit
+@aot
 def buffer_tester() -> str:
     buf = Buffer("test")
     name = buf.get_name()

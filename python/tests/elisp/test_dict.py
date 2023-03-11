@@ -2,20 +2,26 @@ import ast
 
 import astpretty
 import pytest
+from pyimacs.aot import aot, get_context
 from pyimacs.elisp.dict import Dict
-from pyimacs.runtime import jit
+from pyimacs.lang import ir
 
 from pyimacs import compile
 
+ctx = get_context()
+
 
 def test_dict_basic():
-    @jit
+    @aot
     def fn():
         d = Dict()
         d["hello"] = "world"
         return d["hello"]
 
-    code = compile(fn, signature="void->s")
+    builder = ir.Builder(ctx)
+    module = builder.create_module()
+
+    code = compile(fn, builder=builder, module=module)
     target = '''
 (defun fn ()
     (let*

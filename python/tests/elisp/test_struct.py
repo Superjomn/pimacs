@@ -1,20 +1,27 @@
 
 import pyimacs.elisp as elisp
 import pytest
+from pyimacs.aot import aot, get_context
 from pyimacs.elisp.string import String
-from pyimacs.runtime import jit
+from pyimacs.lang import ir
 
 from pyimacs import compile
 
+ctx = get_context()
+
 
 def test_struct_basic():
-    @jit
+    @aot
     def fn() -> str:
         Person = elisp.Struct(["name", "age"], name_hint="Person")
         jojo = Person.create(name="Jojo", age=20)
         return jojo.name
 
-    code = compile(fn, signature="void -> s")
+    builder = ir.Builder(ctx)
+    module = builder.create_module()
+
+    code = compile(fn, builder=builder, module=module)
+
     print(code)
 
     target = '''
