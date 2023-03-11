@@ -22,6 +22,8 @@ class CodeGenerator(ast.NodeVisitor):
                  builder=None, is_kernel=True, function_types={}):
         self.builder = builder or ir.Builder(context)
         self.module = module or self.builder.create_module()
+        assert isinstance(self.module, ir.Module)
+        assert isinstance(self.builder, ir.Builder)
         self.function_types = function_types
         self.is_kernel = is_kernel
 
@@ -111,8 +113,12 @@ class CodeGenerator(ast.NodeVisitor):
         prototype = get_function_type_from_signature(signature)
 
         visibility = "public" if self.is_kernel else "private"
-        assert not self.module.has_function(
-            self.function_name), f"Function {self.function_name} is duplicated in the module"
+        # remove old function if already exists
+        if self.module.has_function(self.function_name):
+            fn = self.module.get_function(self.function_name)
+            fn.remove()
+            assert not self.module.has_function(self.function_name)
+
         fn = self.builder.get_or_insert_function(self.module, self.function_name, prototype.to_ir(self.builder),
                                                  visibility)
         self.module.push_back(fn)

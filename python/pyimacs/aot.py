@@ -24,7 +24,6 @@ class AOTFunction(object):
 
     def __init__(self, fn, do_not_specialize=None):
         self.fn = fn
-        self.module = fn.__module__
 
         signature = inspect.signature(fn)
         self.arg_names = [v.name for v in signature.parameters.values()]
@@ -45,6 +44,8 @@ class AOTFunction(object):
         self.__globals__ = fn.__globals__
         self.__module__ = fn.__module__
 
+        self.compile()
+
     def parse(self):
         tree = ast.parse(self.src)
         assert isinstance(tree, ast.Module)
@@ -55,7 +56,19 @@ class AOTFunction(object):
     def compile(self) -> ir.Module:
         ''' Compile the function to lisp code. '''
         from pyimacs.compiler import translate_ast_to_lispir
-        return translate_ast_to_lispir(self.fn, module=self.module, builder=self.builder)
+        return translate_ast_to_lispir(self, module=self.module, builder=self.builder)
+
+    @staticmethod
+    def to_lispcode() -> str:
+        from pyimacs.compiler import translate_lispir_to_lispcode
+        return translate_lispir_to_lispcode(AOTFunction.module)
+
+    @staticmethod
+    def reset_builder(builder: ir.Builder) -> None:
+        AOTFunction.builder = builer
+
+    def reset_module(module: ir.Module) -> None:
+        AOTFunction.module = module
 
     def _make_signature(self, sig_key) -> str:
         signature = ",".join([self._type_of(k) for i, k in enumerate(sig_key)])

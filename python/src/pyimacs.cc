@@ -342,6 +342,7 @@ void initMLIR(py::module &m) {
            [](mlir::ModuleOp &self, std::string &funcName) -> mlir::FuncOp {
              return self.lookupSymbol<mlir::FuncOp>(funcName);
            })
+
       .def("get_function_names",
            [](mlir::ModuleOp &self) -> std::vector<std::string> {
              std::vector<std::string> ret;
@@ -398,6 +399,7 @@ void initMLIR(py::module &m) {
             return self.addEntryBlock();
           },
           ret::reference)
+      .def("remove", [](mlir::FuncOp &self) { self->remove(); })
       .def(
           "body",
           [](mlir::FuncOp &self) -> mlir::Region * { return &self.body(); },
