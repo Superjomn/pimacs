@@ -1,2 +1,2 @@
 from .compiler import compile
-from .runtime import jit
+from .runtime import aot

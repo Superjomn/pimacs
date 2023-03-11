@@ -11,7 +11,7 @@ import pyimacs._C.libpyimacs.pyimacs as _pyimacs
 import pyimacs.lang as pyl
 import pyimacs.lang.extension as pyl_ext
 
-from .runtime import JITFunction
+from .runtime import AOTFunction
 
 ir = _pyimacs.ir
 target = _pyimacs.target
@@ -287,7 +287,7 @@ class CodeGenerator(ast.NodeVisitor):
             return fn(args, builder=self.builder)
         if inspect.isclass(fn) and issubclass(fn, pyl.ElispClass):
             return fn(args, builder=self.builder)
-        if isinstance(fn, JITFunction):
+        if isinstance(fn, AOTFunction):
             from inspect import getcallargs
             args = getcallargs(fn.fn, *args, **kws)
             args = [args[name] for name in fn.arg_names]
@@ -488,7 +488,7 @@ def get_signature_from_FunctionDef(node: ast.FunctionDef) -> str:
     return ",".join(args) + " -> " + ",".join(ret)
 
 
-def compile(fn: JITFunction, **kwargs):
+def compile(fn: AOTFunction, **kwargs):
     '''
     :param fn: An
     :param kwargs:

@@ -2,13 +2,13 @@ import logging
 
 import pyimacs.lang as pyl
 from pyimacs.elisp.buffer import Buffer, buffer_get
-from pyimacs.runtime import jit
+from pyimacs.runtime import aot
 
 from pyimacs import compiler
 
 
 def test_empty_kernel():
-    @jit
+    @aot
     def some_fn(a: int):
         pass
 
@@ -24,7 +24,7 @@ def test_empty_kernel():
 
 
 def test_naive_kernel():
-    @jit
+    @aot
     def some_fn(a: int) -> int:
         b = (a + 1) * 23
         return b + 1
@@ -43,7 +43,7 @@ def test_naive_kernel():
 
 
 def test_kernel_with_if():
-    @jit
+    @aot
     def some_fn(a: int) -> int:
         a = a + 1
         if True:
@@ -79,7 +79,7 @@ def test_kernel_with_if():
 
 def test_external_call():
 
-    @jit
+    @aot
     def some_fn() -> object:
         return buffer_get("hello")
 
@@ -97,7 +97,7 @@ def test_external_call():
 
 
 def test_kernel_external_call():
-    @jit
+    @aot
     def some_fn(buffer_name: str) -> str:
         buffer = Buffer(buffer_name)
         name = buffer.get_name()

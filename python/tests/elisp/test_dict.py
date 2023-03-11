@@ -3,13 +3,13 @@ import ast
 import astpretty
 import pytest
 from pyimacs.elisp.dict import Dict
-from pyimacs.runtime import jit
+from pyimacs.runtime import aot
 
 from pyimacs import compile
 
 
 def test_dict_basic():
-    @jit
+    @aot
     def fn():
         d = Dict()
         d["hello"] = "world"

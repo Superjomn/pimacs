@@ -1,12 +1,12 @@
 import pytest
 from pyimacs.elisp.string import String
-from pyimacs.runtime import jit
+from pyimacs.runtime import aot
 
 from pyimacs import compile
 
 
 def test_string_substring():
-    @jit
+    @aot
     def fn(name: str) -> str:
         s = String(name)
         s = s[2:3]
@@ -25,7 +25,7 @@ def test_string_substring():
 
 
 def test_string_concat():
-    @jit
+    @aot
     def fn() -> str:
         a = String("hello")
         b = String("world")

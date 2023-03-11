@@ -2,13 +2,13 @@
 import pyimacs.elisp as elisp
 import pytest
 from pyimacs.elisp.string import String
-from pyimacs.runtime import jit
+from pyimacs.runtime import aot
 
 from pyimacs import compile
 
 
 def test_struct_basic():
-    @jit
+    @aot
     def fn() -> str:
         Person = elisp.Struct(["name", "age"], name_hint="Person")
         jojo = Person.create(name="Jojo", age=20)

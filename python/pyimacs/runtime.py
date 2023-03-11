@@ -8,7 +8,7 @@ import pyimacs.lang as pyl
 ir = pyl.ir
 
 
-class JITFunction(object):
+class AOTFunction(object):
     def __init__(self, fn, do_not_specialize=None):
         self.fn = fn
         self.module = fn.__module__
@@ -60,11 +60,11 @@ class JITFunction(object):
 T = TypeVar("T")
 
 
-def jit(fn: Optional[T] = None,
+def aot(fn: Optional[T] = None,
         do_not_specialize=None):
-    def decorator(fn: T) -> JITFunction:
+    def decorator(fn: T) -> AOTFunction:
         assert callable(fn)
-        return JITFunction(fn, do_not_specialize=do_not_specialize)
+        return AOTFunction(fn, do_not_specialize=do_not_specialize)
 
     if fn is not None:
         return decorator(fn)
