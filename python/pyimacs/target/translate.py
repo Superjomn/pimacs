@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import *
 
 from pyimacs._C.libpyimacs.pyimacs import ir
+from pyimacs.elisp.core import make_var_args
 from pyimacs.target import elisp_ast as ast
 
 
@@ -67,10 +68,14 @@ class MlirToAstTranslator:
     Translate from MLIR to Elisp AST
     '''
 
+    _make_var_args_ = "make_var_args"
+    _make_tuple_ = "lisp.make_tuple"
+
     def __init__(self):
         self.symbol_table = SymbolTable()
 
-        self._constant_val = None
+        # some values cached during translation, these are not in the symbol table, but we need to keep them
+        self._py_values: Dict[Any, Any] = dict()
 
     def run(self, mod: ir.Module) -> List[ast.Function]:
         funcs = []
@@ -179,6 +184,7 @@ class MlirToAstTranslator:
         return self.setq(op.get_result(0), res)
 
     def visit_MakeTuple(self, op: ir.Operation) -> ast.Expression:
+        self._cache_MakeTuple(op)
         assert op.num_operands() > 0
         res = ast.Expression(ast.Symbol("list"))
         for i in range(op.num_operands()):
@@ -242,13 +248,48 @@ class MlirToAstTranslator:
 
     def visit_Call(self, op: ir.Operation):
         callee = op.to_call_op().get_callee()
+        print("callee", callee, make_var_args.__name__)
+        if callee == self._make_var_args_:
+            self.visit_MakeVarArgsCall(op)
+
         args = []
         for arg in op.operands():
-            args.append(self.symbol_table.get(arg))
+            arg_py = self._get_py_value(arg)
+            if arg_py is not None:
+                if isinstance(arg_py, list):
+                    args.extend(arg_py)
+                    continue
+                arg = arg_py
+            arg = self.symbol_table.get(arg)
+            args.append(arg)
         call = ast.Call(ast.Symbol(callee), args)
         if op.get_num_results() == 0:
             return call
         return self.setq(op.get_result(0), call)
+
+    def _get_py_value(self, val: ir.Value):
+        if hash(val) in self._py_values:
+            return self._py_values[hash(val)]
+
+    def _set_py_value(self, val: ir.Value, py_val: Any):
+        self._py_values[hash(val)] = py_val
+
+    def _cache_MakeTuple(self, op: ir.Operation):
+        res = []
+        for i in range(op.num_operands()):
+            res.append(self.symbol_table.get(op.get_operand(i).get()))
+        print('res', res)
+        self._set_py_value(op.get_result(0), res)
+        return res
+
+    def visit_MakeVarArgsCall(self, op: ir.Operation):
+        callee = op.to_call_op().get_callee()
+        assert callee == self._make_var_args_
+        assert op.num_operands() == 1
+        res = self._get_py_value(op.get_operand(0).get())
+        print('get var args', res)
+        self._set_py_value(op.get_result(0), res)
+        return res
 
     def setq(self, var: ir.Value, val: Any) -> ast.Expression:
         return ast.Expression(ast.Symbol("setq"), self.symbol_table.get(var), val)

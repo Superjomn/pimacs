@@ -103,6 +103,7 @@ def _register_extern(func: Callable, func_name: str):
 
             module.push_back(func)
 
+    @functools.wraps(_register_extern)
     def fn(*args, **kwargs):
         assert module(), "module() need to be set before calling extern function."
         assert builder(), "builder() need to be set before calling extern function."

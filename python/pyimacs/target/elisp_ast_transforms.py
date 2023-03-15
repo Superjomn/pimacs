@@ -77,6 +77,9 @@ class Simplify(Transform):
     def visit_Let(self, node: LetExpr):
         instant_values = {}
         for arg in node.vars:
+            print(arg, arg.user_count)
+            for user in arg.users:
+                print(' - ', user)
             if arg.user_count <= 1:
                 # for return expr, the user_count is 0
                 instant_values[arg] = None

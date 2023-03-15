@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import *
 
 import pyimacs.lang as pyl
-from pyimacs.elisp.core import make_symbol
+from pyimacs.elisp.core import make_symbol, make_var_args
 from pyimacs.elisp.tuple import _make_tuple
 from pyimacs.lang import ir
 from pyimacs.lang.extension import Ext, builder, ctx, module, register_extern
@@ -34,7 +34,8 @@ class Struct(Ext):
             flatten.append(make_symbol(item[0], is_keyword=True))
             flatten.append(item[1])
         flatten = _make_tuple(flatten)
-        instance = _make_struct(self.name, flatten)
+        var_args = make_var_args(flatten)
+        instance = _make_struct(self.name, var_args)
         return Struct.Field(instance, self.fields)
 
     @dataclass
@@ -61,10 +62,9 @@ def _def_struct(name: object, fields: object) -> None: ...
 
 
 @register_extern("pyimacs-makestruct")
-def _make_struct(struct: str, args: object) -> object: ...
-
-
-''' args is a tuple of arguments. '''
+def _make_struct(struct: str, args: object) -> object:
+    ''' args is a tuple of arguments. '''
+    pass
 
 
 @register_extern("pyimacs-get-field")
