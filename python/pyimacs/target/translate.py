@@ -145,7 +145,7 @@ class MlirToAstTranslator:
             return self.visit_binary(op)
         if op.name() == "arith.constant":
             return self.visit_Constant(op)
-        if op.name() == "std.return":
+        if op.name() == "func.return":
             return self.visit_Ret(op)
         if op.name() == "scf.if":
             return self.visit_If(op)

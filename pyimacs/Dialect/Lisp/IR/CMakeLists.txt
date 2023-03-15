@@ -20,7 +20,7 @@ add_mlir_dialect_library(LispIR
 
   LINK_LIBS PUBLIC
   MLIRIR
-  MLIRArithmetic
-  MLIRSCF
-  MLIRStandard
+  MLIRSCFDialect
+  MLIRArithDialect
+  MLIRLLVMDialect
 )

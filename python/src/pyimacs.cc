@@ -4,7 +4,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Verifier.h"
-#include "mlir/Parser.h"
+#include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
@@ -284,7 +284,9 @@ void initMLIR(py::module &m) {
              return llvm::cast<mlir::scf::IfOp>(self);
            })
       .def("to_call_op",
-           [](mlir::Operation &self) { return llvm::cast<mlir::CallOp>(self); })
+           [](mlir::Operation &self) {
+             return llvm::cast<mlir::func::CallOp>(self);
+           })
       .def("to_llvm_call_op",
            [](mlir::Operation &self) {
              return llvm::cast<mlir::LLVM::CallOp>(self);
@@ -302,20 +304,21 @@ void initMLIR(py::module &m) {
   py::class_<mlir::scf::ForOp, mlir::OpState>(m, "ForOp")
       .def("get_induction_var", &mlir::scf::ForOp::getInductionVar);
 
-  py::class_<mlir::CallOp, mlir::OpState>(m, "CallOp")
+  py::class_<mlir::func::CallOp, mlir::OpState>(m, "CallOp")
       .def("get_callee",
-           [](mlir::CallOp &self) -> std::string {
+           [](mlir::func::CallOp &self) -> std::string {
              return self.getCallee().str();
            })
-      .def("operands", [](mlir::CallOp &self) -> std::vector<mlir::Value> {
-        return std::vector<mlir::Value>(self.getOperands().begin(),
-                                        self.getOperands().end());
-      });
+      .def("operands",
+           [](mlir::func::CallOp &self) -> std::vector<mlir::Value> {
+             return std::vector<mlir::Value>(self.getOperands().begin(),
+                                             self.getOperands().end());
+           });
 
   py::class_<mlir::LLVM::CallOp, mlir::OpState>(m, "LLVMCallOp")
       .def("get_callee",
            [](mlir::LLVM::CallOp &self) -> std::string {
-             llvm::StringRef callee = self.getCallee().getValue();
+             llvm::StringRef callee = self.getCallee().value();
              return callee.str();
            })
       .def("operands",
@@ -347,7 +350,7 @@ void initMLIR(py::module &m) {
              return str;
            })
       .def("push_back",
-           [](mlir::ModuleOp &self, mlir::FuncOp &funcOp) -> void {
+           [](mlir::ModuleOp &self, mlir::func::FuncOp &funcOp) -> void {
              self.push_back(funcOp);
            })
       .def("push_back",
@@ -361,8 +364,9 @@ void initMLIR(py::module &m) {
              return false;
            })
       .def("get_function__",
-           [](mlir::ModuleOp &self, std::string &funcName) -> mlir::FuncOp {
-             return self.lookupSymbol<mlir::FuncOp>(funcName);
+           [](mlir::ModuleOp &self,
+              std::string &funcName) -> mlir::func::FuncOp {
+             return self.lookupSymbol<mlir::func::FuncOp>(funcName);
            })
       .def("get_llvm_function",
            [](mlir::ModuleOp &self,
@@ -374,8 +378,8 @@ void initMLIR(py::module &m) {
            [](mlir::ModuleOp &self) -> std::vector<std::string> {
              std::vector<std::string> ret;
              self.walk([&](mlir::Operation *op) {
-               if (auto func = llvm::dyn_cast<mlir::FuncOp>(op)) {
-                 ret.push_back(func.sym_name().str());
+               if (auto func = llvm::dyn_cast<mlir::func::FuncOp>(op)) {
+                 ret.push_back(func->getName().stripDialect().str());
                }
                if (auto func = llvm::dyn_cast<mlir::LLVM::LLVMFuncOp>(op)) {
                  ret.push_back(func.getName().str());
@@ -387,6 +391,7 @@ void initMLIR(py::module &m) {
         return self.getBody(blockId);
       });
 
+  /*
   m.def(
       "parse_mlir_module",
       [](const std::string &inputFilename, mlir::MLIRContext &context) {
@@ -394,8 +399,7 @@ void initMLIR(py::module &m) {
         mlir::DialectRegistry registry;
         registry.insert<mlir::pyimacs::LispDialect, mlir::math::MathDialect,
                         mlir::arith::ArithmeticDialect,
-                        mlir::StandardOpsDialect, mlir::scf::SCFDialect>();
-        context.appendDialectRegistry(registry);
+  mlir::scf::SCFDialect>(); context.appendDialectRegistry(registry);
         context.loadAllAvailableDialects();
 
         // parse module
@@ -411,38 +415,44 @@ void initMLIR(py::module &m) {
         return module->clone();
       },
       ret::take_ownership);
+      */
 
-  py::class_<mlir::FuncOp, mlir::OpState>(m, "Function")
+  py::class_<mlir::func::FuncOp, mlir::OpState>(m, "Function")
       .def("args",
-           [](mlir::FuncOp &self, unsigned idx) -> mlir::Value {
+           [](mlir::func::FuncOp &self, unsigned idx) -> mlir::Value {
              return self.getArgument(idx);
            })
       .def("get_name",
-           [](mlir::FuncOp &self) -> std::string {
-             return self.sym_name().str();
+           [](mlir::func::FuncOp &self) -> std::string {
+             return self->getName().stripDialect().str();
            })
       .def("num_args",
-           [](mlir::FuncOp &self) -> int { return self.getNumArguments(); })
+           [](mlir::func::FuncOp &self) -> int {
+             return self.getNumArguments();
+           })
       .def(
           "add_entry_block",
-          [](mlir::FuncOp &self) -> mlir::Block * {
+          [](mlir::func::FuncOp &self) -> mlir::Block * {
             return self.addEntryBlock();
           },
           ret::reference)
-      .def("remove", [](mlir::FuncOp &self) { self->remove(); })
+      .def("remove", [](mlir::func::FuncOp &self) { self->remove(); })
       .def(
           "body",
-          [](mlir::FuncOp &self) -> mlir::Region * { return &self.body(); },
+          [](mlir::func::FuncOp &self) -> mlir::Region * {
+            return &self.getBody();
+          },
           ret::reference)
       .def(
           "set_arg_attr",
-          [](mlir::FuncOp &self, int arg_no, const std::string &name, int val) {
+          [](mlir::func::FuncOp &self, int arg_no, const std::string &name,
+             int val) {
             // set arg attributes "name" to value "val"
             auto attrTy = mlir::IntegerType::get(self.getContext(), 32);
             self.setArgAttr(arg_no, name, mlir::IntegerAttr::get(attrTy, val));
           },
           ret::reference)
-      .def("reset_type", &mlir::FuncOp::setType);
+      .def("reset_type", &mlir::func::FuncOp::setType);
 
   py::class_<mlir::LLVM::LLVMFuncOp, mlir::OpState>(m, "LLVMFunction")
       .def("args",
@@ -499,14 +509,14 @@ void initBuilder(py::module &m) {
       .def("ret",
            [](mlir::OpBuilder &self, std::vector<mlir::Value> &vals) -> void {
              auto loc = self.getUnknownLoc();
-             self.create<mlir::ReturnOp>(loc, vals);
+             self.create<mlir::func::ReturnOp>(loc, vals);
            })
       .def(
           "call",
-          [](mlir::OpBuilder &self, mlir::FuncOp &func,
+          [](mlir::OpBuilder &self, mlir::func::FuncOp &func,
              std::vector<mlir::Value> &args) -> mlir::Operation * {
             auto loc = self.getUnknownLoc();
-            return self.create<mlir::CallOp>(loc, func, args);
+            return self.create<mlir::func::CallOp>(loc, func, args);
           },
           ret::reference)
       .def(
@@ -727,9 +737,9 @@ void initBuilder(py::module &m) {
       .def("get_or_insert_function__",
            [](mlir::OpBuilder &self, mlir::ModuleOp &module,
               const std::string &funcName, mlir::Type &funcType,
-              const std::string &visibility) -> mlir::FuncOp {
+              const std::string &visibility) -> mlir::func::FuncOp {
              if (mlir::Operation *funcOperation = module.lookupSymbol(funcName))
-               return llvm::dyn_cast<mlir::FuncOp>(funcOperation);
+               return llvm::dyn_cast<mlir::func::FuncOp>(funcOperation);
 
              auto loc = self.getUnknownLoc();
              mlir::OpBuilder::InsertionGuard guard(self);
@@ -738,7 +748,8 @@ void initBuilder(py::module &m) {
                mlir::ArrayRef<mlir::NamedAttribute> attrs = {
                    mlir::NamedAttribute(self.getStringAttr("sym_visibility"),
                                         self.getStringAttr(visibility))};
-               return self.create<mlir::FuncOp>(loc, funcName, funcTy, attrs);
+               return self.create<mlir::func::FuncOp>(loc, funcName, funcTy,
+                                                      attrs);
              }
              throw std::runtime_error("invalid function type");
            })

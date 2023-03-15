@@ -13,16 +13,18 @@ def Lisp_Dialect : Dialect {
     let description = [{ }];
 
     let dependentDialects = [
-        "arith::ArithmeticDialect",
+        "arith::ArithDialect",
         "math::MathDialect",
-        "StandardOpsDialect",
         "scf::SCFDialect",
         "LLVM::LLVMDialect",
+        "func::FuncDialect",
     ];
 
     let extraClassDeclaration = [{
         void registerTypes();
     }];
+
+    let useDefaultTypePrinterParser = 1;
 }
 
 include "pyimacs/Dialect/Lisp/IR/LispTypes.td"

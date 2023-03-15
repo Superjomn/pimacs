@@ -83,6 +83,3 @@ def test_function_declaration():
     assert str(func).strip(
     ) == 'llvm.func @"get-buffer"(!lisp.string) -> !lisp.object'
     mod.push_back(func)
-
-
-test_function_declaration()
