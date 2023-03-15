@@ -26,7 +26,7 @@ jobs:
           # Download llvm
           mkdir -p ~/llvm
           #wget -P ~/llvm/ https://github.com/ptillet/triton-llvm-releases/releases/download/llvm-14.0.6-f28c006a5895/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert.tar.xz --quiet
-          wget -P https://github.com/ptillet/triton-llvm-releases/releases/download/llvm-17.0.0-3e497a114730/llvm+mlir-17.0.0-x86_64-linux-gnu-ubuntu-18.04-release.tar.xz --quiet
+          wget -P ~/llvm/ https://github.com/ptillet/triton-llvm-releases/releases/download/llvm-17.0.0-3e497a114730/llvm+mlir-17.0.0-x86_64-linux-gnu-ubuntu-18.04-release.tar.xz --quiet
           xz -d ~/llvm/*.xz
           LLVM_DIR=~/llvm
           WORKSPACE=$PWD
