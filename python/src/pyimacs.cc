@@ -1,4 +1,5 @@
 #include "mlir/Conversion/Passes.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
@@ -284,6 +285,11 @@ void initMLIR(py::module &m) {
            })
       .def("to_call_op",
            [](mlir::Operation &self) { return llvm::cast<mlir::CallOp>(self); })
+      .def("to_llvm_call_op",
+           [](mlir::Operation &self) {
+             return llvm::cast<mlir::LLVM::CallOp>(self);
+           })
+
       .def("__str__", [](mlir::Operation &self) -> std::string {
         std::string buf;
         llvm::raw_string_ostream os(buf);
@@ -305,6 +311,18 @@ void initMLIR(py::module &m) {
         return std::vector<mlir::Value>(self.getOperands().begin(),
                                         self.getOperands().end());
       });
+
+  py::class_<mlir::LLVM::CallOp, mlir::OpState>(m, "LLVMCallOp")
+      .def("get_callee",
+           [](mlir::LLVM::CallOp &self) -> std::string {
+             llvm::StringRef callee = self.getCallee().getValue();
+             return callee.str();
+           })
+      .def("operands",
+           [](mlir::LLVM::CallOp &self) -> std::vector<mlir::Value> {
+             return std::vector<mlir::Value>(self.getOperands().begin(),
+                                             self.getOperands().end());
+           });
 
   py::class_<mlir::scf::IfOp, mlir::OpState>(m, "IfOp")
       .def("get_then_block", &mlir::scf::IfOp::thenBlock, ret::reference)
@@ -332,15 +350,24 @@ void initMLIR(py::module &m) {
            [](mlir::ModuleOp &self, mlir::FuncOp &funcOp) -> void {
              self.push_back(funcOp);
            })
+      .def("push_back",
+           [](mlir::ModuleOp &self, mlir::LLVM::LLVMFuncOp &funcOp) -> void {
+             self.push_back(funcOp);
+           })
       .def("has_function",
            [](mlir::ModuleOp &self, std::string &funcName) -> bool {
              if (self.lookupSymbol(funcName))
                return true;
              return false;
            })
-      .def("get_function",
+      .def("get_function__",
            [](mlir::ModuleOp &self, std::string &funcName) -> mlir::FuncOp {
              return self.lookupSymbol<mlir::FuncOp>(funcName);
+           })
+      .def("get_llvm_function",
+           [](mlir::ModuleOp &self,
+              std::string &funcName) -> mlir::LLVM::LLVMFuncOp {
+             return self.lookupSymbol<mlir::LLVM::LLVMFuncOp>(funcName);
            })
 
       .def("get_function_names",
@@ -349,6 +376,9 @@ void initMLIR(py::module &m) {
              self.walk([&](mlir::Operation *op) {
                if (auto func = llvm::dyn_cast<mlir::FuncOp>(op)) {
                  ret.push_back(func.sym_name().str());
+               }
+               if (auto func = llvm::dyn_cast<mlir::LLVM::LLVMFuncOp>(op)) {
+                 ret.push_back(func.getName().str());
                }
              });
              return ret;
@@ -414,6 +444,43 @@ void initMLIR(py::module &m) {
           ret::reference)
       .def("reset_type", &mlir::FuncOp::setType);
 
+  py::class_<mlir::LLVM::LLVMFuncOp, mlir::OpState>(m, "LLVMFunction")
+      .def("args",
+           [](mlir::LLVM::LLVMFuncOp &self, unsigned idx) -> mlir::Value {
+             return self.getArgument(idx);
+           })
+      .def("get_name",
+           [](mlir::LLVM::LLVMFuncOp &self) -> std::string {
+             return self.getName().str();
+           })
+      .def("num_args",
+           [](mlir::LLVM::LLVMFuncOp &self) -> int {
+             return self.getNumArguments();
+           })
+      .def(
+          "add_entry_block",
+          [](mlir::LLVM::LLVMFuncOp &self) -> mlir::Block * {
+            return self.addEntryBlock();
+          },
+          ret::reference)
+      .def("remove", [](mlir::LLVM::LLVMFuncOp &self) { self->remove(); })
+      .def(
+          "body",
+          [](mlir::LLVM::LLVMFuncOp &self) -> mlir::Region * {
+            return &self.getBody();
+          },
+          ret::reference)
+      .def(
+          "set_arg_attr",
+          [](mlir::LLVM::LLVMFuncOp &self, int arg_no, const std::string &name,
+             int val) {
+            // set arg attributes "name" to value "val"
+            auto attrTy = mlir::IntegerType::get(self.getContext(), 32);
+            self.setArgAttr(arg_no, name, mlir::IntegerAttr::get(attrTy, val));
+          },
+          ret::reference)
+      .def("reset_type", &mlir::LLVM::LLVMFuncOp::setType);
+
   py::class_<mlir::OpBuilder::InsertPoint>(m, "InsertPoint");
 }
 
@@ -440,6 +507,14 @@ void initBuilder(py::module &m) {
              std::vector<mlir::Value> &args) -> mlir::Operation * {
             auto loc = self.getUnknownLoc();
             return self.create<mlir::CallOp>(loc, func, args);
+          },
+          ret::reference)
+      .def(
+          "llvm_call",
+          [](mlir::OpBuilder &self, mlir::LLVM::LLVMFuncOp &func,
+             std::vector<mlir::Value> &args) -> mlir::Operation * {
+            auto loc = self.getUnknownLoc();
+            return self.create<mlir::LLVM::CallOp>(loc, func, args);
           },
           ret::reference)
       .def("extern_call",
@@ -591,7 +666,7 @@ void initBuilder(py::module &m) {
       // Types
       .def("get_void_ty",
            [](mlir::OpBuilder &self) -> mlir::Type {
-             return self.getNoneType();
+             return mlir::LLVM::LLVMVoidType::get(self.getContext());
            })
       .def("get_int1_ty",
            [](mlir::OpBuilder &self) -> mlir::Type {
@@ -628,14 +703,28 @@ void initBuilder(py::module &m) {
               std::vector<int64_t> &shape) -> mlir::Type {
              return mlir::RankedTensorType::get(shape, elementType);
            })
-      .def("get_function_ty",
+      .def("get_function_ty__",
            [](mlir::OpBuilder &self, std::vector<mlir::Type> inTypes,
               std::vector<mlir::Type> outTypes) -> mlir::Type {
              return self.getFunctionType(inTypes, outTypes);
            })
+      .def(
+          "get_llvm_function_ty",
+          [](mlir::OpBuilder &self, std::vector<mlir::Type> inTypes,
+             std::vector<mlir::Type> outTypes,
+             bool isVarArg = true) -> mlir::Type {
+            assert(outTypes.size() <= 1);
+            mlir::Type outTy =
+                outTypes.empty()
+                    ? mlir::LLVM::LLVMVoidType::get(self.getContext())
+                    : outTypes[0];
+            return mlir::LLVM::LLVMFunctionType::get(outTy, inTypes, isVarArg);
+          },
+          "get a FunctionType in LLVM dialect.", py::arg("in_types"),
+          py::arg("out_types"), py::arg("is_var_arg") = false)
 
       // Ops
-      .def("get_or_insert_function",
+      .def("get_or_insert_function__",
            [](mlir::OpBuilder &self, mlir::ModuleOp &module,
               const std::string &funcName, mlir::Type &funcType,
               const std::string &visibility) -> mlir::FuncOp {
@@ -650,6 +739,26 @@ void initBuilder(py::module &m) {
                    mlir::NamedAttribute(self.getStringAttr("sym_visibility"),
                                         self.getStringAttr(visibility))};
                return self.create<mlir::FuncOp>(loc, funcName, funcTy, attrs);
+             }
+             throw std::runtime_error("invalid function type");
+           })
+      .def("get_or_insert_llvm_function",
+           [](mlir::OpBuilder &self, mlir::ModuleOp &module,
+              const std::string &funcName, mlir::Type &funcType,
+              const std::string &visibility) -> mlir::LLVM::LLVMFuncOp {
+             if (mlir::Operation *funcOperation = module.lookupSymbol(funcName))
+               return llvm::dyn_cast<mlir::LLVM::LLVMFuncOp>(funcOperation);
+
+             auto loc = self.getUnknownLoc();
+             mlir::OpBuilder::InsertionGuard guard(self);
+             self.setInsertionPoint(module);
+             if (auto funcTy =
+                     funcType.dyn_cast<mlir::LLVM::LLVMFunctionType>()) {
+               mlir::ArrayRef<mlir::NamedAttribute> attrs = {
+                   mlir::NamedAttribute(self.getStringAttr("sym_visibility"),
+                                        self.getStringAttr(visibility))};
+               return self.create<mlir::LLVM::LLVMFuncOp>(loc, funcName,
+                                                          funcTy);
              }
              throw std::runtime_error("invalid function type");
            })

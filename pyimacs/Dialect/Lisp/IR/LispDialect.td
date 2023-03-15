@@ -17,6 +17,7 @@ def Lisp_Dialect : Dialect {
         "math::MathDialect",
         "StandardOpsDialect",
         "scf::SCFDialect",
+        "LLVM::LLVMDialect",
     ];
 
     let extraClassDeclaration = [{

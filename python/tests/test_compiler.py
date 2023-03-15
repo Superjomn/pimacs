@@ -26,6 +26,7 @@ def test_empty_kernel():
     )
 )
     '''
+    print(code)
     assert code.strip() == target.strip()
 
 
