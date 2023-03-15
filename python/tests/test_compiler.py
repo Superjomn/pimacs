@@ -3,7 +3,7 @@ import logging
 import pyimacs.lang as pyl
 from pyimacs.aot import AOTFunction, aot, get_context
 from pyimacs.elisp.buffer import Buffer, buffer_get
-from pyimacs.lang import ir
+from pyimacs.lang import Int, ir
 
 from pyimacs import compiler
 
@@ -26,6 +26,7 @@ def test_empty_kernel():
     )
 )
     '''
+    print(code)
     assert code.strip() == target.strip()
 
 
@@ -66,7 +67,6 @@ def test_kernel_with_if():
     module = builder.create_module()
 
     code = compiler.compile(some_fn, builder=builder, module=module)
-    print(code)
     print(code)
 
     target = '''
@@ -134,3 +134,25 @@ def test_kernel_external_call():
 )
     '''
     assert code.strip() == target.strip()
+
+
+def test_function_with_variaric_argument():
+    ctx = ir.MLIRContext()
+    ctx.load_pyimacs()
+    builder = ir.Builder(ctx)
+    mod = builder.create_module()
+    func_ty = builder.get_llvm_function_ty(
+        [Int.to_ir(builder)], [], is_var_arg=True)
+    func = builder.get_or_insert_llvm_function(mod, "add", func_ty, "public")
+    mod.push_back(func)
+
+    entry_block = func.add_entry_block()
+    builder.set_insertion_point_to_start(entry_block)
+    arg0 = func.args(0)
+    eq0 = builder.create_add(arg0, builder.get_int32(32))
+    builder.ret([eq0])
+
+    builder.set_insertion_point_to_end(entry_block)
+    builder.llvm_call(func, [builder.get_int32(32), builder.get_int32(32)])
+
+    print(mod)

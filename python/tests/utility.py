@@ -8,8 +8,8 @@ def build_mod0():
     builder = ir.Builder(ctx)
     mod = builder.create_module()
     int_ty = Int.to_ir(builder)
-    func_ty = builder.get_function_ty([int_ty], [int_ty])
-    func = builder.get_or_insert_function(mod, "add", func_ty, "public")
+    func_ty = builder.get_llvm_function_ty([int_ty], [int_ty], False)
+    func = builder.get_or_insert_llvm_function(mod, "add", func_ty, "public")
     mod.push_back(func)
 
     entry_block = func.add_entry_block()

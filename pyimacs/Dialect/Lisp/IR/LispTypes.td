@@ -2,6 +2,7 @@
 #define PYIMACS_LISP_TYPES
 
 include "pyimacs/Dialect/Lisp/IR/LispDialect.td"
+include "mlir/IR/AttrTypeBase.td"
 
 class LispTypeDef<string name, string _mnemonic>
         : TypeDef<Lisp_Dialect, name> {

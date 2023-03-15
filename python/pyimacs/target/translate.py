@@ -75,7 +75,7 @@ class MlirToAstTranslator:
     def run(self, mod: ir.Module) -> List[ast.Function]:
         funcs = []
         for func_name in mod.get_function_names():
-            func = self.visit_Function(mod.get_function(func_name))
+            func = self.visit_Function(mod.get_llvm_function(func_name))
             if func is not None:
                 funcs.append(func)
         return funcs
@@ -145,12 +145,14 @@ class MlirToAstTranslator:
             return self.visit_binary(op)
         if op.name() == "arith.constant":
             return self.visit_Constant(op)
-        if op.name() == "std.return":
+        if op.name() == "func.return":
             return self.visit_Ret(op)
         if op.name() == "scf.if":
             return self.visit_If(op)
-        if op.name() == "std.call":
-            return self.visit_Call(op)
+        # if op.name() == "std.call":
+        #     return self.visit_Call(op)
+        if op.name() == "llvm.call":
+            return self.visit_LLVMCall(op)
         if op.name() == "lisp.make_tuple":
             return self.visit_MakeTuple(op)
         if op.name() == "lisp.make_symbol":
@@ -240,12 +242,23 @@ class MlirToAstTranslator:
 
         return ast.IfElse(cond, then_block, else_block)
 
-    def visit_Call(self, op: ir.Operation):
-        callee = op.to_call_op().get_callee()
+    # def visit_Call(self, op: ir.Operation):
+    #     callee = op.to_call_op().get_callee()
+    #     args = []
+    #     for arg in op.operands():
+    #         args.append(self.symbol_table.get(arg))
+    #     call = ast.Call(ast.Symbol(callee), args)
+    #     if op.get_num_results() == 0:
+    #         return call
+    #     return self.setq(op.get_result(0), call)
+
+    def visit_LLVMCall(self, op: ir.Operation):
+        callee = op.to_llvm_call_op().get_callee()
+        is_void_call = op.get_num_results() == 0
         args = []
         for arg in op.operands():
             args.append(self.symbol_table.get(arg))
-        call = ast.Call(ast.Symbol(callee), args)
+        call = ast.Call(ast.Symbol(callee), args, is_void_call=is_void_call)
         if op.get_num_results() == 0:
             return call
         return self.setq(op.get_result(0), call)

@@ -111,6 +111,7 @@ class FunctionType(DataType):
     ret_types: List[DataType]
     param_types: List[DataType]
     name: ClassVar[str] = "function_type"
+    is_var_arg: bool = False
 
     def to_ir(self, builder: ir.Builder):
         ir_param_types = [ty.to_ir(builder) for ty in self.param_types]
@@ -118,3 +119,10 @@ class FunctionType(DataType):
         ) for ret_type in self.ret_types]
 
         return builder.get_function_ty(ir_param_types, ret_types)
+
+    def to_llvm_ir(self, builder: ir.Builder):
+        ir_param_types = [ty.to_ir(builder) for ty in self.param_types]
+        ret_types = [ret_type.to_ir(builder) if ret_type is not None else builder.get_void_ty(
+        ) for ret_type in self.ret_types]
+
+        return builder.get_llvm_function_ty(ir_param_types, ret_types, self.is_var_arg)

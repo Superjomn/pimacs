@@ -260,8 +260,9 @@ class Function(Node):
 class Call(Expr):
     func: Symbol
     args: List[Var]
+    is_void_call: bool
 
-    def __init__(self, func: Symbol, args: List[Var]):
+    def __init__(self, func: Symbol, args: List[Var], is_void_call: bool = False):
         super().__init__()
         self.func = func
         self.args = args
@@ -269,6 +270,7 @@ class Call(Expr):
         self.func.add_user(self)
         for arg in self.args:
             arg.add_user(self)
+        self.is_void_call = is_void_call
 
     @property
     def symbols(self):

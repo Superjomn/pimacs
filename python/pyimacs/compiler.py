@@ -113,14 +113,14 @@ class CodeGenerator(ast.NodeVisitor):
         prototype = get_function_type_from_signature(signature)
 
         visibility = "public" if self.is_kernel else "private"
-        # remove old function if already exists
         if self.module.has_function(self.function_name):
-            fn = self.module.get_function(self.function_name)
+            ''' remove old function if already exists. '''
+            fn = self.module.get_llvm_function(self.function_name)
             fn.remove()
             assert not self.module.has_function(self.function_name)
 
-        fn = self.builder.get_or_insert_function(self.module, self.function_name, prototype.to_ir(self.builder),
-                                                 visibility)
+        fn = self.builder.get_or_insert_llvm_function(self.module, self.function_name, prototype.to_llvm_ir(self.builder),
+                                                      visibility)
         self.module.push_back(fn)
         entry = fn.add_entry_block()
         arg_values = []

@@ -96,9 +96,11 @@ def _register_extern(func: Callable, func_name: str):
                 if arg == "return":
                     continue
                 in_types.append(dtype_to_mlir_type(py_ty, builder))
-            func_ty = builder.get_function_ty(in_types, ret_type)
+            is_var_arg = bool(signature.varargs)
+            func_ty = builder.get_llvm_function_ty(
+                in_types, ret_type, is_var_arg)
 
-            func = builder.get_or_insert_function(
+            func = builder.get_or_insert_llvm_function(
                 module, func_name, func_ty, "public")
 
             module.push_back(func)
@@ -125,8 +127,8 @@ def _register_extern(func: Callable, func_name: str):
             mlir_arg = arg_to_mlir(arg, py_type)
             mlir_args.append(mlir_arg)
 
-        func = module().get_function(func_name)
-        called = builder().call(func, mlir_args)
+        func = module().get_llvm_function(func_name)
+        called = builder().llvm_call(func, mlir_args)
         if called.get_num_results() == 0:
             return
         assert called.get_num_results() == 1, "Only one result is supported now."
