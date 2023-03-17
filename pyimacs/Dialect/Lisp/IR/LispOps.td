@@ -51,6 +51,28 @@ def Lisp_CallOp : Lisp_Op<"call"> {
 //     let results = (outs Value:$output);
 // }
 
+def AnyBlock : Region<CPred<"true">, "any ast Block">;
+
+
+def Lisp_GuardOp: Lisp_Op<"guard"> {
+  let summary = "guard op";
+  let description = [{
+    guard with a region.
+  }];
+
+  let regions = (region AnyBlock: $body);
+  let arguments = (ins StrAttr:$name);
+
+  let extraClassDeclaration = [{
+    Block &GetBody() { return getOperation()->getRegion(0).front(); }
+  }];
+
+  let builders = [
+      OpBuilder<(ins "OpBuilder&":$builder, "StringRef":$name, "bool":$add_block)>
+  ];
+
+}
+
 def Lisp_GetNullOp: Lisp_Op<"get_null"> {
   let summary = "get null op";
   let description = [{

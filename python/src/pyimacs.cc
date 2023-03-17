@@ -338,6 +338,14 @@ void initMLIR(py::module &m) {
       .def("get_after", &mlir::scf::WhileOp::getAfter, ret::reference);
   py::class_<mlir::scf::ConditionOp, mlir::OpState>(m, "CondtionOp");
 
+  py::class_<mlir::pyimacs::GuardOp, mlir::OpState>(m, "GuardOp")
+      .def(
+          "get_body",
+          [](mlir::pyimacs::GuardOp &self) -> mlir::Block & {
+            return self.getBody().front();
+          },
+          ret::reference);
+
   // dynamic_attr is used to transfer ownership of the MLIR context to the
   // module
   py::class_<mlir::ModuleOp, mlir::OpState>(m, "Module", py::dynamic_attr())
@@ -555,6 +563,14 @@ void initBuilder(py::module &m) {
              return self.create<mlir::pyimacs::MakeSymbolOp>(loc, name,
                                                              boolAttr);
            })
+      .def("guard",
+           [](mlir::OpBuilder &self, const std::string &name) {
+             auto loc = self.getUnknownLoc();
+             auto value = mlir::StringAttr::get(self.getContext(), name.data());
+             auto op = self.create<mlir::pyimacs::GuardOp>(loc, self, value);
+             return op;
+           })
+
       .def("make_symbol",
            [](mlir::OpBuilder &self, mlir::Value name,
               bool is_keyword) -> mlir::OpState {
@@ -792,9 +808,8 @@ void initBuilder(py::module &m) {
           ret::reference)
       .def(
           "new_block",
-          [](mlir::OpBuilder &self) -> mlir::Block * {
-            return new mlir::Block();
-          },
+          [](mlir::OpBuilder &self)
+              -> mlir::Block * { return new mlir::Block(); },
           ret::reference)
       // Structured control flow
       .def("create_for_op",
