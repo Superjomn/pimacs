@@ -68,9 +68,7 @@ def Lisp_GuardOp: Lisp_Op<"guard"> {
   }];
 
   let builders = [
-      OpBuilder<(ins "OpBuilder&":$builder, "StringRef":$name, "bool":$add_block)>
   ];
-
 }
 
 def Lisp_GetNullOp: Lisp_Op<"get_null"> {

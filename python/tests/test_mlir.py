@@ -1,7 +1,6 @@
 from pyimacs._C.libpyimacs.pyimacs import ir
 from pyimacs.lang.core import *
-
-from .utility import build_mod0, init_mod
+from utility import build_mod0, init_mod
 
 
 def test_mod_get_function():
@@ -83,3 +82,47 @@ def test_function_declaration():
     assert str(func).strip(
     ) == 'llvm.func @"get-buffer"(!lisp.string) -> !lisp.object'
     mod.push_back(func)
+
+
+def test_guard_op():
+    ctx = ir.MLIRContext()
+    ctx.load_pyimacs()
+
+    builder = ir.Builder(ctx)
+    mod = builder.create_module()
+    int_ty = Int.to_ir(builder)
+
+    func_ty = builder.get_llvm_function_ty([int_ty], [int_ty])
+    func_decl = builder.get_or_insert_llvm_function(
+        mod, "add", func_ty, "public")
+    mod.push_back(func_decl)
+
+    func_main = builder.get_or_insert_llvm_function(
+        mod, "add_main", func_ty, "public")
+    mod.push_back(func_main)
+    builder.set_insertion_point_to_start(func_main.add_entry_block())
+    arg = func_main.args(0)
+
+    guard = builder.guard("temp-buffer")
+    print(guard)
+    # builder.set_insertion_point_to_start(guard.get_body_block())
+
+    call = builder.llvm_call(func_decl, [arg])
+    builder.ret([call.get_result(0)])
+
+    print(mod)
+    code = str(mod).strip()
+    target = '''
+"builtin.module"() ({
+  "llvm.func"() ({
+  }) {CConv = #llvm.cconv<ccc>, function_type = !llvm.func<i32 (i32)>, linkage = #llvm.linkage<external>, sym_name = "add", visibility_ = 0 : i64} : () -> ()
+  "llvm.func"() ({
+  ^bb0(%arg0: i32):
+    "lisp.guard"() ({
+      %0 = "llvm.call"(%arg0) {callee = @add, fastmathFlags = #llvm.fastmath<none>} : (i32) -> i32
+      "func.return"(%0) : (i32) -> ()
+    }) {name = "temp-buffer"} : () -> ()
+  }) {CConv = #llvm.cconv<ccc>, function_type = !llvm.func<i32 (i32)>, linkage = #llvm.linkage<external>, sym_name = "add_main", visibility_ = 0 : i64} : () -> ()
+}) : () -> ()
+    '''
+    assert code.strip() == target.strip()

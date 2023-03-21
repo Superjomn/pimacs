@@ -341,10 +341,19 @@ void initMLIR(py::module &m) {
   py::class_<mlir::pyimacs::GuardOp, mlir::OpState>(m, "GuardOp")
       .def(
           "get_body",
+          [](mlir::pyimacs::GuardOp &self) -> mlir::Region & {
+            return self.getBody();
+          },
+          ret::reference)
+      .def(
+          "get_body_block",
           [](mlir::pyimacs::GuardOp &self) -> mlir::Block & {
             return self.getBody().front();
           },
-          ret::reference);
+          ret::reference)
+      .def("__str__", [](mlir::pyimacs::GuardOp &self) -> std::string {
+        return toStr(self);
+      });
 
   // dynamic_attr is used to transfer ownership of the MLIR context to the
   // module
@@ -567,7 +576,9 @@ void initBuilder(py::module &m) {
            [](mlir::OpBuilder &self, const std::string &name) {
              auto loc = self.getUnknownLoc();
              auto value = mlir::StringAttr::get(self.getContext(), name.data());
-             auto op = self.create<mlir::pyimacs::GuardOp>(loc, self, value);
+             auto op = self.create<mlir::pyimacs::GuardOp>(loc, value);
+             auto *block = new mlir::Block;
+             op.getBody().push_back(block);
              return op;
            })
 
