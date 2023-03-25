@@ -291,6 +291,10 @@ void initMLIR(py::module &m) {
            [](mlir::Operation &self) {
              return llvm::cast<mlir::LLVM::CallOp>(self);
            })
+      .def("to_guard_op",
+           [](mlir::Operation &self) {
+             return llvm::cast<mlir::pyimacs::GuardOp>(self);
+           })
 
       .def("__str__", [](mlir::Operation &self) -> std::string {
         std::string buf;
@@ -337,6 +341,34 @@ void initMLIR(py::module &m) {
       .def("get_before", &mlir::scf::WhileOp::getBefore, ret::reference)
       .def("get_after", &mlir::scf::WhileOp::getAfter, ret::reference);
   py::class_<mlir::scf::ConditionOp, mlir::OpState>(m, "CondtionOp");
+
+  py::class_<mlir::pyimacs::GuardOp, mlir::OpState>(m, "GuardOp")
+      .def("get_name",
+           [](mlir::pyimacs::GuardOp &self) -> std::string {
+             return self.getName().str();
+           })
+      .def("get_args",
+           [](mlir::pyimacs::GuardOp &self) -> std::vector<mlir::Value> {
+             std::vector<mlir::Value> args;
+             for (auto it : self.getArgs())
+               args.push_back(it);
+             return args;
+           })
+      .def(
+          "get_body",
+          [](mlir::pyimacs::GuardOp &self) -> mlir::Region & {
+            return self.getBody();
+          },
+          ret::reference)
+      .def(
+          "get_body_block",
+          [](mlir::pyimacs::GuardOp &self) -> mlir::Block & {
+            return self.getBody().front();
+          },
+          ret::reference)
+      .def("__str__", [](mlir::pyimacs::GuardOp &self) -> std::string {
+        return toStr(self);
+      });
 
   // dynamic_attr is used to transfer ownership of the MLIR context to the
   // module
@@ -555,6 +587,21 @@ void initBuilder(py::module &m) {
              return self.create<mlir::pyimacs::MakeSymbolOp>(loc, name,
                                                              boolAttr);
            })
+      .def("guard",
+           [](mlir::OpBuilder &self, mlir::Value name,
+              std::vector<mlir::Value> args) {
+             auto value =
+                 llvm::dyn_cast<mlir::arith::ConstantOp>(name.getDefiningOp());
+             assert(value);
+             auto strAttr = value.getValue().cast<mlir::StringAttr>();
+
+             auto loc = self.getUnknownLoc();
+             auto op = self.create<mlir::pyimacs::GuardOp>(loc, strAttr, args);
+             auto *block = new mlir::Block;
+             op.getBody().push_back(block);
+             return op;
+           })
+
       .def("make_symbol",
            [](mlir::OpBuilder &self, mlir::Value name,
               bool is_keyword) -> mlir::OpState {
@@ -792,9 +839,8 @@ void initBuilder(py::module &m) {
           ret::reference)
       .def(
           "new_block",
-          [](mlir::OpBuilder &self) -> mlir::Block * {
-            return new mlir::Block();
-          },
+          [](mlir::OpBuilder &self)
+              -> mlir::Block * { return new mlir::Block(); },
           ret::reference)
       // Structured control flow
       .def("create_for_op",

@@ -237,6 +237,41 @@ class LetExpr(Expr):
         return hash(str(self))
 
 
+@dataclass
+class Guard(Expr):
+    name: str
+    args: List[Var]
+    body: List[Expr]
+
+    def __init__(self, name: str, args: List[Var], body: List[Expr]):
+        super().__init__()
+        self.name = name
+        self.args = args
+        self.body = body
+
+    @property
+    def symbols(self) -> List[Any]:
+        return [Symbol(self.name), *self.body]
+
+    def dump(self, dumper: Dumper) -> None:
+        dumper.println(f"({self.name}")
+        dumper.do_indent()
+        body = self.body
+        if not isinstance(body, Iterable):
+            body = [body]
+        for b in body:
+            b.dump(dumper)
+        dumper.undo_indent()
+        dumper.print(")")
+
+    def replace_symbol(self, old: Any, new: Any) -> None:
+        for expr in self.body:
+            expr.replace_symbol(old, new)
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+
 @dataclass()
 class Function(Node):
     name: str

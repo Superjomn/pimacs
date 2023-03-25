@@ -23,6 +23,8 @@ class Transform:
             return self.visit_Token(node)
         elif isinstance(node, IfElse):
             return self.visit_IfElse(node)
+        elif isinstance(node, Guard):
+            return self.visit_Guard(node)
         else:
             raise Exception(f"Unknown node type {type(node)}")
 
@@ -31,6 +33,11 @@ class Transform:
         then_body = self.visit(node.then_body)
         else_body = self.visit(node.else_body)
         return IfElse(cond, then_body, else_body)
+
+    def visit_Guard(self, node: Guard):
+        args = [self.visit(arg) for arg in node.args]
+        body = self.visit(node.body)
+        return Guard(node.name, args, body)
 
     def visit_Let(self, node: LetExpr):
         new_vars = []
