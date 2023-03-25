@@ -1,6 +1,8 @@
 from typing import *
 
 from pyimacs.lang.extension import *
+from pyimacs.elisp.core import Guard
+import pyimacs
 
 
 class Buffer(Ext):
@@ -39,12 +41,28 @@ class Buffer(Ext):
         elif type(x) is object:
             _kill_buffer_by_buffer(x)
 
+    def get_content(self) -> str:
+        return _buffer_content(self._handle)
+        #with Guard("with-current-buffer", self._handle):
+            #return _buffer_string()
+
     def get_name(self) -> str:
         return _buffer_file_name(self._handle)
+
+    def insert(self, x: str) -> None:
+        _insert(x)
 
     def __handle_return__(self):
         return self._handle
 
+@pyimacs.aot
+def _buffer_content(buf: object) -> str:
+    with Guard("with-current-buffer", buf):
+        return _buffer_string()
+
+
+@register_extern("buffer-string")
+def _buffer_string() -> str: ...
 
 @register_extern("point")
 def _point() -> int: ...
@@ -91,14 +109,15 @@ def _get_buffer_create(name: str) -> object: ...
 
 # TODO register function name mangle
 
-
 @register_extern("kill-buffer")
 def _kill_buffer_by_name(x: str) -> None: ...
-
 
 @register_extern("kill-buffer")
 def _kill_buffer_by_buffer(x: object) -> None: ...
 
-
 @register_extern("insert-buffer-substring")
 def _insert_buffer_substring(buf: object, start: int, end: int) -> None: ...
+
+@register_extern("insert")
+def _insert(buf:object, content:str) -> None: ...
+

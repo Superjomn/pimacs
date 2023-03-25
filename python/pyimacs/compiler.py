@@ -37,6 +37,8 @@ class CodeGenerator(ast.NodeVisitor):
         self.global_uses: Dict[str, pyl.Value] = {}
 
     def get_value(self, name: str) -> pyl.Value:
+        #print("lscope",self.lscope)
+        #print("gscope",self.gscope)
         if name in self.lscope:
             return self.lscope[name]
         if name in self.gscope:
@@ -288,6 +290,7 @@ class CodeGenerator(ast.NodeVisitor):
 
         fn = self.visit(node.func)
         if isinstance(fn, pyl_ext.Ext):
+            print('args', args)
             return fn(*args)
         if isinstance(fn, pyl.ExternalCallable):
             # NOTE the builder is injected automatically, which is transparent to user.
@@ -465,7 +468,19 @@ class CodeGenerator(ast.NodeVisitor):
         if node.comparators:
             for op, rhs in zip(node.ops, node.comparators):
                 rhs = self.visit(rhs)
-                lhs = self.visit_Compare_op(op, lhs, rhs)
+                if op is ast.Eq:
+                    return self.builder.create_eq(lhs, rhs)
+                if op is ast.NotEq:
+                    return self.builder.create_ne(lhs, rhs)
+                if op is ast.Lt:
+                    return self.builder.create_lt(lhs, rhs)
+                if op is ast.Gt:
+                    return self.builder.create_gt(lhs, rhs)
+                if op is ast.LtE:
+                    return self.builder.create_le(lhs, rhs)
+                if op is ast.GtE:
+                    return self.builder.create_ge(lhs, rhs)
+
 
     def visit_Index(self, node: ast.Index):
         key = node.value
@@ -473,6 +488,12 @@ class CodeGenerator(ast.NodeVisitor):
 
     def visit_List(self, node: ast.List):
         return [self.visit(e) for e in node.elts]
+
+    def visit_Assert(self, node: ast.Assert):
+        cond = self.visit(node.test)
+        msg = self.visit(node.msg)
+        from pyimacs.elisp.core import cl_assert
+        return cl_assert(cond, msg)
 
     def visit(self, node):
         if node is not None:

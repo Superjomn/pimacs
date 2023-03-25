@@ -55,6 +55,10 @@ void initMLIR(py::module &m) {
            [](mlir::Type &self) {
              return self.isInteger(32) || self.isInteger(64);
            })
+      .def("is_bool",
+           [](mlir::Type &self) {
+             return self.isInteger(1);
+           })
       .def(
           "is_float",
           [](mlir::Type &self) -> bool { return self.isF16() || self.isF32(); })
@@ -692,6 +696,11 @@ void initBuilder(py::module &m) {
            [](mlir::OpBuilder &self) -> mlir::Value {
              return self.create<mlir::pyimacs::GetNullOp>(
                  self.getUnknownLoc(), self.getIntegerType(32));
+           })
+      .def("get_null_as_bool",
+           [](mlir::OpBuilder &self) -> mlir::Value {
+             return self.create<mlir::pyimacs::GetNullOp>(
+                 self.getUnknownLoc(), self.getIntegerType(1));
            })
       .def("get_null_as_float",
            [](mlir::OpBuilder &self) -> mlir::Value {

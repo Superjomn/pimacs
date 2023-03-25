@@ -145,6 +145,8 @@ class MlirToAstTranslator:
             return self.visit_binary(op)
         if op.name() == "arith.constant":
             return self.visit_Constant(op)
+        if op.name() == "lisp.get_null":
+            return self.visit_GetNull(op)
         if op.name() == "func.return":
             return self.visit_Ret(op)
         if op.name() == "scf.if":
@@ -229,6 +231,18 @@ class MlirToAstTranslator:
         value = ast.Token(value)
 
         return self.setq(op.get_result(0), value)
+
+    def visit_GetNull(self, op:ir.Operation):
+        value = op.get_result(0).get_type()
+        if value.is_float():
+            return self.setq(op.get_result(0), ast.Token(0.0))
+        if value.is_int():
+            return self.setq(op.get_result(0), ast.Token(0))
+        if value.is_bool():
+            return self.setq(op.get_result(0), ast.Token("nil"))
+        if value.is_string():
+            return self.setq(op.get_result(0), ast.Token(""))
+        raise NotImplementedError(value)
 
     def get_consant_value(self, op: ir.Operation):
         value = op.get_attr("value")

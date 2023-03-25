@@ -8,6 +8,7 @@ __all__ = [
 
 import functools
 import inspect
+import logging
 from dataclasses import dataclass
 from typing import *
 
@@ -96,6 +97,7 @@ def _register_extern(func: Callable, func_name: str):
                 if arg == "return":
                     continue
                 in_types.append(dtype_to_mlir_type(py_ty, builder))
+            print('in_types', in_types)
             is_var_arg = bool(signature.varargs)
             func_ty = builder.get_llvm_function_ty(
                 in_types, ret_type, is_var_arg)
@@ -119,7 +121,11 @@ def _register_extern(func: Callable, func_name: str):
         decl_args = signature.args
 
         if not module().has_function(func_name):
-            register_to_module(signature, module(), builder())
+            try:
+                register_to_module(signature, module(), builder())
+            except TypeError:
+                logging.error(f"Failed to register function: {func_name} with signature: {signature}")
+                raise
 
         mlir_args = []
         for idx, arg in enumerate(args):
@@ -141,6 +147,7 @@ def _register_extern(func: Callable, func_name: str):
 
 
 def dtype_to_mlir_type(dtype: Any, builder: ir.Builder) -> ir.Type:
+    # TODO[Superjomn]: Turn the following ifs to a map.
     if dtype is int:
         return builder.get_int32_ty()
     if dtype is float:
@@ -149,7 +156,10 @@ def dtype_to_mlir_type(dtype: Any, builder: ir.Builder) -> ir.Type:
         return builder.get_string_ty()
     if dtype is object:
         return builder.get_object_ty()
-    assert NotImplementedError()
+    if dtype is bool:
+        return builder.get_int1_ty()
+
+    raise NotImplementedError()
 
 
 class Ext:
@@ -198,6 +208,8 @@ def arg_to_mlir(arg, type=None):
             return builder().get_null_as_float()
         if type is object:
             return builder().get_null_as_object()
+        if type is bool:
+            return builder().get_null_as_bool()
         raise NotImplementedError(f"{arg} of {type}")
     else:
         return _arg_to_mlir_value(arg)
