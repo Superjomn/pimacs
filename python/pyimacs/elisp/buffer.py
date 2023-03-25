@@ -35,6 +35,26 @@ class Buffer(Ext):
         return self._handle
 
 
+@register_extern("point")
+def point() -> int: ...
+
+
+@register_extern("point-max")
+def point_max() -> int: ...
+
+
+@register_extern("point-min")
+def point_min() -> int: ...
+
+
+@register_extern("goto_char")
+def goto_char(x: int) -> None: ...
+
+
+@register_extern("buffer-size")
+def buffer_size() -> int: ...
+
+
 @register_extern("buffer-get")
 def buffer_get(name: str) -> object: ...
 

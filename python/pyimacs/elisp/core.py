@@ -44,6 +44,20 @@ def make_symbol(name: str, is_keyword: bool = False):
     return builder().make_symbol(name, is_keyword).get_result(0)
 
 
+class Guard(Ext):
+    def __init__(self, name: str, *args):
+        if isinstance(name, pyl.core.Value):
+            name = name.handle
+        self.name = name
+        self.guard_op = builder().guard(self.name, args)
+
+    def __enter__(self):
+        builder().set_insertion_point_to_start(self.guard_op.get_body_block())
+
+    def __exit__(self, exc_type=None, exc_val=None, exc_tb=None):
+        builder().set_insertion_point_to_end(self.guard_op.get_body_block())
+
+
 @register_extern("load")
 def load(path: str) -> None: ...
 

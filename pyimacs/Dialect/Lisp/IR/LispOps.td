@@ -61,7 +61,7 @@ def Lisp_GuardOp: Lisp_Op<"guard"> {
   }];
 
   let regions = (region AnyBlock: $body);
-  let arguments = (ins StrAttr:$name);
+  let arguments = (ins StrAttr:$name, Variadic<Value>:$args);
 
   let extraClassDeclaration = [{
     Block &GetBody() { return getOperation()->getRegion(0).front(); }

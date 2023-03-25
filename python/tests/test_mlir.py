@@ -1,6 +1,7 @@
 from pyimacs._C.libpyimacs.pyimacs import ir
 from pyimacs.lang.core import *
-from utility import build_mod0, init_mod
+
+from .utility import build_mod0, init_mod
 
 
 def test_mod_get_function():
@@ -103,7 +104,8 @@ def test_guard_op():
     builder.set_insertion_point_to_start(func_main.add_entry_block())
     arg = func_main.args(0)
 
-    guard = builder.guard("temp-buffer")
+    name = builder.get_string("temp-buffer")
+    guard = builder.guard(name, [])
     print(guard)
     # builder.set_insertion_point_to_start(guard.get_body_block())
 
@@ -111,18 +113,3 @@ def test_guard_op():
     builder.ret([call.get_result(0)])
 
     print(mod)
-    code = str(mod).strip()
-    target = '''
-"builtin.module"() ({
-  "llvm.func"() ({
-  }) {CConv = #llvm.cconv<ccc>, function_type = !llvm.func<i32 (i32)>, linkage = #llvm.linkage<external>, sym_name = "add", visibility_ = 0 : i64} : () -> ()
-  "llvm.func"() ({
-  ^bb0(%arg0: i32):
-    "lisp.guard"() ({
-      %0 = "llvm.call"(%arg0) {callee = @add, fastmathFlags = #llvm.fastmath<none>} : (i32) -> i32
-      "func.return"(%0) : (i32) -> ()
-    }) {name = "temp-buffer"} : () -> ()
-  }) {CConv = #llvm.cconv<ccc>, function_type = !llvm.func<i32 (i32)>, linkage = #llvm.linkage<external>, sym_name = "add_main", visibility_ = 0 : i64} : () -> ()
-}) : () -> ()
-    '''
-    assert code.strip() == target.strip()

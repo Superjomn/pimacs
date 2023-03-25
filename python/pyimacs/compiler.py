@@ -445,6 +445,28 @@ class CodeGenerator(ast.NodeVisitor):
         lhs = self.visit(node.value)
         return getattr(lhs, node.attr)
 
+    def visit_With(self, node: ast.With):
+        with_items = []
+        for item in node.items:
+            item = self.visit(item)
+            item.__enter__()
+            with_items.append(item)
+
+        self.visit_compound_statement(node.body)
+
+        for item in with_items:
+            item.__exit__()
+
+    def visit_withitem(self, node: ast.withitem):
+        return self.visit(node.context_expr)
+
+    def visit_Compare(self, node: ast.Compare):
+        lhs = self.visit(node.left)
+        if node.comparators:
+            for op, rhs in zip(node.ops, node.comparators):
+                rhs = self.visit(rhs)
+                lhs = self.visit_Compare_op(op, lhs, rhs)
+
     def visit_Index(self, node: ast.Index):
         key = node.value
         return self.visit(key)

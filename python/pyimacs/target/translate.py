@@ -157,6 +157,8 @@ class MlirToAstTranslator:
             return self.visit_MakeTuple(op)
         if op.name() == "lisp.make_symbol":
             return self.visit_MakeSymbol(op)
+        if op.name() == "lisp.guard":
+            return self.visit_Guard(op)
 
         raise NotImplementedError(op.name())
 
@@ -203,11 +205,23 @@ class MlirToAstTranslator:
         if op.num_operands() == 1:
             return self.symbol_table.get(op.get_operand(0).get())
 
+    def visit_Guard(self, op: ir.Operation) -> ast.Expression:
+        op: ir.GuardOp = op.to_guard_op()
+        name = op.get_name()
+        args = op.get_args()
+        args = [self.symbol_table.get(arg) for arg in args]
+        body = self.visit_Region(op.get_body())
+        assert isinstance(body, ast.Expression)
+        assert len(body.symbols) == 1
+        body = body.symbols[0]
+
+        return ast.Guard(name, args, body)
+
     def visit_Region(self, op: ir.Region) -> ast.Expression:
         blocks = []
         for i in range(op.size()):
             block = op.blocks(i)
-            blocks.append(self.visit(block))
+            blocks.append(self.visit_Block(block))
         return ast.Expression(*blocks)
 
     def visit_Constant(self, op: ir.Operation):

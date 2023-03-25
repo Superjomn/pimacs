@@ -291,6 +291,10 @@ void initMLIR(py::module &m) {
            [](mlir::Operation &self) {
              return llvm::cast<mlir::LLVM::CallOp>(self);
            })
+      .def("to_guard_op",
+           [](mlir::Operation &self) {
+             return llvm::cast<mlir::pyimacs::GuardOp>(self);
+           })
 
       .def("__str__", [](mlir::Operation &self) -> std::string {
         std::string buf;
@@ -339,6 +343,17 @@ void initMLIR(py::module &m) {
   py::class_<mlir::scf::ConditionOp, mlir::OpState>(m, "CondtionOp");
 
   py::class_<mlir::pyimacs::GuardOp, mlir::OpState>(m, "GuardOp")
+      .def("get_name",
+           [](mlir::pyimacs::GuardOp &self) -> std::string {
+             return self.getName().str();
+           })
+      .def("get_args",
+           [](mlir::pyimacs::GuardOp &self) -> std::vector<mlir::Value> {
+             std::vector<mlir::Value> args;
+             for (auto it : self.getArgs())
+               args.push_back(it);
+             return args;
+           })
       .def(
           "get_body",
           [](mlir::pyimacs::GuardOp &self) -> mlir::Region & {
@@ -573,10 +588,15 @@ void initBuilder(py::module &m) {
                                                              boolAttr);
            })
       .def("guard",
-           [](mlir::OpBuilder &self, const std::string &name) {
+           [](mlir::OpBuilder &self, mlir::Value name,
+              std::vector<mlir::Value> args) {
+             auto value =
+                 llvm::dyn_cast<mlir::arith::ConstantOp>(name.getDefiningOp());
+             assert(value);
+             auto strAttr = value.getValue().cast<mlir::StringAttr>();
+
              auto loc = self.getUnknownLoc();
-             auto value = mlir::StringAttr::get(self.getContext(), name.data());
-             auto op = self.create<mlir::pyimacs::GuardOp>(loc, value);
+             auto op = self.create<mlir::pyimacs::GuardOp>(loc, strAttr, args);
              auto *block = new mlir::Block;
              op.getBody().push_back(block);
              return op;
