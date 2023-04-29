@@ -22,7 +22,7 @@ def test_guard_basic():
             return 0
 
     code = compile(fn)
-    print(code)
+    print('code', code)
     target = '''
 (defun fn ()
     (let*

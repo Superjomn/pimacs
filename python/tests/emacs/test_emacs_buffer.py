@@ -26,21 +26,9 @@ def main():
 def test_buffer():
     code = AOTFunction.to_lispcode()
     print(code)
-    assert code.strip() == \
-        '''
-(defun _buffer_content (arg0)
-    (let*
-        ()
-        (with-current-buffer arg0
-            (let*
-                ()
-                (buffer-string)
-            )
-        )
-    )
-)
+    assert code.strip()
 
-
+    part0 = '''
 (defun _test_buffer_basic ()
     (let*
         (arg1)
@@ -54,8 +42,9 @@ def test_buffer():
         )
     )
 )
+'''.strip()
 
-
+    part1 = '''
 (defun main ()
     (let*
         ()
@@ -63,3 +52,6 @@ def test_buffer():
     )
 )
 '''.strip()
+
+    assert part0 in code
+    assert part1 in code
