@@ -505,11 +505,8 @@ class CodeGenerator(ast.NodeVisitor):
         return [self.visit(e) for e in node.elts]
 
     def visit_Assert(self, node: ast.Assert):
-        astpretty.pprint(node)
         cond = self.visit(node.test)
         msg = self.visit(node.msg)
-        print('cond', cond)
-        print('msg', msg)
         from pyimacs.elisp.core import cl_assert
         return cl_assert(cond, msg)
 

@@ -20,12 +20,46 @@ def _test_buffer_basic() -> str:
 
 @pyimacs.aot
 def main():
-    _test_buffer_basic()
+    return _test_buffer_basic()
 
 
 def test_buffer():
     code = AOTFunction.to_lispcode()
     print(code)
+    assert code.strip() == \
+        '''
+(defun _buffer_content (arg0)
+    (let*
+        ()
+        (with-current-buffer arg0
+            (let*
+                ()
+                (buffer-string)
+            )
+        )
+    )
+)
 
 
-test_buffer()
+(defun _test_buffer_basic ()
+    (let*
+        (arg1)
+        (setq arg1 (buffer-get "test"))
+        (with-current-buffer arg1
+            (let*
+                ()
+                (insert "hello world")
+                (cl-assert (string= (_buffer_content arg1) "hello world") "")
+            )
+        )
+    )
+)
+
+
+(defun main ()
+    (let*
+        ()
+        (_test_buffer_basic)
+    )
+)
+'''.strip()
