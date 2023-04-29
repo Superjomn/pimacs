@@ -27,7 +27,7 @@ def test_guard_basic():
 (defun fn ()
     (let*
         ()
-        (with-current-buffer
+        (with-current-buffer 
             (let*
                 ()
                 (goto_char (+ (point) 10))
