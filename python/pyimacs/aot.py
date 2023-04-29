@@ -65,7 +65,7 @@ class AOTFunction(object):
 
     @staticmethod
     def reset_builder(builder: ir.Builder) -> None:
-        AOTFunction.builder = builer
+        AOTFunction.builder = builder
 
     def reset_module(module: ir.Module) -> None:
         AOTFunction.module = module
@@ -75,8 +75,8 @@ class AOTFunction(object):
         return signature
 
     def __call__(self, *args, **kwargs):
-        assert not kwargs
-        self.builder.call(self.module.get_function(self.fn.__name__), args)
+        assert not kwargs, "Not supported yet"
+        return self.builder.llvm_call(self.module.get_llvm_function(self.fn.__name__), args)
 
     def __repr__(self):
         return f"JITFunction<{self.__module__}:{self.__name__}>"

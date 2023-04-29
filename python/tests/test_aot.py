@@ -2,7 +2,7 @@ import logging
 
 import pyimacs.lang as pyl
 from pyimacs.aot import AOTFunction, aot, get_context
-from pyimacs.elisp.buffer import Buffer, buffer_get
+from pyimacs.elisp.buffer import Buffer
 from pyimacs.lang import ir
 
 from pyimacs import compiler

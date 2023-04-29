@@ -58,7 +58,7 @@ class SymbolTable:
     def symbols(self):
         res = set()
         for frame in self.frames:
-            res.update([hash(key) for key in frame.keys()])
+            res.update(frame.values())
         return res
 
 
@@ -73,6 +73,7 @@ class MlirToAstTranslator:
         self._constant_val = None
 
     def run(self, mod: ir.Module) -> List[ast.Function]:
+        print("mlir:\n", mod)
         funcs = []
         for func_name in mod.get_function_names():
             func = self.visit_Function(mod.get_llvm_function(func_name))
@@ -145,6 +146,8 @@ class MlirToAstTranslator:
             return self.visit_binary(op)
         if op.name() == "arith.constant":
             return self.visit_Constant(op)
+        if op.name() == "lisp.get_null":
+            return self.visit_GetNull(op)
         if op.name() == "func.return":
             return self.visit_Ret(op)
         if op.name() == "scf.if":
@@ -159,6 +162,8 @@ class MlirToAstTranslator:
             return self.visit_MakeSymbol(op)
         if op.name() == "lisp.guard":
             return self.visit_Guard(op)
+        if op.name() == "lisp.string_eq":
+            return self.visit_StringEq(op)
 
         raise NotImplementedError(op.name())
 
@@ -180,6 +185,18 @@ class MlirToAstTranslator:
         assert lhs
         assert rhs
         res = ast.Expression(ast.Symbol(self.bin_op[op.name()]), lhs, rhs)
+        return self.setq(op.get_result(0), res)
+
+    def visit_StringEq(self, op: ir.Operation) -> ir.Value:
+        assert op.num_operands() == 2
+        lhs = op.get_operand(0).get()
+        rhs = op.get_operand(1).get()
+
+        lhs = self.symbol_table.get(lhs)
+        rhs = self.symbol_table.get(rhs)
+        assert lhs
+        assert rhs
+        res = ast.Expression(ast.Symbol("string="), lhs, rhs)
         return self.setq(op.get_result(0), res)
 
     def visit_MakeTuple(self, op: ir.Operation) -> ast.Expression:
@@ -229,6 +246,18 @@ class MlirToAstTranslator:
         value = ast.Token(value)
 
         return self.setq(op.get_result(0), value)
+
+    def visit_GetNull(self, op: ir.Operation):
+        value = op.get_result(0).get_type()
+        if value.is_float():
+            return self.setq(op.get_result(0), ast.Token(0.0))
+        if value.is_int():
+            return self.setq(op.get_result(0), ast.Token(0))
+        if value.is_bool():
+            return self.setq(op.get_result(0), ast.Token("nil"))
+        if value.is_string():
+            return self.setq(op.get_result(0), ast.Token(""))
+        raise NotImplementedError(value)
 
     def get_consant_value(self, op: ir.Operation):
         value = op.get_attr("value")

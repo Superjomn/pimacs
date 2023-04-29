@@ -10,7 +10,7 @@
 #include "mlir/Transforms/Passes.h"
 #include "pyimacs/Dialect/Lisp/IR/Dialect.h"
 #include "pyimacs/Dialect/Lisp/IR/Types.h"
-//#include "pyimacs/Target/elisp/translateToElisp.h"
+// #include "pyimacs/Target/elisp/translateToElisp.h"
 
 #include <Python.h>
 #include <cctype>
@@ -55,6 +55,7 @@ void initMLIR(py::module &m) {
            [](mlir::Type &self) {
              return self.isInteger(32) || self.isInteger(64);
            })
+      .def("is_bool", [](mlir::Type &self) { return self.isInteger(1); })
       .def(
           "is_float",
           [](mlir::Type &self) -> bool { return self.isF16() || self.isF32(); })
@@ -693,6 +694,11 @@ void initBuilder(py::module &m) {
              return self.create<mlir::pyimacs::GetNullOp>(
                  self.getUnknownLoc(), self.getIntegerType(32));
            })
+      .def("get_null_as_bool",
+           [](mlir::OpBuilder &self) -> mlir::Value {
+             return self.create<mlir::pyimacs::GetNullOp>(
+                 self.getUnknownLoc(), self.getIntegerType(1));
+           })
       .def("get_null_as_float",
            [](mlir::OpBuilder &self) -> mlir::Value {
              return self.create<mlir::pyimacs::GetNullOp>(self.getUnknownLoc(),
@@ -893,7 +899,7 @@ void initBuilder(py::module &m) {
           ADD_BINARY_OP(add, AddI) ADD_BINARY_OP(sub, SubI)
 
 #define ADD_CMP_OP(api__, op__, enum__)                                        \
-  .def("create_" #api__,                                                       \
+  .def("create_" #enum__,                                                      \
        [](mlir::OpBuilder &self, mlir::Value &lhs,                             \
           mlir::Value &rhs) -> mlir::Value {                                   \
          auto loc = self.getUnknownLoc();                                      \
@@ -921,7 +927,14 @@ void initBuilder(py::module &m) {
       // float type
       ADD_CMP_OP(fcmpOLT, CmpF, OLT) ADD_CMP_OP(fcmpOGT, CmpF, OGT)
           ADD_CMP_OP(fcmpOLE, CmpF, OLE) ADD_CMP_OP(fcmpOGE, CmpF, OGE)
-              ADD_CMP_OP(fcmpOEQ, CmpF, OEQ) ADD_CMP_OP(fcmpONE, CmpF, ONE);
+              ADD_CMP_OP(fcmpOEQ, CmpF, OEQ) ADD_CMP_OP(fcmpONE, CmpF, ONE)
+
+      .def("create_string_eq",
+           [](mlir::OpBuilder &self, mlir::Value &lhs,
+              mlir::Value &rhs) -> mlir::Value {
+             auto loc = self.getUnknownLoc();
+             return self.create<mlir::pyimacs::StringEqOp>(loc, lhs, rhs);
+           });
 }
 
 void initTarget(py::module &m) {

@@ -2,7 +2,7 @@ import logging
 
 import pyimacs.lang as pyl
 from pyimacs.aot import AOTFunction, aot, get_context
-from pyimacs.elisp.buffer import Buffer, buffer_get
+from pyimacs.elisp.buffer import Buffer, _buffer_get
 from pyimacs.lang import Int, ir
 
 from pyimacs import compiler
@@ -94,7 +94,7 @@ def test_external_call():
 
     @aot
     def some_fn() -> object:
-        return buffer_get("hello")
+        return _buffer_get("hello")
 
     builder = ir.Builder(ctx)
     module = builder.create_module()

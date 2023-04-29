@@ -10,6 +10,7 @@ import astpretty
 import pyimacs._C.libpyimacs.pyimacs as _pyimacs
 import pyimacs.lang as pyl
 import pyimacs.lang.extension as pyl_ext
+from pyimacs.lang.core import Value
 
 from .aot import AOTFunction
 
@@ -37,6 +38,8 @@ class CodeGenerator(ast.NodeVisitor):
         self.global_uses: Dict[str, pyl.Value] = {}
 
     def get_value(self, name: str) -> pyl.Value:
+        # print("lscope",self.lscope)
+        # print("gscope",self.gscope)
         if name in self.lscope:
             return self.lscope[name]
         if name in self.gscope:
@@ -161,7 +164,7 @@ class CodeGenerator(ast.NodeVisitor):
         return arg_names, kwarg_names
 
     def visit_arg(self, node: ast.arg) -> str:
-        #ast.NodeVisitor.generic_visit(self, node)
+        # ast.NodeVisitor.generic_visit(self, node)
         return node.arg
 
     def visit_Assign(self, node):
@@ -288,6 +291,7 @@ class CodeGenerator(ast.NodeVisitor):
 
         fn = self.visit(node.func)
         if isinstance(fn, pyl_ext.Ext):
+            print('args', args)
             return fn(*args)
         if isinstance(fn, pyl.ExternalCallable):
             # NOTE the builder is injected automatically, which is transparent to user.
@@ -460,12 +464,38 @@ class CodeGenerator(ast.NodeVisitor):
     def visit_withitem(self, node: ast.withitem):
         return self.visit(node.context_expr)
 
+    def to_value(self, op):
+        if isinstance(op, ir.Operation):
+            return op.get_result(0)
+        if isinstance(op, ir.Value):
+            return op
+        if isinstance(op, Value):
+            return op.handle
+        raise TypeError()
+
     def visit_Compare(self, node: ast.Compare):
         lhs = self.visit(node.left)
+        lhs: ir.Value = self.to_value(lhs)
         if node.comparators:
             for op, rhs in zip(node.ops, node.comparators):
                 rhs = self.visit(rhs)
-                lhs = self.visit_Compare_op(op, lhs, rhs)
+                rhs = self.to_value(rhs)
+                if lhs.get_type().is_string():
+                    assert isinstance(op, ast.Eq)
+                    return self.builder.create_string_eq(lhs, rhs)
+                if isinstance(op, ast.Eq):
+                    return self.builder.create_eq(lhs, rhs)
+                if isinstance(op, ast.NotEq):
+                    return self.builder.create_ne(lhs, rhs)
+                if isinstance(op, ast.Lt):
+                    return self.builder.create_lt(lhs, rhs)
+                if isinstance(op, ast.Gt):
+                    return self.builder.create_gt(lhs, rhs)
+                if isinstance(op, ast.LtE):
+                    return self.builder.create_le(lhs, rhs)
+                if isinstance(op, ast.GtE):
+                    return self.builder.create_ge(lhs, rhs)
+                assert TypeError()
 
     def visit_Index(self, node: ast.Index):
         key = node.value
@@ -473,6 +503,12 @@ class CodeGenerator(ast.NodeVisitor):
 
     def visit_List(self, node: ast.List):
         return [self.visit(e) for e in node.elts]
+
+    def visit_Assert(self, node: ast.Assert):
+        cond = self.visit(node.test)
+        msg = self.visit(node.msg)
+        from pyimacs.elisp.core import cl_assert
+        return cl_assert(cond, msg)
 
     def visit(self, node):
         if node is not None:
