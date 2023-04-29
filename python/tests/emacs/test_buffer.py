@@ -9,8 +9,9 @@ from pyimacs.elisp.core import Guard
 import pyimacs
 
 
+# TODO Add side-effect
 @pyimacs.aot
-def _test_buffer_basic():
+def _test_buffer_basic() -> str:
     some_buffer = Buffer("test")
     with Guard("with-current-buffer", some_buffer):
         some_buffer.insert("hello world")

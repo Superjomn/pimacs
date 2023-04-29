@@ -58,7 +58,7 @@ class SymbolTable:
     def symbols(self):
         res = set()
         for frame in self.frames:
-            res.update([hash(key) for key in frame.keys()])
+            res.update(frame.values())
         return res
 
 
@@ -73,6 +73,7 @@ class MlirToAstTranslator:
         self._constant_val = None
 
     def run(self, mod: ir.Module) -> List[ast.Function]:
+        print("mlir:\n", mod)
         funcs = []
         for func_name in mod.get_function_names():
             func = self.visit_Function(mod.get_llvm_function(func_name))
@@ -232,7 +233,7 @@ class MlirToAstTranslator:
 
         return self.setq(op.get_result(0), value)
 
-    def visit_GetNull(self, op:ir.Operation):
+    def visit_GetNull(self, op: ir.Operation):
         value = op.get_result(0).get_type()
         if value.is_float():
             return self.setq(op.get_result(0), ast.Token(0.0))

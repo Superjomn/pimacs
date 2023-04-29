@@ -249,12 +249,16 @@ class Guard(Expr):
         self.args = args
         self.body = body
 
+        for arg in self.args:
+            arg.add_user(self)
+
     @property
     def symbols(self) -> List[Any]:
         return [Symbol(self.name), *self.body]
 
     def dump(self, dumper: Dumper) -> None:
-        dumper.println(f"({self.name}")
+        arg_str = " ".join([str(arg) for arg in self.args])
+        dumper.println(f"({self.name} {arg_str}")
         dumper.do_indent()
         body = self.body
         if not isinstance(body, Iterable):

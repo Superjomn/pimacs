@@ -70,7 +70,8 @@ def _require(feature: str, *args) -> None: ...
 @register_extern("setq")
 def _setq(*args): ...
 
-def cl_assert(condition: bool, message: str="") -> None:
+
+def cl_assert(condition: bool, message: str = "") -> None:
     _cl_assert(condition, message)
 
 # TODO[Superjomn]: replace with make_symbol?
@@ -91,6 +92,7 @@ def length(x: object) -> int: ...
 @register_extern("cl-assert")
 def _cl_assert(condition: bool, message: str) -> None: ...
 
+
 def _trans_arg_to_mlir(arg):
     if isinstance(arg, pyl.core.Value):
         return arg.handle
@@ -102,4 +104,6 @@ def _trans_arg_to_mlir(arg):
         return builder().get_string(arg)
     if isinstance(arg, bool):
         return builder().get_bool(arg)
+    if isinstance(arg, Ext):
+        return arg._handle
     return arg
