@@ -162,6 +162,8 @@ class MlirToAstTranslator:
             return self.visit_MakeSymbol(op)
         if op.name() == "lisp.guard":
             return self.visit_Guard(op)
+        if op.name() == "lisp.string_eq":
+            return self.visit_StringEq(op)
 
         raise NotImplementedError(op.name())
 
@@ -183,6 +185,18 @@ class MlirToAstTranslator:
         assert lhs
         assert rhs
         res = ast.Expression(ast.Symbol(self.bin_op[op.name()]), lhs, rhs)
+        return self.setq(op.get_result(0), res)
+
+    def visit_StringEq(self, op: ir.Operation) -> ir.Value:
+        assert op.num_operands() == 2
+        lhs = op.get_operand(0).get()
+        rhs = op.get_operand(1).get()
+
+        lhs = self.symbol_table.get(lhs)
+        rhs = self.symbol_table.get(rhs)
+        assert lhs
+        assert rhs
+        res = ast.Expression(ast.Symbol("string="), lhs, rhs)
         return self.setq(op.get_result(0), res)
 
     def visit_MakeTuple(self, op: ir.Operation) -> ast.Expression:

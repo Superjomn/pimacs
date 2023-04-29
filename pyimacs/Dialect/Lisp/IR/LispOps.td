@@ -36,6 +36,12 @@ def Lisp_MakeSymbolOp : Lisp_Op<"make_symbol"> {
 //   let regions = (region SizedRegion<1>:$body);
 // }
 
+def Lisp_StringEqOp : Lisp_Op<"string_eq"> {
+  let summary = "string_eq op";
+  let arguments = (ins Value:$a, Value:$b);
+  let results = (outs I1:$output);
+}
+
 def Lisp_CallOp : Lisp_Op<"call"> {
     let summary = "call op";
     let arguments = (ins StrAttr:$callee, Variadic<Value>:$inputs);
