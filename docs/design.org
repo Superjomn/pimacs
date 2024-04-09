@@ -1,0 +1,111 @@
+#+title: Design
+
+* Movitation
+
+A DSL with modern features:
+
+1. Typing and type inference
+2. Python-like core data structures
+3. class support
+
+* Syntax
+** Basic examples
+*** Bultin constants
+
+#+BEGIN_SRC python
+var bool_true = true
+var bool_false = false
+var nothing = none
+#+END_SRC
+
+*** Variable declaration
+#+BEGIN_SRC python
+var a = 1
+var b: Int = 1
+var c = b + 1
+#+END_SRC
+
+*** If-else
+
+#+BEGIN_SRC python
+if a_cond:
+    ...
+elif b_cond:
+    ...
+else:
+    ...
+#+END_SRC
+
+** Core data structure
+*** Dictionary
+#+BEGIN_SRC python
+var d = {
+    "a" -> 1,
+    "b" -> 2,
+    "c" -> 3,
+}
+#+END_SRC
+
+*** Set
+#+BEGIN_SRC python
+var aset = {
+    1, 2, 3
+}
+#+END_SRC
+
+*** Tuple
+
+#+BEGIN_SRC python
+var t = (1, 2, 3)
+#+END_SRC
+
+*** List
+
+#+BEGIN_SRC python
+var arr = [0, 1, 2]
+#+END_SRC
+
+** Function definition
+*** Basic function
+#+BEGIN_SRC python
+def func0(a:Int, b:Int) -> Float:
+    "Define a function"
+    return a + b + 1.f
+#+END_SRC
+
+*** Function with default values
+
+#+BEGIN_SRC python
+def func1(a:Int=1, b:Int=2) -> Float:
+    ...
+#+END_SRC
+
+*** Lambda function
+
+#+BEGIN_SRC python
+var fn = lambda (x:Int, y:Int) -> Int: x + y
+#+END_SRC
+
+*** Template
+
+#+BEGIN_SRC python
+template<T0, T1>
+def fn(a:T0, b:T1) -> T1:
+    ...
+#+END_SRC
+
+** Class definition
+*** Basic example
+
+#+BEGIN_SRC python
+class Fruit:
+    name: Str
+    weight: Int
+
+    def __init__(self, name:Str, weigt:Int):
+        self.name = name
+        self.weight = weight
+
+    def __add__(self, a, b):
+        return a + b
+#+END_SRC
