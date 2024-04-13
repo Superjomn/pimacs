@@ -21,9 +21,3 @@ repos:
     rev: ''
     hooks:
     - id: isort
-
--   repo: https://github.com/pycqa/flake8
-    rev: ''  # pick a git hash / tag to point to
-    hooks:
-    -   id: flake8
-        args: [--config=./python/setup.cfg]

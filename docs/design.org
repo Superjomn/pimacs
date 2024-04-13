@@ -9,13 +9,13 @@ A DSL with modern features:
 3. class support
 
 * Syntax
-** Basic examples
+** Basic Examples
 *** Bultin constants
 
 #+BEGIN_SRC python
 var bool_true = true
 var bool_false = false
-var nothing = none
+var nothing = nil
 #+END_SRC
 
 *** Variable declaration
@@ -36,21 +36,81 @@ else:
     ...
 #+END_SRC
 
-** Core data structure
+*** While
+
+#+BEGIN_SRC python
+var a = 100
+while a > 0:
+    a -= 1
+#+END_SRC
+
+*** For
+
+#+BEGIN_SRC python
+for i in range(10):
+    print(i)
+#+END_SRC
+
+The target code:
+
+#+BEGIN_SRC emacs-lisp
+(dotimes (i 10)
+  (print i))
+#+END_SRC
+
+*** Optional value
+
+#+BEGIN_SRC python
+# A optional integer
+var a: Int?
+var a: Int? = nil
+
+# Assign a value
+a = 1
+
+if a == nil:
+    ...
+
+# Force to get a value, it will raise exception if a is nil
+b :Int = a!
+#+END_SRC
+
+** Core Data Structure
 *** Dictionary
 #+BEGIN_SRC python
 var d = {
-    "a" -> 1,
-    "b" -> 2,
-    "c" -> 3,
+    "a" : 1,
+    "b" : 2,
+    "c" : 3,
 }
+
+# Dict type
+var d1 : Dict[Str, Int]
+
+# Empty dictionary
+var d2 = {:}
 #+END_SRC
+
+
+The target elisp code:
+
+#+BEGIN_SRC emacs-lisp
+(setq d (make-hash-table :test 'equal))
+(puthash "a" 1 d)
+(puthash "b" 2 d)
+(puthash "c" 3 d)
+#+END_SRC
+
 
 *** Set
 #+BEGIN_SRC python
 var aset = {
     1, 2, 3
 }
+
+var aset : Set[Int]
+
+var empty_set = {}
 #+END_SRC
 
 *** Tuple
@@ -65,19 +125,89 @@ var t = (1, 2, 3)
 var arr = [0, 1, 2]
 #+END_SRC
 
-** Function definition
+** Function Definition
 *** Basic function
 #+BEGIN_SRC python
 def func0(a:Int, b:Int) -> Float:
     "Define a function"
     return a + b + 1.f
+
+# Call the function
+var c = func0(1, 2)
+var c1 = func0(a=1, b=2)
+#+END_SRC
+
+Function with early returns
+
+#+BEGIN_SRC python
+def func0(a:Int, b:Int):
+    c = 0
+    if a > 0:
+        c += 1
+        return c + a
+    if b > 0:
+        c -= 1
+        return a + b
+    if a < 0:
+        c *= 2
+        return a - b
+    c /= 2
+    return a + b + 1
+#+END_SRC
+
+The target elisp code:
+
+#+BEGIN_SRC emacs-lisp
+(defun func0 (a b)
+  (let ((c 0))
+    (cond ((> a 0)
+           (setq c (+ c 1))
+           (+ c a))
+          ((> b 0)
+           (setq c (- c 1))
+           (+ a b))
+          ((< a 0)
+           (setq c (* c 2))
+           (- a b))
+          (t
+           (setq c (/ c 2))
+           (+ a b 1)))))
+
 #+END_SRC
 
 *** Function with default values
 
 #+BEGIN_SRC python
-def func1(a:Int=1, b:Int=2) -> Float:
+# With default value, the argument type could be deduced automatically
+def func1(a=1, b=2) -> Float:
     ...
+#+END_SRC
+
+Target elisp code:
+
+#+BEGIN_SRC python
+(defun func1 (&optional a b)
+  (unless a (setq a 1))
+  (unless b (setq b 2))
+  ;; ... the rest of the function body goes here ...
+  )
+#+END_SRC
+
+
+*** Variadic args
+
+#+BEGIN_SRC python
+def func(a :Int, numbers :Int...) -> Int:
+    let ns = numbers.size
+    return a + numbers[0] + ns
+#+END_SRC
+
+The elisp code:
+
+#+BEGIN_SRC emacs-lisp
+(defun func (a &rest numbers)
+  (let ((ns (length numbers)))
+    (+ a (if numbers (first numbers) 0) ns)))
 #+END_SRC
 
 *** Lambda function
@@ -99,8 +229,8 @@ def fn(a:T0, b:T1) -> T1:
 
 #+BEGIN_SRC python
 class Fruit:
-    name: Str
-    weight: Int
+    var name: Str
+    var weight: Int
 
     def __init__(self, name:Str, weigt:Int):
         self.name = name
@@ -108,4 +238,171 @@ class Fruit:
 
     def __add__(self, a, b):
         return a + b
+#+END_SRC
+
+The target elisp code should be
+
+#+BEGIN_SRC emacs-lisp
+(require 'cl-lib)
+
+(cl-defstruct (fruit (:constructor fruit-create))
+  name
+  weight)
+
+(defun fruit-init (self name weight)
+  (setf (fruit-name self) name)
+  (setf (fruit-weight self) weight))
+
+(defun fruit-add (self a b)
+  (+ a b))
+#+END_SRC
+
+
+*** Inherient
+** Visit elisp code
+*** Call elisp code
+
+#+BEGIN_SRC python
+var a :Int = %('+1', 1, 2)
+#+END_SRC
+
+Get a elisp method
+
+#+BEGIN_SRC python
+let a_fn = %'+1'
+let b = a_fn(1, 1)
+
+# One can supply the typing for a elisp method
+let b_fn :(Int, Int)->Int = %'+1'
+#+END_SRC
+
+*** Special methods
+There are several core elisp methods builtin.
+
+**** with-temp-buffer
+#+BEGIN_SRC python
+with temp_buffer():
+    # do something
+#+END_SRC
+
+**** provide
+
+#+BEGIN_SRC python
+provide("some-mode")
+#+END_SRC
+
+**** defcustom
+
+#+BEGIN_SRC python
+# It will return a CustomVar object
+var some_custom = defcustom[Int]("somecustom", group=some_group)
+#+END_SRC
+
+**** defvar
+
+#+BEGIN_SRC python
+# Get a Variable object
+var some_var = defvar[Int]("somevar", group=some_group)
+#+END_SRC
+
+*** Mixing pyimacs with elisp
+
+#+BEGIN_SRC python
+# A elisp list is wrapped with %() rather than ()
+%(defun hello-world (a b)
+  (message "a: %S b: %S" a b))
+
+# It is possible to mix elisp list in pyimacs native code
+def hello(name :Str):
+    # All the elements within %() is in elisp space, you can use native elisp syntax,
+    # They will be inserted into the final transpiled code.
+    # If you want to reference the symbols in pyimacs space, prefix the symbol with $.
+    print(%(format "hello %s" $name))
+    # equivalent to
+    format = %"format"
+    print(format("hello %s", name))
+#+END_SRC
+
+* Examples
+** Insert date
+
+#+BEGIN_SRC python
+@interative
+def chun/insert-current-date ():
+    var date = %shell-command-to-string("echo -n $(date +%Y-%m-%d)")
+    insert(" " + date)
+#+END_SRC
+
+** Collect bookmarks from org-mode
+
+#+BEGIN_SRC python
+def retrieve-org-links (file: Str) -> List[Tuple[Str, Str]]:
+    with temp-buffer():
+        %insert-file-contents(file)
+        %org-mode()
+
+        %org-element-map(
+            %org-element-parse-buffer(),
+            %'link,
+            lambda (link): (%org-element-property(:raw-link link),
+                            %buffer-substring-no-properties(%org-element-property(:contents-begin link),
+                                                            %org-element-property(:contents-end link))))
+#+END_SRC
+
+It is better to make the lambda function a local function:
+
+
+#+BEGIN_SRC python
+def retrieve-org-links (file: Str) -> List[Tuple[Str, Str]]:
+    with temp-buffer():
+        %insert-file-contents(file)
+        %org-mode()
+
+        def get-content-range(link) -> Tuple[str, str]:
+            var begin = %org-element-property(%:contents-begin link)
+            var end = %org-element-property(%:content-end link)
+            return (begin, end)
+
+        return %org-element-map(
+            %org-element-parse-buffer(),
+            %'link,
+            get-content-range
+        )
+#+END_SRC
+
+It is possible to encapsulate org-mode data structure.
+
+#+BEGIN_SRC python
+# This could be a builtin data structure.
+class OrgElement:
+    def __init__(self, obj :List):
+        self.obj = obj
+
+    @classmethod
+    def create(cls) -> OrgElement:
+        "Create from buffer."
+        return cls(%org-element-parse-buffer())
+
+    @property
+    def contents-begin(self):
+        return %org-element-property(%:contents-begin self)
+
+    def map(self, kind :Symbol, fn :Callable) -> List:
+        def wrapper(ele: List):
+            element = OrgElement(ele)
+            return fn(element)
+        return %org-element-map(self, wrapper)
+
+    # other methods or properties ...
+
+def retrieve-org-links (file: Str) -> List[Tuple[Str, Str]]:
+    with temp-buffer():
+        %insert-file-contents(file)
+        %org-mode()
+
+        def get-content-range(link :OrgElement) -> Tuple[Str, Str]:
+            return (link.contents-begin, link.contents-end)
+
+        root-elem = OrgElement.create_from_buffer()
+        return root-elem.map(%'link, get-content-range)
 #+END_SRC
