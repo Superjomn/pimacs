@@ -109,6 +109,25 @@ var c: MyType[Int, MyType[Float, Bool]]
     print(tree.pretty())
 
 
+def test_decorator():
+    code = '''
+@decorator
+def hello-world():
+    pass
+
+@decorator(1, 2, 3)
+@decorator1
+@decorator2
+def hello-world():
+    pass
+'''
+    for token in parser.lex(code):
+        print('token:', repr(token))
+    tree = parser.parse(code)
+    assert tree
+    print(tree.pretty())
+
+
 # test_basic()
 # test_function_def()
 # test_control_flow()
@@ -116,4 +135,5 @@ var c: MyType[Int, MyType[Float, Bool]]
 # test_constant()
 # test_dict()
 # test_list()
-test_type()
+# test_type()
+# test_decorator()

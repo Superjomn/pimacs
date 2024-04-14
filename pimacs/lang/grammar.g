@@ -6,6 +6,7 @@ file_input: (_NEWLINE | statement)*
 ?statement: var_decl
             | func_def
             | class_def
+            | decorated
             | if_stmt
             | while_loop
             | for_loop
@@ -15,14 +16,23 @@ file_input: (_NEWLINE | statement)*
             | return_stmt
 
 var_decl: "var" NAME [":" type] ["=" expr]
+let_decl: "let" NAME [":" type] ["=" expr]
 
 if_stmt: "if" expr ":" block elif_block* else_block?
 elif_block: "elif" expr ":" block
 else_block: "else" ":" block
 
+assign_stmt: NAME "=" expr
+
 while_loop: "while" expr ":" block
 
 for_loop: "for" NAME "in" expr ":" block
+
+?decorated: decorator+ (class_def | func_def)
+decorator: "@" dotted_name ["(" [args] ")"] _NEWLINE
+dotted_name: NAME ("." NAME)*
+
+
 
 // function related
 func_def: "def" NAME "(" [func_params] ")" ["->" type] ":" block
@@ -83,6 +93,7 @@ pair_list: pair (_NEWLINE | "," [_NEWLINE] pair)* ["," [_NEWLINE]]
 type: PRIMITIVE_TYPE
      | NAME
      | complex_type
+variadic_type: type "..."
 basic_type: PRIMITIVE_TYPE | custom_type
 complex_type: NAME "[" type_list "]"
 
