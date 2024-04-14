@@ -14,8 +14,7 @@ file_input: (_NEWLINE | statement)*
             | "pass" -> pass
             | return_stmt
 
-var_decl: "var" NAME "=" expr
-        | "var" NAME ":" TYPE "=" expr
+var_decl: "var" NAME [":" type] ["=" expr]
 
 if_stmt: "if" expr ":" block elif_block* else_block?
 elif_block: "elif" expr ":" block
@@ -26,9 +25,9 @@ while_loop: "while" expr ":" block
 for_loop: "for" NAME "in" expr ":" block
 
 // function related
-func_def: "def" NAME "(" [func_params] ")" ["->" TYPE] ":" block
+func_def: "def" NAME "(" [func_params] ")" ["->" type] ":" block
 func_params: func_param ("," func_param)*
-func_param: NAME [":" TYPE] ["=" expr]
+func_param: NAME [":" type] ["=" expr]
 
 // class related
 class_def: "class" NAME ":" class_body
@@ -49,6 +48,10 @@ expr: atom
     | expr "/" expr       -> divide
     | expr "==" expr      -> eq
     | expr "!=" expr      -> neq
+    | expr ">" expr       -> gt
+    | expr ">=" expr      -> ge
+    | expr "<" expr       -> lt
+    | expr "<=" expr      -> le
     | "(" expr ")"
 
 atom: NUMBER                   -> number
@@ -56,9 +59,14 @@ atom: NUMBER                   -> number
     | "true" | "false"         -> bool
     | "nil"                    -> nil
     | NAME                     -> variable
-    | "[" [expr ("," expr)*] "]" -> list
-    | "{" [pair ("," pair)*] "}" -> dict
+    | dict
+    | list
     | func_call
+
+dict: "{"  [pair_list]  "}"
+list: "["  [expr_list]  "]"
+
+expr_list: expr (_NEWLINE | "," [_NEWLINE] expr)* ["," [_NEWLINE]]
 
 
 func_call: NAME "(" args* ")"
@@ -69,8 +77,21 @@ return_stmt: "return" [expr]
 
 
 pair: expr ":" expr
+pair_list: pair (_NEWLINE | "," [_NEWLINE] pair)* ["," [_NEWLINE]]
 
-TYPE: "Int" | "Float" | "Str" | "Bool" | "Dict" | "List" | "Set" | "nil" | NAME
+
+type: PRIMITIVE_TYPE
+     | NAME
+     | complex_type
+basic_type: PRIMITIVE_TYPE | custom_type
+complex_type: NAME "[" type_list "]"
+
+custom_type: NAME  // Allows for user-defined types, including generics
+
+type_list: type ("," type)*
+
+PRIMITIVE_TYPE: "Int" | "Float" | "Str" | "Bool" | "Dict" | "List" | "Set" | "nil"
+
 NAME: /%?[a-zA-Z_\-\/\+\-][a-zA-Z0-9_\-\/\+\-]*/
 NUMBER: /-?\d+(\.\d+)?/
 STRING: /"(?:\\.|[^"\\])*"/
