@@ -29,10 +29,13 @@ while_loop: "while" expr ":" block
 for_loop: "for" NAME "in" expr ":" block
 
 ?decorated: decorator+ (class_def | func_def)
-decorator: "@" dotted_name ["(" [args] ")"] _NEWLINE
+decorator: "@" ((dotted_name ["(" [args] ")"]) | "template" type_placeholder_list) _NEWLINE
 dotted_name: NAME ("." NAME)*
 
-
+// templated_func_def: [template] func_def
+// template: "@template" type_placeholder_list _NEWLINE
+type_placeholder_list: "[" type_placeholders "]"
+type_placeholders: NAME ("," NAME)*
 
 // function related
 func_def: "def" NAME "(" [func_params] ")" ["->" type] ":" block

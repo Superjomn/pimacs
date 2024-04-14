@@ -120,6 +120,10 @@ def hello-world():
 @decorator2
 def hello-world():
     pass
+
+@template [ T ]
+def templated_fn(a: T):
+    pass
 '''
     for token in parser.lex(code):
         print('token:', repr(token))
@@ -136,4 +140,4 @@ def hello-world():
 # test_dict()
 # test_list()
 # test_type()
-# test_decorator()
+test_decorator()
