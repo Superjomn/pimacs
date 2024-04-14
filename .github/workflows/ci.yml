@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10",]
+        python-version: ["3.12",]
 
     steps:
       - uses: actions/checkout@v3
@@ -19,29 +19,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pytest astpretty
+          pip install flake8 pytest
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - name: Build
-        run: |
-          # Download llvm
-          mkdir -p ~/llvm
-          #wget -P ~/llvm/ https://github.com/ptillet/triton-llvm-releases/releases/download/llvm-14.0.6-f28c006a5895/llvm+mlir-14.0.6-x86_64-linux-gnu-ubuntu-18.04-assert.tar.xz --quiet
-          wget -P ~/llvm/ https://github.com/ptillet/triton-llvm-releases/releases/download/llvm-17.0.0-3e497a114730/llvm+mlir-17.0.0-x86_64-linux-gnu-ubuntu-18.04-release.tar.xz --quiet
-          xz -d ~/llvm/*.xz
-          ls ~/llvm
-          LLVM_DIR=~/llvm/
-          WORKSPACE=$PWD
-          cd $LLVM_DIR
-          tar xf *.tar
-          ls -l $LLVM_DIR
-
-          cd $WORKSPACE
-          # build
-          mkdir build
-          cd build
-          cmake .. -DMLIR_DIR=$LLVM_DIR/llvm+mlir-17.0.0-x86_64-linux-gnu-ubuntu-18.04-release
-          make
-          ln -s $PWD/libpyimacs.so ../python/pyimacs/_C/
 
       - name: Lint with flake8
         run: |
@@ -49,8 +28,9 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
       - name: Test with pytest
         run: |
-          cd python
+          cd tests
           export PYTHONPATH=$PWD
           pytest -v
