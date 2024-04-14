@@ -9,7 +9,7 @@ from pimacs.lang.type import Type
 
 @dataclass
 class IrNode(ABC):
-    loc: Optional["Location"] = None
+    loc: Optional["Location"]
 
     @abstractmethod
     def verify(self):
@@ -28,16 +28,14 @@ class Stmt(IrNode):
     pass
 
 
-@dataclass
+@dataclass(slots=True)
 class FileName:
-    __slots__ = ['filename', 'module']
     filename: str
     module: Optional[str] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class Location:
-    __slots__ = ['line', 'column', 'filename']
     line: int
     column: int
     filename: FileName
@@ -46,10 +44,9 @@ class Location:
         return f"{self.filename}:{self.line}:{self.column}"
 
 
-@dataclass
+@dataclass(slots=True)
 class VarDecl(Stmt):
-    __slots__ = ['name', 'type', 'init']
-    name: str
+    name: str = ""
     type: Optional[Type] = None
     init: Optional[Expr] = None
 
@@ -64,9 +61,8 @@ class VarDecl(Stmt):
                 f"{self.loc}:\n var declaration type mismatch: type is {self.type} but the init is {self.init.get_type()}")
 
 
-@dataclass
-class Arg:
-    __slots__ = ['name', 'type', 'default']
+@dataclass(slots=True)
+class ArgDecl(Stmt):
     name: str
     type: Optional[Type] = None
     default: Optional[Expr] = None
@@ -77,9 +73,8 @@ class Arg:
                 f"{self.loc}:\nArg type mismatch: type is {self.type} but the default is {self.default.get_type()}")
 
 
-@dataclass
+@dataclass(slots=True)
 class Block(Stmt):
-    __slots__ = ['stmts']
     stmts: List[Stmt] = field(default_factory=list)
 
     def verify(self):
@@ -87,23 +82,21 @@ class Block(Stmt):
             stmt.verify()
 
 
-@dataclass
+@dataclass(slots=True)
 class FuncDecl(Stmt):
-    __slots__ = ['name', 'params', 'return_type', 'body']
     name: str
-    params: List[Arg]
-    return_type: Optional[Type] = None
+    args: List[ArgDecl]
     body: Block
+    return_type: Optional[Type] = None
 
     def verify(self):
-        for param in self.params:
-            param.verify()
+        for arg in self.args:
+            arg.verify()
         self.body.verify()
 
 
-@dataclass
+@dataclass(slots=True)
 class IfStmt(Stmt):
-    __slots__ = ['condition', 'then_branch', 'else_branch']
     condition: Expr
     then_branch: Block
     else_branch: Optional[Block] = None
@@ -115,9 +108,8 @@ class IfStmt(Stmt):
             self.else_branch.verify()
 
 
-@dataclass
+@dataclass(slots=True)
 class WhileStmt(Stmt):
-    __slots__ = ['condition', 'body']
     condition: Expr
     body: Block
 
@@ -126,9 +118,8 @@ class WhileStmt(Stmt):
         self.body.verify()
 
 
-@dataclass
+@dataclass(slots=True)
 class ForStmt(Stmt):
-    __slots__ = ['init', 'condition', 'increment', 'body']
     init: VarDecl
     condition: Expr
     increment: Expr
@@ -141,9 +132,8 @@ class ForStmt(Stmt):
         self.body.verify()
 
 
-@dataclass
+@dataclass(slots=True)
 class Constant(Expr):
-    __slots__ = ['value']
     value: Any
 
     def get_type(self) -> Type:
@@ -161,9 +151,8 @@ class Constant(Expr):
         pass
 
 
-@dataclass
+@dataclass(slots=True)
 class BinaryOp(Expr):
-    __slots__ = ['left', 'op', 'right']
     left: Expr
     op: "BinaryOperator"
     right: Expr
@@ -187,6 +176,32 @@ class BinaryOp(Expr):
     def verify(self):
         self.left.verify()
         self.right.verify()
+
+
+@dataclass(slots=True)
+class Arg(Expr):
+    name: str
+    value: Expr
+
+    def verify(self):
+        self.value.verify()
+
+    def get_type(self) -> Type:
+        return self.value.get_type()
+
+
+@dataclass(slots=True)
+class FuncCall(Expr):
+    func: FuncDecl | str
+    args: Optional[List[Arg | Expr]] = None
+
+    def get_type(self) -> Type:
+        return self.func.return_type
+
+    def verify(self):
+        self.func.verify()
+        for arg in self.args:
+            arg.verify()
 
 
 class BinaryOperator(Enum):

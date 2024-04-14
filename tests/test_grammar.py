@@ -1,16 +1,20 @@
 import pytest
 
-from pimacs.lang.grammar import parser
+from pimacs.lang.parser import get_lark_parser, get_parser
+
+lark_parser = get_lark_parser()
+parser = get_parser()
 
 
 def test_basic():
     basic_code = '''
-def hello-world():
+def hello-world(name:Str) -> nil:
     print("Hello, world!")
 '''
-    for token in parser.lex(basic_code):
+    for token in lark_parser.lex(basic_code):
         print('token:', repr(token))
-    assert parser.parse(basic_code) is not None
+    print("lark:\n", lark_parser.parse(basic_code).pretty())
+    print(parser.parse(basic_code))
 
 
 def test_constant():
@@ -18,9 +22,9 @@ def test_constant():
 var a: Bool = true
 var b = false
 var c = nil'''
-    for token in parser.lex(code):
+    for token in lark_parser.lex(code):
         print('token:', repr(token))
-    assert parser.parse(code) is not None
+    assert lark_parser.parse(code) is not None
 
 
 def test_function_def():
@@ -40,9 +44,9 @@ def hello-world(name:Str, age:Int) -> nil:
     # some comment
     return format("Hello %s, age: %d", name, age)
 '''
-    for token in parser.lex(code):
+    for token in lark_parser.lex(code):
         print('token:', repr(token))
-    assert parser.parse(code) is not None
+    assert lark_parser.parse(code) is not None
 
 
 def test_control_flow():
@@ -60,9 +64,9 @@ for i in range(10):
 while x > 0:
     var c = x - 1
 '''
-    for token in parser.lex(code):
+    for token in lark_parser.lex(code):
         print('token:', repr(token))
-    assert parser.parse(code) is not None
+    assert lark_parser.parse(code) is not None
 
 
 def test_optional():
@@ -71,7 +75,7 @@ var a : Int?
 var b : Int? = 10
 var c = a + b!
 '''
-    for token in parser.lex(code):
+    for token in lark_parser.lex(code):
         print('token:', repr(token))
 
 
@@ -79,9 +83,9 @@ def test_dict():
     code = '''
 var a = { "a": 1, "b": 2 }
 '''
-    for token in parser.lex(code):
+    for token in lark_parser.lex(code):
         print('token:', repr(token))
-    assert parser.parse(code) is not None
+    assert lark_parser.parse(code) is not None
 
 
 def test_list():
@@ -93,7 +97,7 @@ var c = [1,
     2, 3,
     4, 5, 6]
 '''
-    tree = parser.parse(code)
+    tree = lark_parser.parse(code)
     assert tree
     print(tree.pretty())
 
@@ -104,7 +108,7 @@ var a: Int
 var b: MyType[Int, Float]
 var c: MyType[Int, MyType[Float, Bool]]
 '''
-    tree = parser.parse(code)
+    tree = lark_parser.parse(code)
     assert tree
     print(tree.pretty())
 
@@ -125,14 +129,14 @@ def hello-world():
 def templated_fn(a: T):
     pass
 '''
-    for token in parser.lex(code):
+    for token in lark_parser.lex(code):
         print('token:', repr(token))
-    tree = parser.parse(code)
+    tree = lark_parser.parse(code)
     assert tree
     print(tree.pretty())
 
 
-# test_basic()
+test_basic()
 # test_function_def()
 # test_control_flow()
 # test_optional()
@@ -140,4 +144,4 @@ def templated_fn(a: T):
 # test_dict()
 # test_list()
 # test_type()
-test_decorator()
+# test_decorator()

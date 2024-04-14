@@ -94,7 +94,7 @@ pair_list: pair (_NEWLINE | "," [_NEWLINE] pair)* ["," [_NEWLINE]]
 
 
 type: PRIMITIVE_TYPE
-     | NAME
+     | custom_type
      | complex_type
 variadic_type: type "..."
 basic_type: PRIMITIVE_TYPE | custom_type
