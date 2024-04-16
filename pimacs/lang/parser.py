@@ -29,10 +29,6 @@ class PimacsTransformer(Transformer):
         return items
 
     def func_def(self, items):
-        print('func_def:')
-        for i, item in enumerate(items):
-            print(i, repr(item))
-
         name: str = items[0].value
         args: List[ir.ArgDecl] = safe_get(items, 1, [])
         block: ir.Block = safe_get(items, 3, None)
@@ -59,7 +55,6 @@ class PimacsTransformer(Transformer):
         return ir.ArgDecl(name=name, type=type, default=default, loc=loc)
 
     def type(self, items):
-        print('type', items)
         return items[0]
 
     def PRIMITIVE_TYPE(self, items) -> _type.Type:
@@ -83,17 +78,38 @@ class PimacsTransformer(Transformer):
         stmts = list(filter(lambda x: x is not None, items))
         return ir.Block(stmts=stmts, loc=stmts[0].loc)
 
-    def args(self, items: List[lark.lexer.Token]) -> List[ir.Arg]:
+    def args(self, items: List[lark.lexer.Token]) -> List[ir.CallParam]:
         return items
 
-    def arg(self, items: List[lark.Tree]) -> ir.Arg:
+    def arg(self, items: List[lark.Tree]) -> ir.CallParam:
         assert len(items) == 1
-        content = items[0].children[0]
-        return ir.Arg(name="", value=content, loc=content.loc)
+        content = items[0][0]
+        return ir.CallParam(name="", value=content, loc=content.loc)
 
     def string(self, items: List[lark.lexer.Token]):
         loc = ir.Location("", items[0].line, items[0].column)
         return ir.Constant(value=items[0].value, loc=loc)
+
+    def var_decl(self, items) -> ir.VarDecl:
+        name = items[0].value
+        type = safe_get(items, 1, None)
+        init = safe_get(items, 2, None)
+        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        if init:
+            assert len(init) == 1
+            init = init[0]
+        return ir.VarDecl(name=name, type=type, init=init, loc=loc)
+
+    def expr(self, items):
+        return items
+
+    def number(self, x: List[ir.Constant]):
+        assert len(x) == 1
+        return x[0]
+
+    def NUMBER(self, x):
+        value = float(x) if '.' in x else int(x)
+        return ir.Constant(value=value, loc=ir.Location(self.filename, x.line, x.column))
 
 
 def safe_get(items, index, default):

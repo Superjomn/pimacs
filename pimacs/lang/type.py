@@ -4,12 +4,12 @@ from typing import Dict, List, Optional
 
 
 class TypeId(Enum):
-    INT = 1
-    FLOAT = 2
-    BOOL = 3
-    STRING = 4
-    CUSTOMED = 5
-    NIL = 6
+    INT = 'Int'
+    FLOAT = 'Float'
+    BOOL = 'Bool'
+    STRING = 'String'
+    CUSTOMED = 'Customed'
+    NIL = 'nil'
 
 
 @dataclass(slots=True)
@@ -18,7 +18,7 @@ class TypeBase:
     _name: Optional[str] = None
 
     def __str__(self):
-        return self._name or self.type_id.name.lower()
+        return self._name or self.type_id.value
 
 
 @dataclass(slots=True)
@@ -27,7 +27,7 @@ class Type(TypeBase):
 
     def __str__(self) -> str:
         if not self.inner_types:
-            return super().__str__()
+            return self._name or self.type_id.value
         return f"{self._name or self.type_id.name.lower()}[{', '.join(map(str, self.inner_types))}]"
 
 

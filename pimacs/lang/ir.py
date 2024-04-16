@@ -36,9 +36,9 @@ class FileName:
 
 @dataclass(slots=True)
 class Location:
+    filename: FileName
     line: int
     column: int
-    filename: FileName
 
     def __str__(self):
         return f"{self.filename}:{self.line}:{self.column}"
@@ -179,7 +179,7 @@ class BinaryOp(Expr):
 
 
 @dataclass(slots=True)
-class Arg(Expr):
+class CallParam(Expr):
     name: str
     value: Expr
 
@@ -193,7 +193,7 @@ class Arg(Expr):
 @dataclass(slots=True)
 class FuncCall(Expr):
     func: FuncDecl | str
-    args: Optional[List[Arg | Expr]] = None
+    args: Optional[List[CallParam | Expr]] = None
 
     def get_type(self) -> Type:
         return self.func.return_type

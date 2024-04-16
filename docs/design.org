@@ -12,14 +12,14 @@ A DSL with modern features:
 ** Basic Examples
 *** Bultin constants
 
-#+BEGIN_SRC python
-var bool_true = true
-var bool_false = false
-var nothing = nil
+#+BEGIN_SRC pimacs
+let bool_t = true
+let bool_f = false
+let nothing = nil
 #+END_SRC
 
 *** Variable declaration
-#+BEGIN_SRC python
+#+BEGIN_SRC pimacs
 var a = 1
 var b: Int = 1
 var c = b + 1
@@ -27,7 +27,7 @@ var c = b + 1
 
 *** If-else
 
-#+BEGIN_SRC python
+#+BEGIN_SRC pimacs
 if a_cond:
     ...
 elif b_cond:
@@ -38,7 +38,7 @@ else:
 
 *** While
 
-#+BEGIN_SRC python
+#+BEGIN_SRC pimacs
 var a = 100
 while a > 0:
     a -= 1
@@ -46,7 +46,7 @@ while a > 0:
 
 *** For
 
-#+BEGIN_SRC python
+#+BEGIN_SRC pimacs
 for i in range(10):
     print(i)
 #+END_SRC
@@ -60,7 +60,7 @@ The target code:
 
 *** Optional value
 
-#+BEGIN_SRC python
+#+BEGIN_SRC pimacs
 # A optional integer
 var a: Int?
 var a: Int? = nil
@@ -77,7 +77,7 @@ b :Int = a!
 
 ** Core Data Structure
 *** Dictionary
-#+BEGIN_SRC python
+#+BEGIN_SRC pimacs
 var d = {
     "a" : 1,
     "b" : 2,
@@ -102,7 +102,7 @@ The target elisp code:
 #+END_SRC
 
 *** Set
-#+BEGIN_SRC python
+#+BEGIN_SRC pimacs
 var aset = {
     1, 2, 3
 }
@@ -226,7 +226,7 @@ def fn(a:T0, b:T1) -> T1:
 ** Class definition
 *** Basic example
 
-#+BEGIN_SRC python
+#+BEGIN_SRC pimacs
 class Fruit:
     var name: Str
     var weight: Int

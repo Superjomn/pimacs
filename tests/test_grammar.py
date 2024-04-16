@@ -25,6 +25,7 @@ var c = nil'''
     for token in lark_parser.lex(code):
         print('token:', repr(token))
     assert lark_parser.parse(code) is not None
+    print(parser.parse(code))
 
 
 def test_function_def():
@@ -134,3 +135,6 @@ def templated_fn(a: T):
     tree = lark_parser.parse(code)
     assert tree
     print(tree.pretty())
+
+
+test_basic()
