@@ -29,7 +29,7 @@ while_loop: "while" expr ":" block
 for_loop: "for" NAME "in" expr ":" block
 
 ?decorated: decorator+ (class_def | func_def)
-decorator: "@" ((dotted_name ["(" [args] ")"]) | "template" type_placeholder_list) _NEWLINE
+decorator: "@" ((dotted_name ["(" [call_params] ")"]) | "template" type_placeholder_list) _NEWLINE
 dotted_name: NAME ("." NAME)*
 
 // templated_func_def: [template] func_def
@@ -38,9 +38,9 @@ type_placeholder_list: "[" type_placeholders "]"
 type_placeholders: NAME ("," NAME)*
 
 // function related
-func_def: "def" NAME "(" [func_params] ")" ["->" type] ":" block
-func_params: func_param ("," func_param)*
-func_param: NAME [":" type] ["=" expr]
+func_def: "def" NAME "(" [func_args] ")" ["->" type] ":" block
+func_args: func_arg ("," func_arg)*
+func_arg: NAME [":" type] ["=" expr]
 
 // class related
 class_def: "class" NAME ":" class_body
@@ -56,11 +56,11 @@ block: _NEWLINE _INDENT [STRING] (_NEWLINE | statement)+ _DEDENT
 
 expr: atom
     | expr "+" expr       -> add
-    | expr "-" expr       -> subtract
-    | expr "*" expr       -> multiply
-    | expr "/" expr       -> divide
+    | expr "-" expr       -> sub
+    | expr "*" expr       -> mul
+    | expr "/" expr       -> div
     | expr "==" expr      -> eq
-    | expr "!=" expr      -> neq
+    | expr "!=" expr      -> ne
     | expr ">" expr       -> gt
     | expr ">=" expr      -> ge
     | expr "<" expr       -> lt
@@ -69,12 +69,16 @@ expr: atom
 
 atom: NUMBER                   -> number
     | STRING                   -> string
-    | "true" | "false"         -> bool
-    | "nil"                    -> nil
+    | true | false             -> bool
+    | nil
     | NAME                     -> variable
     | dict
     | list
     | func_call
+
+true: "true"
+false: "false"
+nil: "nil"
 
 dict: "{"  [pair_list]  "}"
 list: "["  [expr_list]  "]"
@@ -82,9 +86,12 @@ list: "["  [expr_list]  "]"
 expr_list: expr (_NEWLINE | "," [_NEWLINE] expr)* ["," [_NEWLINE]]
 
 
-func_call: NAME "(" args* ")"
-arg: expr | NAME "=" expr
-args: arg ("," arg)*
+func_call: func_call_name "(" [call_params] ")"
+call_param: expr                -> value_param
+          | call_param_name "=" expr       -> key_value_param
+call_params: call_param ("," call_param)*
+call_param_name: NAME
+func_call_name: NAME
 
 return_stmt: "return" [expr]
 
@@ -104,7 +111,7 @@ custom_type: NAME  // Allows for user-defined types, including generics
 
 type_list: type ("," type)*
 
-PRIMITIVE_TYPE: "Int" | "Float" | "Str" | "Bool" | "Dict" | "List" | "Set" | "nil"
+PRIMITIVE_TYPE: "Int" | "Float" | "Str" | "Bool" | "Dict" | "List" | "Set"
 
 NAME: /%?[a-zA-Z_\-\/\+\-][a-zA-Z0-9_\-\/\+\-]*/
 NUMBER: /-?\d+(\.\d+)?/

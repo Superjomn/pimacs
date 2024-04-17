@@ -62,6 +62,30 @@ class VarDecl(Stmt):
 
 
 @dataclass(slots=True)
+class VarRef(Expr):
+    ''' A placeholder for a variable.
+    It is used by lexer to represent a variable. Then in the parser, it will be replaced by one with VarDecl and other meta data.
+    '''
+    decl: Optional[VarDecl] = None
+    value: Optional[Expr] = None
+    name: str = ""
+
+    def is_placeholder(self) -> bool:
+        return self.name
+
+    def is_ref(self) -> bool:
+        return self.decl is not None
+
+    def get_type(self) -> Type:
+        return self.decl.type
+
+    def verify(self):
+        if self.decl is None:
+            raise Exception(f"{self.loc}:\nVariable is not declared")
+        # TODO: varify the SSA
+
+
+@dataclass(slots=True)
 class ArgDecl(Stmt):
     name: str
     type: Optional[Type] = None
@@ -83,6 +107,15 @@ class Block(Stmt):
 
 
 @dataclass(slots=True)
+class File(Stmt):
+    body: List[Stmt]
+
+    def verify(self):
+        for stmt in self.body:
+            stmt.verify()
+
+
+@dataclass(slots=True)
 class FuncDecl(Stmt):
     name: str
     args: List[ArgDecl]
@@ -97,12 +130,12 @@ class FuncDecl(Stmt):
 
 @dataclass(slots=True)
 class IfStmt(Stmt):
-    condition: Expr
+    cond: Expr
     then_branch: Block
     else_branch: Optional[Block] = None
 
     def verify(self):
-        self.condition.verify()
+        self.cond.verify()
         self.then_branch.verify()
         if self.else_branch is not None:
             self.else_branch.verify()
@@ -204,17 +237,26 @@ class FuncCall(Expr):
             arg.verify()
 
 
+@dataclass(slots=True)
+class ReturnStmt(Stmt):
+    value: Optional[Expr] = None
+
+    def verify(self):
+        if self.value is not None:
+            self.value.verify()
+
+
 class BinaryOperator(Enum):
     ADD = "+"
-    SUBTRACT = "-"
-    MULTIPLY = "*"
-    DIVIDE = "/"
-    MODULO = "%"
-    EQUALS = "=="
-    NOT_EQUALS = "!="
-    LESS_THAN = "<"
-    LESS_THAN_EQUALS = "<="
-    GREATER_THAN = ">"
-    GREATER_THAN_EQUALS = ">="
+    SUB = "-"
+    MUL = "*"
+    DIV = "/"
+    MOD = "%"
+    EQ = "=="
+    NE = "!="
+    LT = "<"
+    LE = "<="
+    GT = ">"
+    GE = ">="
     AND = "&&"
     OR = "||"

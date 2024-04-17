@@ -21,6 +21,12 @@ def get_parser(fllename: str = "<pimacs>"):
     return Lark(dsl_grammar, parser='lalr', postlex=PythonIndenter(), transformer=PimacsTransformer(filename=fllename))
 
 
+def parse(code: str, filename: str = "<pimacs>"):
+    parser = get_parser(filename)
+    stmts = parser.parse(code)
+    return ir.File(body=stmts, loc=ir.Location(ir.FileName(filename), 0, 0))
+
+
 class PimacsTransformer(Transformer):
     def __init__(self, filename: str):
         self.filename = ir.FileName(filename)
@@ -31,16 +37,29 @@ class PimacsTransformer(Transformer):
     def func_def(self, items):
         name: str = items[0].value
         args: List[ir.ArgDecl] = safe_get(items, 1, [])
+        type = safe_get(items, 2, None)
         block: ir.Block = safe_get(items, 3, None)
         loc = ir.Location(self.filename, items[0].line, items[0].column)
 
         if block is None:
             raise Exception(f"{loc}:\nFunction {name} must have a block")
 
-        return ir.FuncDecl(name=name, args=args, body=block, loc=loc)
+        return ir.FuncDecl(name=name, args=args, body=block,
+                           return_type=type,
+                           loc=loc)
+
+    def func_args(self, items):
+        return items
+
+    def func_arg(self, items) -> ir.ArgDecl:
+        name: str = safe_get(items, 0, None)
+        type_ = safe_get(items, 1, None)
+        default = safe_get(items, 2, None)
+
+        return ir.ArgDecl(name=name, type=type_, default=default, loc=ir.Location(self.filename, items[0].line, items[0].column))
 
     def func_params(self, items):
-        return items
+        return items[0]
 
     def func_param(self, items):
         name: str = items[0].value
@@ -68,40 +87,50 @@ class PimacsTransformer(Transformer):
             return ret
         return _type.Type(type_id=_type.TypeId.CUSTOMED, _name=items[0].value)
 
+    def block(self, items) -> ir.Block:
+        stmts = list(filter(lambda x: x is not None, items))
+
+        return ir.Block(stmts=stmts, loc=stmts[0].loc)
+
+    def return_stmt(self, items) -> ir.ReturnStmt:
+        return ir.ReturnStmt(value=items[0], loc=items[0].loc)
+
     def func_call(self, items) -> ir.FuncDecl:
         name = items[0].value
         args = items[1]
         loc = ir.Location(self.filename, items[0].line, items[0].column)
         return ir.FuncCall(func=name, args=args, loc=loc)
 
-    def block(self, items) -> ir.Block:
-        stmts = list(filter(lambda x: x is not None, items))
-        return ir.Block(stmts=stmts, loc=stmts[0].loc)
+    def func_call_name(self, items) -> str:
+        return items[0]
 
-    def args(self, items: List[lark.lexer.Token]) -> List[ir.CallParam]:
-        return items
-
-    def arg(self, items: List[lark.Tree]) -> ir.CallParam:
+    def call_param(self, items: List[lark.Tree]) -> ir.CallParam:
         assert len(items) == 1
         content = items[0][0]
         return ir.CallParam(name="", value=content, loc=content.loc)
 
+    def call_params(self, items: List[lark.Tree]) -> List[ir.CallParam]:
+        return items[0]
+
     def string(self, items: List[lark.lexer.Token]):
         loc = ir.Location("", items[0].line, items[0].column)
         return ir.Constant(value=items[0].value, loc=loc)
+
+    def variable(self, items) -> ir.VarRef:
+        return ir.VarRef(name=items[0].value, loc=ir.Location(self.filename, items[0].line, items[0].column))
 
     def var_decl(self, items) -> ir.VarDecl:
         name = items[0].value
         type = safe_get(items, 1, None)
         init = safe_get(items, 2, None)
         loc = ir.Location(self.filename, items[0].line, items[0].column)
-        if init:
-            assert len(init) == 1
-            init = init[0]
         return ir.VarDecl(name=name, type=type, init=init, loc=loc)
 
-    def expr(self, items):
+    def value_param(self, items):
         return items
+
+    def expr(self, items):
+        return items[0]
 
     def number(self, x: List[ir.Constant]):
         assert len(x) == 1
@@ -110,6 +139,53 @@ class PimacsTransformer(Transformer):
     def NUMBER(self, x):
         value = float(x) if '.' in x else int(x)
         return ir.Constant(value=value, loc=ir.Location(self.filename, x.line, x.column))
+
+    def atom(self, items):
+        return items[0]
+
+    def true(self, items):
+        return ir.Constant(value=True, loc=None)
+
+    def false(self, items):
+        return ir.Constant(value=False, loc=None)
+
+    def nil(self, items):
+        return ir.Constant(value=None, loc=None)
+
+    def if_stmt(self, items):
+        cond = items[0]
+        block = items[1]
+        return ir.IfStmt(cond=cond, then_branch=block, loc=cond.loc)
+
+    def add(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.ADD, loc=items[0].loc)
+
+    def sub(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.SUB, loc=items[0].loc)
+
+    def mul(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.MUL, loc=items[0].loc)
+
+    def div(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.DIV, loc=items[0].loc)
+
+    def le(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.LE, loc=items[0].loc)
+
+    def lt(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.LT, loc=items[0].loc)
+
+    def ge(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.GE, loc=items[0].loc)
+
+    def gt(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.GT, loc=items[0].loc)
+
+    def eq(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.EQ, loc=items[0].loc)
+
+    def ne(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.NE, loc=items[0].loc)
 
 
 def safe_get(items, index, default):
