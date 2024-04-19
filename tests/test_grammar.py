@@ -136,6 +136,3 @@ def templated_fn(a: T):
     tree = lark_parser.parse(code)
     assert tree
     print(tree.pretty())
-
-
-test_constant()

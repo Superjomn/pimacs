@@ -20,3 +20,36 @@ def fib(n: Int) -> Int:
         return n
     return fib(n - 1) + fib(n - 2)
 '''
+
+decorator_case = '''
+@interactive
+def hello(name:Str) -> nil:
+    print("Hello %s", name)
+'''
+
+decorator_case1 = '''
+@some-decorator(100, 200)
+@interactive("P:")
+def hello(name:Str) -> nil:
+    print("Hello %s", name)
+'''
+
+class_case = '''
+class Person:
+    var name: Str
+    var age: Int
+
+    def __init__(self, name: Str, age: Int) -> nil:
+        self.name = name
+        self.age = age
+
+    def get-name(self) -> Str:
+        return self.name
+
+    def get-age(self) -> Int:
+        return self.age
+'''
+
+lisp_symbol_case = '''
+var a :Lisp = %org-mode
+'''

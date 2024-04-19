@@ -92,6 +92,9 @@ class PimacsTransformer(Transformer):
 
         return ir.Block(stmts=stmts, loc=stmts[0].loc)
 
+    def assign_stmt(self, items) -> ir.AssignStmt:
+        return items
+
     def return_stmt(self, items) -> ir.ReturnStmt:
         return ir.ReturnStmt(value=items[0], loc=items[0].loc)
 
@@ -117,6 +120,12 @@ class PimacsTransformer(Transformer):
         return ir.Constant(value=items[0].value, loc=loc)
 
     def variable(self, items) -> ir.VarRef:
+        assert len(items) == 1
+        if isinstance(items[0], ir.VarRef):
+            return items[0]
+        name = items[0].value
+        if name.startswith('%'):
+            return ir.LispVarRef(name=name, loc=ir.Location(self.filename, items[0].line, items[0].column))
         return ir.VarRef(name=items[0].value, loc=ir.Location(self.filename, items[0].line, items[0].column))
 
     def var_decl(self, items) -> ir.VarDecl:
@@ -186,6 +195,41 @@ class PimacsTransformer(Transformer):
 
     def ne(self, items):
         return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.NE, loc=items[0].loc)
+
+    def decorator(self, items):
+        action = None
+        if isinstance(items[0], ir.FuncCall):
+            action: ir.FuncCall = items[0]
+            loc = action.loc
+        else:
+            assert isinstance(items[0].value, str)
+            action: str = items[0].value
+            loc = ir.Location(self.filename, items[0].line, items[0].column)
+
+        return ir.Decorator(action=action, loc=loc)
+
+    def decorated(self, items):
+        decorators: List[ir.Decorator] = items[:-1]
+        func_def: ir.FuncDecl = items[-1]
+        func_def.decorators = decorators
+        return func_def
+
+    def dotted_name(self, items) -> ir.VarRef:
+        return ir.VarRef(name=".".join([x.value for x in items]), loc=ir.Location(self.filename, items[0].line, items[0].column))
+
+    def assign_stmt(self, items):
+        target = items[0]
+        value = items[1]
+        return ir.AssignStmt(target=target, value=value, loc=target.loc)
+
+    def class_def(self, items):
+        name = items[0].value
+        body = items[1]
+        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        return ir.ClassDef(name=name, body=body, loc=loc)
+
+    def class_body(self, items):
+        return filter(lambda x: x is not None, items)
 
 
 def safe_get(items, index, default):

@@ -14,6 +14,7 @@ file_input: (_NEWLINE | statement)*
             | func_call
             | "pass" -> pass
             | return_stmt
+            | assign_stmt
 
 var_decl: "var" NAME [":" type] ["=" expr]
 let_decl: "let" NAME [":" type] ["=" expr]
@@ -22,15 +23,16 @@ if_stmt: "if" expr ":" block elif_block* else_block?
 elif_block: "elif" expr ":" block
 else_block: "else" ":" block
 
-assign_stmt: NAME "=" expr
+assign_stmt: dotted_name "=" expr
 
 while_loop: "while" expr ":" block
 
 for_loop: "for" NAME "in" expr ":" block
 
 ?decorated: decorator+ (class_def | func_def)
-decorator: "@" ((dotted_name ["(" [call_params] ")"]) | "template" type_placeholder_list) _NEWLINE
-dotted_name: NAME ("." NAME)*
+decorator: "@" (dotted_name | func_call | "template" type_placeholder_list) _NEWLINE
+?dotted_name: NAME ("." NAME)*
+?lisp_name: "%" NAME
 
 // templated_func_def: [template] func_def
 // template: "@template" type_placeholder_list _NEWLINE
@@ -44,7 +46,7 @@ func_arg: NAME [":" type] ["=" expr]
 
 // class related
 class_def: "class" NAME ":" class_body
-class_body: _INDENT statement+ _DEDENT
+class_body: _NEWLINE _INDENT [STRING] (_NEWLINE | statement)+ _DEDENT
 
 // elisp mixing
 elisp_call: "%" "(" elisp_expr ")"
@@ -70,8 +72,9 @@ expr: atom
 atom: NUMBER                   -> number
     | STRING                   -> string
     | true | false             -> bool
+    | dotted_name              -> variable
+    | lisp_name                -> lisp_symbol
     | nil
-    | NAME                     -> variable
     | dict
     | list
     | func_call

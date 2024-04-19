@@ -68,6 +68,7 @@ class VarRef(Expr):
     '''
     decl: Optional[VarDecl] = None
     value: Optional[Expr] = None
+    type: Optional[Type] = None
     name: str = ""
 
     def is_placeholder(self) -> bool:
@@ -76,13 +77,24 @@ class VarRef(Expr):
     def is_ref(self) -> bool:
         return self.decl is not None
 
+    def is_lisp(self) -> bool:
+        return self.name.startswith('%')
+
     def get_type(self) -> Type:
         return self.decl.type
 
     def verify(self):
-        if self.decl is None:
-            raise Exception(f"{self.loc}:\nVariable is not declared")
-        # TODO: varify the SSA
+        pass
+
+
+@dataclass
+class LispVarRef(VarRef):
+    def __init__(self, name: str, loc: Location):
+        self.loc = loc
+        self.name = name[1:]
+
+    def __repr__(self):
+        return f"LispVal({self.name})"
 
 
 @dataclass(slots=True)
@@ -121,11 +133,15 @@ class FuncDecl(Stmt):
     args: List[ArgDecl]
     body: Block
     return_type: Optional[Type] = None
+    decorators: List["Decorator"] = field(default_factory=list)
 
     def verify(self):
         for arg in self.args:
             arg.verify()
         self.body.verify()
+
+        for decorator in self.decorators:
+            decorator.verify()
 
 
 @dataclass(slots=True)
@@ -244,6 +260,34 @@ class ReturnStmt(Stmt):
     def verify(self):
         if self.value is not None:
             self.value.verify()
+
+
+@dataclass(slots=True)
+class Decorator(Stmt):
+    action: FuncCall | str
+
+    def verify(self):
+        self.action.verify()
+
+
+@dataclass(slots=True)
+class AssignStmt(Stmt):
+    target: VarRef
+    value: Expr
+
+    def verify(self):
+        self.target.verify()
+        self.value.verify()
+
+
+@dataclass
+class ClassDef(Stmt):
+    name: str
+    body: List[Stmt]
+
+    def verify(self):
+        for stmt in self.body:
+            stmt.verify()
 
 
 class BinaryOperator(Enum):
