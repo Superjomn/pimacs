@@ -1,6 +1,6 @@
 import pytest
 
-from pimacs.lang.parser import get_lark_parser, get_parser
+from pimacs.lang.parser import get_lark_parser, get_parser, parse
 
 lark_parser = get_lark_parser()
 parser = get_parser()
@@ -19,12 +19,14 @@ def hello-world(name:Str) -> nil:
 
 def test_constant():
     code = '''
-var a: Bool = true
+var a: Bool = nil
 var b = false
-var c = nil'''
+var c = nil
+'''
     for token in lark_parser.lex(code):
         print('token:', repr(token))
     assert lark_parser.parse(code) is not None
+    print(parser.parse(code))
 
 
 def test_function_def():

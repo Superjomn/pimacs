@@ -1,0 +1,45 @@
+# A wrapper for elisp buffer
+let save-current-buffer = %save-current-buffer
+
+let with-current-buffer = %with-current-buffer
+
+let with-temp-buffer = %with-temp-buffer
+
+class Buffer:
+    var buf : Lisp
+
+    @classmethod
+    def get-or-create(cls, name: Str):
+        return cls(%get-buffer-create(name))
+
+    @classmethod
+    def create-new(cls, name: Str):
+        return cls(name)
+
+    def __init__(self, buf: Lisp=nil):
+        self.buf = Buffer.current-buffer() if not buf else buf
+
+    def __init__(self, buf: Str):
+        self.buf = %get-buffer(buf)
+
+    def name(self) -> Str:
+        guard with-current-buffer(self.buf):
+            return Buffer.current-buffer()
+
+    def file-name(self) -> Str:
+        return %buffer-file-name(self.buf)
+
+    def kill(self) -> nil:
+        %kill-buffer(self.buf)
+
+    def modified-p(self) -> Bool:
+        return %buffer-modified-p(self.buf)
+
+    @staticmethod
+    def current-buffer() -> Lisp:
+        "Get the current buffer name."
+        return %current-buffer()
+
+    @staticmethod
+    def buffer-name() -> Str:
+        return %buffer-name()

@@ -9,7 +9,7 @@ from pimacs.lang.type import Type
 
 @dataclass
 class IrNode(ABC):
-    loc: Optional["Location"]
+    loc: Optional["Location"] = field(repr=False)
 
     @abstractmethod
     def verify(self):
@@ -36,9 +36,9 @@ class FileName:
 
 @dataclass(slots=True)
 class Location:
+    filename: FileName
     line: int
     column: int
-    filename: FileName
 
     def __str__(self):
         return f"{self.filename}:{self.line}:{self.column}"
@@ -49,6 +49,8 @@ class VarDecl(Stmt):
     name: str = ""
     type: Optional[Type] = None
     init: Optional[Expr] = None
+    # If not mutable, it is a constant declared by `let`
+    mutable: bool = True
 
     def verify(self):
         if self.type is None and self.init is None:
@@ -59,6 +61,42 @@ class VarDecl(Stmt):
         if self.init is not None and self.type != self.init.get_type():
             raise Exception(
                 f"{self.loc}:\n var declaration type mismatch: type is {self.type} but the init is {self.init.get_type()}")
+
+
+@dataclass(slots=True)
+class VarRef(Expr):
+    ''' A placeholder for a variable.
+    It is used by lexer to represent a variable. Then in the parser, it will be replaced by one with VarDecl and other meta data.
+    '''
+    decl: Optional[VarDecl] = None
+    value: Optional[Expr] = None
+    type: Optional[Type] = None
+    name: str = ""
+
+    def is_placeholder(self) -> bool:
+        return self.name
+
+    def is_ref(self) -> bool:
+        return self.decl is not None
+
+    def is_lisp(self) -> bool:
+        return self.name.startswith('%')
+
+    def get_type(self) -> Type:
+        return self.decl.type
+
+    def verify(self):
+        pass
+
+
+@dataclass
+class LispVarRef(VarRef):
+    def __init__(self, name: str, loc: Location):
+        self.loc = loc
+        self.name = name[1:]
+
+    def __repr__(self):
+        return f"LispVal({self.name})"
 
 
 @dataclass(slots=True)
@@ -76,9 +114,21 @@ class ArgDecl(Stmt):
 @dataclass(slots=True)
 class Block(Stmt):
     stmts: List[Stmt] = field(default_factory=list)
+    doc_string: Optional["DocString"] = None
 
     def verify(self):
         for stmt in self.stmts:
+            stmt.verify()
+        if self.doc_string:
+            self.doc_string.verify()
+
+
+@dataclass(slots=True)
+class File(Stmt):
+    body: List[Stmt]
+
+    def verify(self):
+        for stmt in self.body:
             stmt.verify()
 
 
@@ -88,21 +138,25 @@ class FuncDecl(Stmt):
     args: List[ArgDecl]
     body: Block
     return_type: Optional[Type] = None
+    decorators: List["Decorator"] = field(default_factory=list)
 
     def verify(self):
         for arg in self.args:
             arg.verify()
         self.body.verify()
 
+        for decorator in self.decorators:
+            decorator.verify()
+
 
 @dataclass(slots=True)
 class IfStmt(Stmt):
-    condition: Expr
+    cond: Expr
     then_branch: Block
     else_branch: Optional[Block] = None
 
     def verify(self):
-        self.condition.verify()
+        self.cond.verify()
         self.then_branch.verify()
         if self.else_branch is not None:
             self.else_branch.verify()
@@ -151,6 +205,22 @@ class Constant(Expr):
         pass
 
 
+class BinaryOperator(Enum):
+    ADD = "+"
+    SUB = "-"
+    MUL = "*"
+    DIV = "/"
+    MOD = "%"
+    EQ = "=="
+    NE = "!="
+    LT = "<"
+    LE = "<="
+    GT = ">"
+    GE = ">="
+    AND = "&&"
+    OR = "||"
+
+
 @dataclass(slots=True)
 class BinaryOp(Expr):
     left: Expr
@@ -178,8 +248,25 @@ class BinaryOp(Expr):
         self.right.verify()
 
 
+class UnaryOperator(Enum):
+    NEG = "-"
+    NOT = "not"
+
+
 @dataclass(slots=True)
-class Arg(Expr):
+class UnaryOp(Expr):
+    op: UnaryOperator
+    expr: Expr
+
+    def get_type(self) -> Type:
+        return self.expr.get_type()
+
+    def verify(self):
+        self.expr.verify()
+
+
+@dataclass(slots=True)
+class CallParam(Expr):
     name: str
     value: Expr
 
@@ -193,7 +280,7 @@ class Arg(Expr):
 @dataclass(slots=True)
 class FuncCall(Expr):
     func: FuncDecl | str
-    args: Optional[List[Arg | Expr]] = None
+    args: Optional[List[CallParam | Expr]] = None
 
     def get_type(self) -> Type:
         return self.func.return_type
@@ -204,17 +291,81 @@ class FuncCall(Expr):
             arg.verify()
 
 
-class BinaryOperator(Enum):
-    ADD = "+"
-    SUBTRACT = "-"
-    MULTIPLY = "*"
-    DIVIDE = "/"
-    MODULO = "%"
-    EQUALS = "=="
-    NOT_EQUALS = "!="
-    LESS_THAN = "<"
-    LESS_THAN_EQUALS = "<="
-    GREATER_THAN = ">"
-    GREATER_THAN_EQUALS = ">="
-    AND = "&&"
-    OR = "||"
+@dataclass(slots=True)
+class ReturnStmt(Stmt):
+    value: Optional[Expr] = None
+
+    def verify(self):
+        if self.value is not None:
+            self.value.verify()
+
+
+@dataclass(slots=True)
+class Decorator(Stmt):
+    action: FuncCall | str
+
+    def verify(self):
+        self.action.verify()
+
+
+@dataclass(slots=True)
+class AssignStmt(Stmt):
+    target: VarRef
+    value: Expr
+
+    def verify(self):
+        self.target.verify()
+        self.value.verify()
+
+
+@dataclass
+class ClassDef(Stmt):
+    name: str
+    body: List[Stmt]
+
+    def verify(self):
+        for stmt in self.body:
+            stmt.verify()
+
+
+@dataclass(slots=True)
+class DocString(Stmt):
+    content: str
+
+    def verify(self):
+        pass
+
+
+@dataclass(slots=True)
+class SelectExpr(Expr):
+    cond: Expr
+    true_expr: Expr
+    false_expr: Expr
+
+    def get_type(self) -> Type:
+        if self.then_expr.get_type() == self.else_expr.get_type():
+            return self.then_expr.get_type()
+        raise Exception(
+            f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {self.else_expr.get_type()}")
+
+    def verify(self):
+        self.cond.verify()
+        if self.cond.get_type() != _type.Bool:
+            raise Exception(
+                f"{self.loc}:\nCondition type must be bool, but got {self.cond.get_type()}")
+        if self.then_expr.get_type() != self.else_expr.get_type():
+            raise Exception(
+                f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {self.else_expr.get_type()}")
+
+        self.then_expr.verify()
+        self.else_expr.verify()
+
+
+@dataclass(slots=True)
+class GuardStmt(Stmt):
+    header: FuncCall
+    body: Block
+
+    def verify(self):
+        self.header.verify()
+        self.body.verify()

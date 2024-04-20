@@ -21,6 +21,15 @@ def get_parser(fllename: str = "<pimacs>"):
     return Lark(dsl_grammar, parser='lalr', postlex=PythonIndenter(), transformer=PimacsTransformer(filename=fllename))
 
 
+def parse(code: str | None = None, filename: str = "<pimacs>"):
+    if code is None:
+        code = open(filename).read()
+
+    parser = get_parser(filename)
+    stmts = parser.parse(code)
+    return ir.File(body=stmts, loc=ir.Location(ir.FileName(filename), 0, 0))
+
+
 class PimacsTransformer(Transformer):
     def __init__(self, filename: str):
         self.filename = ir.FileName(filename)
@@ -29,22 +38,34 @@ class PimacsTransformer(Transformer):
         return items
 
     def func_def(self, items):
-        print('func_def:')
-        for i, item in enumerate(items):
-            print(i, repr(item))
-
         name: str = items[0].value
         args: List[ir.ArgDecl] = safe_get(items, 1, [])
+        type = safe_get(items, 2, None)
         block: ir.Block = safe_get(items, 3, None)
         loc = ir.Location(self.filename, items[0].line, items[0].column)
 
         if block is None:
             raise Exception(f"{loc}:\nFunction {name} must have a block")
 
-        return ir.FuncDecl(name=name, args=args, body=block, loc=loc)
+        return ir.FuncDecl(name=name, args=args, body=block,
+                           return_type=type,
+                           loc=loc)
+
+    def func_args(self, items):
+        return items
+
+    def func_arg(self, items) -> ir.ArgDecl:
+        name: str = safe_get(items, 0, None)
+        type_ = safe_get(items, 1, None)
+        default = safe_get(items, 2, None)
+
+        if name:
+            name = name.value
+
+        return ir.ArgDecl(name=name, type=type_, default=default, loc=ir.Location(self.filename, items[0].line, items[0].column))
 
     def func_params(self, items):
-        return items
+        return items[0]
 
     def func_param(self, items):
         name: str = items[0].value
@@ -58,8 +79,11 @@ class PimacsTransformer(Transformer):
 
         return ir.ArgDecl(name=name, type=type, default=default, loc=loc)
 
+    def type_base(self, items):
+        return items[0]
+
     def type(self, items):
-        print('type', items)
+        assert len(items) == 1
         return items[0]
 
     def PRIMITIVE_TYPE(self, items) -> _type.Type:
@@ -73,27 +97,199 @@ class PimacsTransformer(Transformer):
             return ret
         return _type.Type(type_id=_type.TypeId.CUSTOMED, _name=items[0].value)
 
-    def func_call(self, items) -> ir.FuncDecl:
-        name = items[0].value
-        args = items[1]
-        loc = ir.Location(self.filename, items[0].line, items[0].column)
-        return ir.FuncCall(func=name, args=args, loc=loc)
-
     def block(self, items) -> ir.Block:
         stmts = list(filter(lambda x: x is not None, items))
-        return ir.Block(stmts=stmts, loc=stmts[0].loc)
+        doc_string = None
+        if isinstance(items[0], ir.DocString):
+            doc_string = stmts[0]
+            stmts = stmts[1:]
 
-    def args(self, items: List[lark.lexer.Token]) -> List[ir.Arg]:
+        return ir.Block(stmts=stmts, doc_string=doc_string, loc=stmts[0].loc)
+
+    def assign_stmt(self, items) -> ir.AssignStmt:
         return items
 
-    def arg(self, items: List[lark.Tree]) -> ir.Arg:
+    def return_stmt(self, items) -> ir.ReturnStmt:
+        assert len(items) == 2
+        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        if items[1]:
+            return ir.ReturnStmt(value=items[1], loc=loc)
+        return ir.ReturnStmt(value=None, loc=loc)
+
+    def func_call(self, items) -> ir.FuncDecl:
+        if isinstance(items[0], ir.VarRef):
+            name = items[0].name
+            loc = items[0].loc
+        else:
+            name = items[0].value
+            loc = ir.Location(self.filename, items[0].line, items[0].column)
+        assert name
+        args = items[1]
+        return ir.FuncCall(func=name, args=args, loc=loc)
+
+    def func_call_name(self, items) -> str:
+        return items[0]
+
+    def call_param(self, items: List[lark.Tree]) -> ir.CallParam:
         assert len(items) == 1
-        content = items[0].children[0]
-        return ir.Arg(name="", value=content, loc=content.loc)
+        content = items[0][0]
+        return ir.CallParam(name="", value=content, loc=content.loc)
+
+    def call_params(self, items: List[lark.Tree]) -> List[ir.CallParam]:
+        return items[0]
 
     def string(self, items: List[lark.lexer.Token]):
         loc = ir.Location("", items[0].line, items[0].column)
         return ir.Constant(value=items[0].value, loc=loc)
+
+    def variable(self, items) -> ir.VarRef:
+        assert len(items) == 1
+        if isinstance(items[0], ir.VarRef):
+            return items[0]
+        name = items[0].value
+        if name.startswith('%'):
+            return ir.LispVarRef(name=name, loc=ir.Location(self.filename, items[0].line, items[0].column))
+        return ir.VarRef(name=items[0].value, loc=ir.Location(self.filename, items[0].line, items[0].column))
+
+    def var_decl(self, items) -> ir.VarDecl:
+        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        name = items[1].value
+        type = safe_get(items, 2, None)
+        init = safe_get(items, 3, None)
+        return ir.VarDecl(name=name, type=type, init=init, loc=loc)
+
+    def let_decl(self, items) -> ir.VarDecl:
+        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        name = items[1].value
+        type = safe_get(items, 2, None)
+        init = safe_get(items, 3, None)
+        return ir.VarDecl(name=name, type=type, init=init, loc=loc, mutable=False)
+
+    def value_param(self, items):
+        return items
+
+    def expr(self, items):
+        return items[0]
+
+    def number(self, x: List[ir.Constant]):
+        assert len(x) == 1
+        return x[0]
+
+    def NUMBER(self, x):
+        value = float(x) if '.' in x else int(x)
+        return ir.Constant(value=value, loc=ir.Location(self.filename, x.line, x.column))
+
+    def atom(self, items):
+        return items[0]
+
+    def true(self, items):
+        return ir.Constant(value=True, loc=None)
+
+    def false(self, items):
+        return ir.Constant(value=False, loc=None)
+
+    def nil(self, items):
+        return ir.Constant(value=None, loc=None)
+
+    def if_stmt(self, items):
+        cond = items[0]
+        block = items[1]
+        return ir.IfStmt(cond=cond, then_branch=block, loc=cond.loc)
+
+    def add(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.ADD, loc=items[0].loc)
+
+    def sub(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.SUB, loc=items[0].loc)
+
+    def mul(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.MUL, loc=items[0].loc)
+
+    def div(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.DIV, loc=items[0].loc)
+
+    def le(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.LE, loc=items[0].loc)
+
+    def lt(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.LT, loc=items[0].loc)
+
+    def ge(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.GE, loc=items[0].loc)
+
+    def gt(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.GT, loc=items[0].loc)
+
+    def eq(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.EQ, loc=items[0].loc)
+
+    def ne(self, items):
+        return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.NE, loc=items[0].loc)
+
+    def decorator(self, items):
+        action = None
+        if isinstance(items[0], ir.FuncCall):
+            action: ir.FuncCall = items[0]
+            loc = action.loc
+        else:
+            assert isinstance(items[0].value, str)
+            action: str = items[0].value
+            loc = ir.Location(self.filename, items[0].line, items[0].column)
+
+        return ir.Decorator(action=action, loc=loc)
+
+    def decorated(self, items):
+        decorators: List[ir.Decorator] = items[:-1]
+        func_def: ir.FuncDecl = items[-1]
+        func_def.decorators = decorators
+        return func_def
+
+    def dotted_name(self, items) -> ir.VarRef:
+        return ir.VarRef(name=".".join([x.value for x in items]), loc=ir.Location(self.filename, items[0].line, items[0].column))
+
+    def assign_stmt(self, items):
+        target = items[0]
+        value = items[1]
+        return ir.AssignStmt(target=target, value=value, loc=target.loc)
+
+    def class_def(self, items):
+        name = items[0].value
+        body = items[1]
+        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        return ir.ClassDef(name=name, body=body, loc=loc)
+
+    def class_body(self, items):
+        return filter(lambda x: x is not None, items)
+
+    def STRING(self, items):
+        assert isinstance(items, str)
+        return items
+
+    def doc_string(self, items):
+        token = items[0]
+        assert token.value.startswith('"') and token.value.endswith('"')
+        content = token.value[1:-1]
+        return ir.DocString(content=content.strip(), loc=ir.Location(self.filename, token.line, token.column))
+
+    def select_expr(self, items):
+        true_expr = items[0]
+        cond = items[1]
+        false_expr = items[2]
+
+        assert isinstance(cond, ir.Expr)
+        assert isinstance(true_expr, ir.Expr)
+        assert isinstance(false_expr, ir.Expr)
+        return ir.SelectExpr(cond=cond, true_expr=true_expr, false_expr=false_expr, loc=cond.loc)
+
+    def guard_stmt(self, items):
+        func_call = items[0]
+        body = items[1]
+        return ir.GuardStmt(header=func_call, body=body, loc=func_call.loc)
+
+    def not_cond(self, items):
+        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        assert isinstance(items[1], ir.Expr)
+        return ir.UnaryOp(op=ir.UnaryOperator.NOT, expr=items[1], loc=loc)
 
 
 def safe_get(items, index, default):

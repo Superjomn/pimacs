@@ -4,33 +4,37 @@ single_input: _NEWLINE | statement | _NEWLINE
 file_input: (_NEWLINE | statement)*
 
 ?statement: var_decl
-            | func_def
-            | class_def
-            | decorated
-            | if_stmt
-            | while_loop
-            | for_loop
-            | elisp_call
-            | func_call
-            | "pass" -> pass
-            | return_stmt
+          | let_decl
+          | func_def
+          | class_def
+          | decorated
+          | if_stmt
+          | while_loop
+          | for_loop
+          | elisp_call
+          | func_call
+          | "pass" -> pass
+          | return_stmt
+          | assign_stmt
+          | guard_stmt
 
-var_decl: "var" NAME [":" type] ["=" expr]
-let_decl: "let" NAME [":" type] ["=" expr]
+var_decl: VAR NAME [":" type] ["=" expr]
+let_decl: LET NAME [":" type] ["=" expr]
 
 if_stmt: "if" expr ":" block elif_block* else_block?
 elif_block: "elif" expr ":" block
 else_block: "else" ":" block
 
-assign_stmt: NAME "=" expr
+assign_stmt: dotted_name "=" expr
 
 while_loop: "while" expr ":" block
 
 for_loop: "for" NAME "in" expr ":" block
 
 ?decorated: decorator+ (class_def | func_def)
-decorator: "@" ((dotted_name ["(" [args] ")"]) | "template" type_placeholder_list) _NEWLINE
-dotted_name: NAME ("." NAME)*
+decorator: "@" (dotted_name | func_call | "template" type_placeholder_list) _NEWLINE
+?dotted_name: NAME ("." NAME)*
+?lisp_name: "%" NAME
 
 // templated_func_def: [template] func_def
 // template: "@template" type_placeholder_list _NEWLINE
@@ -38,13 +42,18 @@ type_placeholder_list: "[" type_placeholders "]"
 type_placeholders: NAME ("," NAME)*
 
 // function related
-func_def: "def" NAME "(" [func_params] ")" ["->" type] ":" block
-func_params: func_param ("," func_param)*
-func_param: NAME [":" type] ["=" expr]
+func_def: "def" NAME "(" [func_args] ")" ["->" type] ":" block
+func_args: func_arg ("," func_arg)*
+func_arg: NAME [":" type] ["=" expr]
 
 // class related
 class_def: "class" NAME ":" class_body
-class_body: _INDENT statement+ _DEDENT
+class_body: _NEWLINE _INDENT [doc_string] (_NEWLINE | statement)+ _DEDENT
+
+// guard
+guard_stmt: "guard" func_call ":" block
+
+doc_string: STRING
 
 // elisp mixing
 elisp_call: "%" "(" elisp_expr ")"
@@ -52,29 +61,36 @@ elisp_call: "%" "(" elisp_expr ")"
 elisp_special: "temp_buffer" | "provide" | "defcustom" | "defvar"
 elisp_expr: /.+/
 
-block: _NEWLINE _INDENT [STRING] (_NEWLINE | statement)+ _DEDENT
+block: _NEWLINE _INDENT [doc_string] (_NEWLINE | statement)+ _DEDENT
 
 expr: atom
     | expr "+" expr       -> add
-    | expr "-" expr       -> subtract
-    | expr "*" expr       -> multiply
-    | expr "/" expr       -> divide
+    | expr "-" expr       -> sub
+    | expr "*" expr       -> mul
+    | expr "/" expr       -> div
     | expr "==" expr      -> eq
-    | expr "!=" expr      -> neq
+    | expr "!=" expr      -> ne
     | expr ">" expr       -> gt
     | expr ">=" expr      -> ge
     | expr "<" expr       -> lt
     | expr "<=" expr      -> le
     | "(" expr ")"
+    | expr "if" expr "else" expr -> select_expr
+    | NOT expr            -> not_cond
 
 atom: NUMBER                   -> number
     | STRING                   -> string
-    | "true" | "false"         -> bool
-    | "nil"                    -> nil
-    | NAME                     -> variable
+    | true | false             -> bool
+    | dotted_name              -> variable
+    | lisp_name                -> lisp_symbol
+    | nil
     | dict
     | list
     | func_call
+
+true: "true"
+false: "false"
+nil: "nil"
 
 dict: "{"  [pair_list]  "}"
 list: "["  [expr_list]  "]"
@@ -82,20 +98,23 @@ list: "["  [expr_list]  "]"
 expr_list: expr (_NEWLINE | "," [_NEWLINE] expr)* ["," [_NEWLINE]]
 
 
-func_call: NAME "(" args* ")"
-arg: expr | NAME "=" expr
-args: arg ("," arg)*
+func_call: dotted_name "(" [call_params] ")"
+call_param: expr                -> value_param
+          | call_param_name "=" expr       -> key_value_param
+call_params: call_param ("," call_param)*
+call_param_name: NAME
+func_call_name: NAME
 
-return_stmt: "return" [expr]
-
+return_stmt: RETURN [expr]
 
 pair: expr ":" expr
 pair_list: pair (_NEWLINE | "," [_NEWLINE] pair)* ["," [_NEWLINE]]
 
 
-type: PRIMITIVE_TYPE
-     | custom_type
-     | complex_type
+type: type_base ["?"]
+type_base: PRIMITIVE_TYPE
+         | custom_type
+         | complex_type
 variadic_type: type "..."
 basic_type: PRIMITIVE_TYPE | custom_type
 complex_type: NAME "[" type_list "]"
@@ -104,11 +123,15 @@ custom_type: NAME  // Allows for user-defined types, including generics
 
 type_list: type ("," type)*
 
-PRIMITIVE_TYPE: "Int" | "Float" | "Str" | "Bool" | "Dict" | "List" | "Set" | "nil"
+PRIMITIVE_TYPE: "Int" | "Float" | "Str" | "Bool" | "Dict" | "List" | "Set"
 
 NAME: /%?[a-zA-Z_\-\/\+\-][a-zA-Z0-9_\-\/\+\-]*/
 NUMBER: /-?\d+(\.\d+)?/
 STRING: /"(?:\\.|[^"\\])*"/
+RETURN: "return"
+LET: "let"
+VAR: "var"
+NOT: "not"
 
 %import common.WS_INLINE
 
