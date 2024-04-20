@@ -9,7 +9,7 @@ from pimacs.lang.type import Type
 
 @dataclass
 class IrNode(ABC):
-    loc: Optional["Location"]
+    loc: Optional["Location"] = field(repr=False)
 
     @abstractmethod
     def verify(self):
@@ -49,6 +49,8 @@ class VarDecl(Stmt):
     name: str = ""
     type: Optional[Type] = None
     init: Optional[Expr] = None
+    # If not mutable, it is a constant declared by `let`
+    mutable: bool = True
 
     def verify(self):
         if self.type is None and self.init is None:
@@ -112,10 +114,13 @@ class ArgDecl(Stmt):
 @dataclass(slots=True)
 class Block(Stmt):
     stmts: List[Stmt] = field(default_factory=list)
+    doc_string: Optional["DocString"] = None
 
     def verify(self):
         for stmt in self.stmts:
             stmt.verify()
+        if self.doc_string:
+            self.doc_string.verify()
 
 
 @dataclass(slots=True)
@@ -200,6 +205,22 @@ class Constant(Expr):
         pass
 
 
+class BinaryOperator(Enum):
+    ADD = "+"
+    SUB = "-"
+    MUL = "*"
+    DIV = "/"
+    MOD = "%"
+    EQ = "=="
+    NE = "!="
+    LT = "<"
+    LE = "<="
+    GT = ">"
+    GE = ">="
+    AND = "&&"
+    OR = "||"
+
+
 @dataclass(slots=True)
 class BinaryOp(Expr):
     left: Expr
@@ -225,6 +246,23 @@ class BinaryOp(Expr):
     def verify(self):
         self.left.verify()
         self.right.verify()
+
+
+class UnaryOperator(Enum):
+    NEG = "-"
+    NOT = "not"
+
+
+@dataclass(slots=True)
+class UnaryOp(Expr):
+    op: UnaryOperator
+    expr: Expr
+
+    def get_type(self) -> Type:
+        return self.expr.get_type()
+
+    def verify(self):
+        self.expr.verify()
 
 
 @dataclass(slots=True)
@@ -290,17 +328,44 @@ class ClassDef(Stmt):
             stmt.verify()
 
 
-class BinaryOperator(Enum):
-    ADD = "+"
-    SUB = "-"
-    MUL = "*"
-    DIV = "/"
-    MOD = "%"
-    EQ = "=="
-    NE = "!="
-    LT = "<"
-    LE = "<="
-    GT = ">"
-    GE = ">="
-    AND = "&&"
-    OR = "||"
+@dataclass(slots=True)
+class DocString(Stmt):
+    content: str
+
+    def verify(self):
+        pass
+
+
+@dataclass(slots=True)
+class SelectExpr(Expr):
+    cond: Expr
+    true_expr: Expr
+    false_expr: Expr
+
+    def get_type(self) -> Type:
+        if self.then_expr.get_type() == self.else_expr.get_type():
+            return self.then_expr.get_type()
+        raise Exception(
+            f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {self.else_expr.get_type()}")
+
+    def verify(self):
+        self.cond.verify()
+        if self.cond.get_type() != _type.Bool:
+            raise Exception(
+                f"{self.loc}:\nCondition type must be bool, but got {self.cond.get_type()}")
+        if self.then_expr.get_type() != self.else_expr.get_type():
+            raise Exception(
+                f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {self.else_expr.get_type()}")
+
+        self.then_expr.verify()
+        self.else_expr.verify()
+
+
+@dataclass(slots=True)
+class GuardStmt(Stmt):
+    header: FuncCall
+    body: Block
+
+    def verify(self):
+        self.header.verify()
+        self.body.verify()

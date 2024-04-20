@@ -21,7 +21,10 @@ def get_parser(fllename: str = "<pimacs>"):
     return Lark(dsl_grammar, parser='lalr', postlex=PythonIndenter(), transformer=PimacsTransformer(filename=fllename))
 
 
-def parse(code: str, filename: str = "<pimacs>"):
+def parse(code: str | None = None, filename: str = "<pimacs>"):
+    if code is None:
+        code = open(filename).read()
+
     parser = get_parser(filename)
     stmts = parser.parse(code)
     return ir.File(body=stmts, loc=ir.Location(ir.FileName(filename), 0, 0))
@@ -56,6 +59,9 @@ class PimacsTransformer(Transformer):
         type_ = safe_get(items, 1, None)
         default = safe_get(items, 2, None)
 
+        if name:
+            name = name.value
+
         return ir.ArgDecl(name=name, type=type_, default=default, loc=ir.Location(self.filename, items[0].line, items[0].column))
 
     def func_params(self, items):
@@ -73,7 +79,11 @@ class PimacsTransformer(Transformer):
 
         return ir.ArgDecl(name=name, type=type, default=default, loc=loc)
 
+    def type_base(self, items):
+        return items[0]
+
     def type(self, items):
+        assert len(items) == 1
         return items[0]
 
     def PRIMITIVE_TYPE(self, items) -> _type.Type:
@@ -89,19 +99,32 @@ class PimacsTransformer(Transformer):
 
     def block(self, items) -> ir.Block:
         stmts = list(filter(lambda x: x is not None, items))
+        doc_string = None
+        if isinstance(items[0], ir.DocString):
+            doc_string = stmts[0]
+            stmts = stmts[1:]
 
-        return ir.Block(stmts=stmts, loc=stmts[0].loc)
+        return ir.Block(stmts=stmts, doc_string=doc_string, loc=stmts[0].loc)
 
     def assign_stmt(self, items) -> ir.AssignStmt:
         return items
 
     def return_stmt(self, items) -> ir.ReturnStmt:
-        return ir.ReturnStmt(value=items[0], loc=items[0].loc)
+        assert len(items) == 2
+        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        if items[1]:
+            return ir.ReturnStmt(value=items[1], loc=loc)
+        return ir.ReturnStmt(value=None, loc=loc)
 
     def func_call(self, items) -> ir.FuncDecl:
-        name = items[0].value
+        if isinstance(items[0], ir.VarRef):
+            name = items[0].name
+            loc = items[0].loc
+        else:
+            name = items[0].value
+            loc = ir.Location(self.filename, items[0].line, items[0].column)
+        assert name
         args = items[1]
-        loc = ir.Location(self.filename, items[0].line, items[0].column)
         return ir.FuncCall(func=name, args=args, loc=loc)
 
     def func_call_name(self, items) -> str:
@@ -129,11 +152,18 @@ class PimacsTransformer(Transformer):
         return ir.VarRef(name=items[0].value, loc=ir.Location(self.filename, items[0].line, items[0].column))
 
     def var_decl(self, items) -> ir.VarDecl:
-        name = items[0].value
-        type = safe_get(items, 1, None)
-        init = safe_get(items, 2, None)
         loc = ir.Location(self.filename, items[0].line, items[0].column)
+        name = items[1].value
+        type = safe_get(items, 2, None)
+        init = safe_get(items, 3, None)
         return ir.VarDecl(name=name, type=type, init=init, loc=loc)
+
+    def let_decl(self, items) -> ir.VarDecl:
+        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        name = items[1].value
+        type = safe_get(items, 2, None)
+        init = safe_get(items, 3, None)
+        return ir.VarDecl(name=name, type=type, init=init, loc=loc, mutable=False)
 
     def value_param(self, items):
         return items
@@ -230,6 +260,36 @@ class PimacsTransformer(Transformer):
 
     def class_body(self, items):
         return filter(lambda x: x is not None, items)
+
+    def STRING(self, items):
+        assert isinstance(items, str)
+        return items
+
+    def doc_string(self, items):
+        token = items[0]
+        assert token.value.startswith('"') and token.value.endswith('"')
+        content = token.value[1:-1]
+        return ir.DocString(content=content.strip(), loc=ir.Location(self.filename, token.line, token.column))
+
+    def select_expr(self, items):
+        true_expr = items[0]
+        cond = items[1]
+        false_expr = items[2]
+
+        assert isinstance(cond, ir.Expr)
+        assert isinstance(true_expr, ir.Expr)
+        assert isinstance(false_expr, ir.Expr)
+        return ir.SelectExpr(cond=cond, true_expr=true_expr, false_expr=false_expr, loc=cond.loc)
+
+    def guard_stmt(self, items):
+        func_call = items[0]
+        body = items[1]
+        return ir.GuardStmt(header=func_call, body=body, loc=func_call.loc)
+
+    def not_cond(self, items):
+        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        assert isinstance(items[1], ir.Expr)
+        return ir.UnaryOp(op=ir.UnaryOperator.NOT, expr=items[1], loc=loc)
 
 
 def safe_get(items, index, default):

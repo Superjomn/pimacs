@@ -1,4 +1,5 @@
 import logging
+from contextlib import contextmanager
 
 import pimacs.lang.ir as ir
 
@@ -46,12 +47,16 @@ class IRVisitor:
         self.visit(node.action)
 
     def visit_Block(self, node: ir.Block):
+        self.visit(node.doc_string)
         for stmt in node.stmts:
             self.visit(stmt)
 
     def visit_BinaryOp(self, node: ir.BinaryOp):
         self.visit(node.left)
         self.visit(node.right)
+
+    def visit_UnaryOp(self, node: ir.UnaryOp):
+        self.visit(node.expr)
 
     def visit_VarRef(self, node: ir.VarRef):
         pass
@@ -81,6 +86,18 @@ class IRVisitor:
     def visit_LispVarRef(self, node: ir.LispVarRef):
         pass
 
+    def visit_DocString(self, node: ir.DocString):
+        pass
+
+    def visit_SelectExpr(self, node: ir.SelectExpr):
+        self.visit(node.cond)
+        self.visit(node.true_expr)
+        self.visit(node.false_expr)
+
+    def visit_GuardStmt(self, node: ir.GuardStmt):
+        self.visit(node.header)
+        self.visit(node.body)
+
 
 class StringStream:
     def __init__(self) -> None:
@@ -100,7 +117,7 @@ class IRPrinter(IRVisitor):
     def __call__(self, node: ir.IrNode) -> None:
         self.visit(node)
 
-    def print_indent(self) -> None:
+    def put_indent(self) -> None:
         self.os.write(' ' * self._indent * self.indent_width)
 
     def put(self, s: str) -> None:
@@ -113,7 +130,10 @@ class IRPrinter(IRVisitor):
         self._indent -= 1
 
     def visit_VarDecl(self, node: ir.VarDecl):
-        self.put(f"var {node.name}")
+        if node.mutable:
+            self.put(f"var {node.name}")
+        else:
+            self.put(f"let {node.name}")
         if node.type is not None:
             self.put(" :")
             self.visit(node.type)
@@ -132,9 +152,10 @@ class IRPrinter(IRVisitor):
             self.visit(decorator)
             self.put("\n")
 
+        if node.decorators:
+            self.put_indent()
         self.put(f"def {node.name} (")
         if node.args:
-            print(f"args: {node.args}")
             for i, arg in enumerate(node.args):
                 if i > 0:
                     self.put(", ")
@@ -148,8 +169,6 @@ class IRPrinter(IRVisitor):
         self.put(":\n")
 
         self.visit(node.body)
-
-        self.put('\n\n')
 
     def visit_ArgDecl(self, node: ir.ArgDecl):
         self.put(f"{node.name}")
@@ -170,17 +189,26 @@ class IRPrinter(IRVisitor):
         self.put(")")
 
     def visit_Block(self, node: ir.Block):
-        self.indent()
-        for stmt in node.stmts:
-            self.print_indent()
-            self.visit(stmt)
-            self.put("\n")
-        self.deindent()
+        with self.indent_guard():
+            if node.doc_string is not None:
+                self.put_indent()
+                self.visit(node.doc_string)
+                self.put("\n")
+            for stmt in node.stmts:
+                self.put_indent()
+                self.visit(stmt)
+                self.put("\n")
 
     def visit_BinaryOp(self, node: ir.BinaryOp):
         self.visit(node.left)
         self.put(f" {node.op.value} ")
         self.visit(node.right)
+
+    def visit_UnaryOp(self, node: ir.UnaryOp):
+        self.put("(")
+        self.put(f"{node.op.value}")
+        self.visit(node.expr)
+        self.put(")")
 
     def visit_VarRef(self, node: ir.VarRef):
         if node.name is not None:
@@ -207,12 +235,13 @@ class IRPrinter(IRVisitor):
 
     def visit_File(self, node: ir.File):
         for stmt in node.body:
-            self.visit(stmt)
-            if not isinstance(stmt, ir.FuncDecl):
+            if isinstance(stmt, ir.FuncDecl):
                 self.put("\n")
+            self.put_indent()
+            self.visit(stmt)
+            self.put("\n")
 
     def visit_Decorator(self, node: ir.Decorator):
-        self.print_indent()
         if isinstance(node.action, ir.FuncCall):
             self.put(f"@{node.action.func}(")
             if node.action.args:
@@ -233,13 +262,35 @@ class IRPrinter(IRVisitor):
 
     def visit_ClassDef(self, node: ir.ClassDef):
         self.put(f"class {node.name}:\n")
-        self.indent()
-        for stmt in node.body:
-            self.print_indent()
-            self.visit(stmt)
-            if not isinstance(stmt, ir.FuncDecl):
+        with self.indent_guard():
+            for stmt in node.body:
+                if isinstance(stmt, ir.FuncDecl):
+                    self.put("\n")
+                self.put_indent()
+                self.visit(stmt)
                 self.put("\n")
-        self.deindent()
 
     def visit_LispVarRef(self, node: ir.LispVarRef):
         self.put(f"%{node.name}")
+
+    def visit_DocString(self, node: ir.DocString):
+        self.put(f'"{node.content}"')
+
+    def visit_SelectExpr(self, node: ir.SelectExpr):
+        self.visit(node.true_expr)
+        self.put(" if ")
+        self.visit(node.cond)
+        self.put(" else ")
+        self.visit(node.false_expr)
+
+    def visit_GuardStmt(self, node: ir.GuardStmt):
+        self.put("guard ")
+        self.visit(node.header)
+        self.put(":\n")
+        self.visit(node.body)
+
+    @contextmanager
+    def indent_guard(self):
+        self.indent()
+        yield
+        self.deindent()
