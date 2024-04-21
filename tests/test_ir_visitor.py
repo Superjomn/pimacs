@@ -100,8 +100,7 @@ def hello (name :Str) -> nil:
 def test_printer(snippet_key, target):
     code = snippets[snippet_key]
     printer = IRPrinter(StringIO())
-    file = parse(code)
-    print('file', file)
+    file = parse(code, build_ir=False)
     printer(file)
     output = printer.os.getvalue()
 
@@ -111,9 +110,13 @@ def test_printer(snippet_key, target):
 @pytest.mark.parametrize("file", [BUILTIN_SOURCE_ROOT / "org-element.pis",
                                   BUILTIN_SOURCE_ROOT / "buffer.pis", ])
 def test_parse_file(file: str):
-    file = parse(filename=file)
+    file = parse(filename=file, build_ir=False)
     printer = IRPrinter(StringIO())
     printer(file)
     output = printer.os.getvalue()
 
     print(output)
+
+
+#test_parse_file(BUILTIN_SOURCE_ROOT / "org-element.pis")
+test_parse_file(BUILTIN_SOURCE_ROOT / "buffer.pis")

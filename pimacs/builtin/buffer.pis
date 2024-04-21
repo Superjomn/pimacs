@@ -1,39 +1,139 @@
 # A wrapper for elisp buffer
+
+# alias for several elisp methods
 let save-current-buffer = %save-current-buffer
-
 let with-current-buffer = %with-current-buffer
-
 let with-temp-buffer = %with-temp-buffer
 
 class Buffer:
-    var buf : Lisp
+    var buf: Lisp
 
     @classmethod
     def get-or-create(cls, name: Str):
         return cls(%get-buffer-create(name))
 
     @classmethod
-    def create-new(cls, name: Str):
+    def create(cls, name: Str):
         return cls(name)
 
+    @classmethod
+    def create-from-file(cls, filename: Str) -> Buffer:
+        var buf: Lisp = %get-file-buffer(filename)
+        return cls(buf)
+
     def __init__(self, buf: Lisp=nil):
-        self.buf = Buffer.current-buffer() if not buf else buf
+        self.buf = %current-buffer() if not buf else buf
 
     def __init__(self, buf: Str):
         self.buf = %get-buffer(buf)
 
     def name(self) -> Str:
-        guard with-current-buffer(self.buf):
-            return Buffer.current-buffer()
+        guard %with-current-buffer(self.buf):
+            return %current-buffer()
 
     def file-name(self) -> Str:
         return %buffer-file-name(self.buf)
 
     def kill(self) -> nil:
+        "Kill the buffer."
         %kill-buffer(self.buf)
 
+    def size(self) -> Int:
+        "Get buffer size."
+        guard %with-current-buffer(self.buf):
+            return %buffer-size()
+
+    def point(self) -> Int:
+        guard %with-current-buffer(self.buf):
+            return %point()
+
+    def point-min(self) -> Int:
+        "Mininum accessible value of point in this buffer."
+        guard with-current-buffer(self.buf):
+            return %point-min()
+
+    def point-max(self) -> Int:
+        "Maximum accessible value of point in the buffer."
+        guard with-current-buffer(self.buf):
+            return %point-max()
+
+    def goto-char(self, position: Int) -> nil:
+        "Set point to the position."
+        guard with-current-buffer(self.buf):
+            %goto-char(position)
+
+    def forward-char(self, count: Int?=nil) -> nil:
+        guard with-current-buffer(self.buf):
+            %forward-char(count)
+
+    def backward-char(self, count: Int?=nil):
+        guard with-current-buffer(self.buf):
+            %backward-char(count)
+
+    def forward-word(self, count: Int?=nil):
+        "Move point forward count words."
+        guard with-current-buffer(self.buf):
+            %forward-word(count)
+
+    def backward-word(self, count: Int?=nil):
+        "Move point backward count words."
+        guard with-current-buffer(self.buf):
+            %backward-word(count)
+
+    def goto-beginning(self):
+        "Goto the begining of the buffer."
+        guard with-current-buffer(self.buf):
+            %goto-char(%point-min())
+
+    def goto-end(self):
+        "Goto the end of the buffer."
+        guard with-current-buffer(self.buf):
+            %goto-char(%point-max())
+
+    def goto-beginning-of-line(self, count:Int?=nil):
+        guard with-current-buffer(self.buf):
+            %beginning-of-line(count)
+
+    def goto-end-of-line(self, count:Int?=nil):
+        guard with-current-buffer(self.buf):
+            %end-of-line(count)
+
+    def line-begining-position(self, count:Int?=nil) -> Int:
+        guard with-current-buffer(self.buf):
+            return %beginning-of-line(count)
+
+    def line-end-position(self, count:Int?=nil) -> Int:
+        guard with-current-buffer(self.buf):
+            return %end-of-line(count)
+
+    def forward-line(self, count:Int?=nil):
+        guard with-current-buffer(self.buf):
+            %forward-line(count)
+
+    def backward-line(self, count:Int?=nil):
+        guard with-current-buffer(self.buf):
+            %backward-line(count)
+
+    def count-lines(self, start:Int, end:Int, ignore-invisible-lines:Bool?=nil):
+        guard with-current-buffer(self.buf):
+            %count-lines(start, end, ignore-invisible-lines)
+
+    def count-words(self, start:Int, end:Int):
+        guard with-current-buffer(self.buf):
+            %count-words(start, end)
+
+    def line-number-at-pos(self, pos:Int?=nil, absolute:Bool?=nil) -> Int:
+        guard with-current-buffer(self.buf):
+            return %line-number-at-pos(pos, absolute)
+
+    @property
     def modified-p(self) -> Bool:
+        "Tell whether the buffer is mutable."
         return %buffer-modified-p(self.buf)
+
+    @staticmethod
+    def get(name: Str):
+        return %get-buffer(name)
 
     @staticmethod
     def current-buffer() -> Lisp:
@@ -43,3 +143,8 @@ class Buffer:
     @staticmethod
     def buffer-name() -> Str:
         return %buffer-name()
+
+    @staticmethod
+    def get-file-truename() -> Str:
+        guard with-current-buffer(self.buf):
+            return %buffer-file-truename
