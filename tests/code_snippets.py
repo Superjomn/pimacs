@@ -47,6 +47,7 @@ def hello(name:Str) -> nil:
     print("Hello %s", name)
 '''
 
+
 snippets.func_with_docstring_case = '''
 def hello(name:Str) -> nil:
     "Some docs"

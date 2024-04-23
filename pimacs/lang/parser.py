@@ -19,27 +19,33 @@ def get_lark_parser():
     return Lark(dsl_grammar, parser='lalr', postlex=PythonIndenter())
 
 
-def get_parser(fllename: str = "<pimacs>"):
+def get_parser(code:Optional[str]=None, filename: str = "<pimacs>"):
+    source = ir.PlainCode(code) if code else ir.FileName(filename)
     dsl_grammar = open(os.path.join(
         os.path.dirname(__file__), 'grammar.g')).read()
-    return Lark(dsl_grammar, parser='lalr', postlex=PythonIndenter(), transformer=PimacsTransformer(filename=fllename))
+    return Lark(dsl_grammar, parser='lalr', postlex=PythonIndenter(),
+                transformer=PimacsTransformer(source=source))
 
 
 def parse(code: str | None = None, filename: str = "<pimacs>", build_ir=True):
-    if code is None:
+    if code:
+        source = ir.PlainCode(code)
+        parser = get_parser(code=code)
+    else:
         code = open(filename).read()
+        source = ir.FileName(filename)
+        parser= get_parser(code=None, filename=filename)
 
-    parser = get_parser(filename)
     stmts = parser.parse(code)
-    the_ir = ir.File(stmts=stmts, loc=ir.Location(ir.FileName(filename), 0, 0))
+    the_ir = ir.File(stmts=stmts, loc=ir.Location(source, 0, 0))
     if build_ir:
         the_ir = BuildIR().visit(the_ir)
     return the_ir
 
 
 class PimacsTransformer(Transformer):
-    def __init__(self, filename: str):
-        self.filename = ir.FileName(filename)
+    def __init__(self, source: ir.PlainCode | ir.FileName):
+        self.source = source
 
     def file_input(self, items):
         return items
@@ -49,7 +55,7 @@ class PimacsTransformer(Transformer):
         args: List[ir.ArgDecl] = safe_get(items, 1, [])
         type = safe_get(items, 2, None)
         block: ir.Block = safe_get(items, 3, None)
-        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        loc = ir.Location(self.source, items[0].line, items[0].column)
 
         if block is None:
             raise Exception(f"{loc}:\nFunction {name} must have a block")
@@ -69,7 +75,7 @@ class PimacsTransformer(Transformer):
         if name:
             name = name.value
 
-        return ir.ArgDecl(name=name, type=type_, default=default, loc=ir.Location(self.filename, items[0].line, items[0].column))
+        return ir.ArgDecl(name=name, type=type_, default=default, loc=ir.Location(self.source, items[0].line, items[0].column))
 
     '''
     def func_params(self, items):
@@ -120,7 +126,7 @@ class PimacsTransformer(Transformer):
 
     def return_stmt(self, items) -> ir.ReturnStmt:
         assert len(items) == 2
-        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        loc = ir.Location(self.source, items[0].line, items[0].column)
         if items[1]:
             return ir.ReturnStmt(value=items[1], loc=loc)
         return ir.ReturnStmt(value=None, loc=loc)
@@ -131,7 +137,7 @@ class PimacsTransformer(Transformer):
             loc = items[0].loc
         else:
             name = items[0].value
-            loc = ir.Location(self.filename, items[0].line, items[0].column)
+            loc = ir.Location(self.source, items[0].line, items[0].column)
         assert name
         args = items[1]
         print(f"call args: {args}")
@@ -150,7 +156,7 @@ class PimacsTransformer(Transformer):
         return items
 
     def string(self, items: List[lark.lexer.Token]):
-        loc = ir.Location("", items[0].line, items[0].column)
+        loc = ir.Location(self.source, items[0].line, items[0].column)
         return ir.Constant(value=items[0].value, loc=loc)
 
     def variable(self, items) -> ir.VarRef:
@@ -159,27 +165,26 @@ class PimacsTransformer(Transformer):
             return items[0]
         name = items[0].value
         if name.startswith('%'):
-            return ir.LispVarRef(name=name, loc=ir.Location(self.filename, items[0].line, items[0].column))
-        return ir.VarRef(name=items[0].value, loc=ir.Location(self.filename, items[0].line, items[0].column))
+            return ir.LispVarRef(name=name, loc=ir.Location(self.source, items[0].line, items[0].column))
+        return ir.VarRef(name=items[0].value, loc=ir.Location(self.source, items[0].line, items[0].column))
 
     def var_decl(self, items) -> ir.VarDecl:
-        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        loc = ir.Location(self.source, items[0].line, items[0].column)
         name = items[1].value
         type = safe_get(items, 2, None)
         init = safe_get(items, 3, None)
         node =  ir.VarDecl(name=name, type=type, init=init, loc=loc)
-        self._deduce_var_type(node)
+        #self._deduce_var_type(node)
         return node
 
     def let_decl(self, items) -> ir.VarDecl:
-        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        loc = ir.Location(self.source, items[0].line, items[0].column)
         name = items[1].value
         type = safe_get(items, 2, None)
         init = safe_get(items, 3, None)
 
         node = ir.VarDecl(name=name, type=type, init=init, loc=loc, mutable=False)
-        node = self._deduce_var_type(node)
-        print(f"** let decl {node}")
+        #node = self._deduce_var_type(node)
         return node
 
     def _deduce_var_type(self, var:ir.VarDecl) -> ir.VarDecl:
@@ -222,7 +227,7 @@ class PimacsTransformer(Transformer):
 
     def NUMBER(self, x):
         value = float(x) if '.' in x else int(x)
-        return ir.Constant(value=value, loc=ir.Location(self.filename, x.line, x.column))
+        return ir.Constant(value=value, loc=ir.Location(self.source, x.line, x.column))
 
     def atom(self, items):
         return items[0]
@@ -279,7 +284,7 @@ class PimacsTransformer(Transformer):
         else:
             assert isinstance(items[0].value, str)
             action: str = items[0].value
-            loc = ir.Location(self.filename, items[0].line, items[0].column)
+            loc = ir.Location(self.source, items[0].line, items[0].column)
 
         return ir.Decorator(action=action, loc=loc)
 
@@ -290,7 +295,7 @@ class PimacsTransformer(Transformer):
         return func_def
 
     def dotted_name(self, items) -> ir.VarRef:
-        return ir.VarRef(name=".".join([x.value for x in items]), loc=ir.Location(self.filename, items[0].line, items[0].column))
+        return ir.VarRef(name=".".join([x.value for x in items]), loc=ir.Location(self.source, items[0].line, items[0].column))
 
     def assign_stmt(self, items):
         target = items[0]
@@ -300,7 +305,7 @@ class PimacsTransformer(Transformer):
     def class_def(self, items):
         name = items[0].value
         body = items[1]
-        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        loc = ir.Location(self.source, items[0].line, items[0].column)
         return ir.ClassDef(name=name, body=body, loc=loc)
 
     def class_body(self, items):
@@ -314,7 +319,7 @@ class PimacsTransformer(Transformer):
         token = items[0]
         assert token.value.startswith('"') and token.value.endswith('"')
         content = token.value[1:-1]
-        return ir.DocString(content=content.strip(), loc=ir.Location(self.filename, token.line, token.column))
+        return ir.DocString(content=content.strip(), loc=ir.Location(self.source, token.line, token.column))
 
     def select_expr(self, items):
         true_expr = items[0]
@@ -332,7 +337,7 @@ class PimacsTransformer(Transformer):
         return ir.GuardStmt(header=func_call, body=body, loc=func_call.loc)
 
     def not_cond(self, items):
-        loc = ir.Location(self.filename, items[0].line, items[0].column)
+        loc = ir.Location(self.source, items[0].line, items[0].column)
         assert isinstance(items[1], ir.Expr)
         return ir.UnaryOp(op=ir.UnaryOperator.NOT, value=items[1], loc=loc)
 

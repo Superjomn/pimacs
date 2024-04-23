@@ -42,19 +42,37 @@ class FileName:
 
 
 @dataclass(slots=True)
+class PlainCode:
+    content: str
+
+    def __post_init__(self):
+        assert isinstance(self.content, str)
+
+
+@dataclass(slots=True)
 class Location:
-    filename: FileName
+    source: FileName | PlainCode
     line: int
     column: int
 
+    def __post_init__(self):
+        assert isinstance(self.source, FileName) or isinstance(
+            self.source, PlainCode)
+
     def __str__(self):
-        if os.path.exists(self.filename.filename):
-            file_line = open(self.filename.filename).readlines()[
+        if isinstance(self.source, PlainCode):
+            file_line = self.source.content.splitlines()[
                 self.line - 1].rstrip()
             marker = " " * (self.column - 1) + "^"
-            return f"{self.filename.filename}:{self.line}:{self.column}\n{file_line}\n{marker}"
+            return f"<code>:{self.line}:{self.column}\n{file_line}\n{marker}"
+
+        if os.path.exists(self.source.filename):
+            file_line = open(self.source.filename).readlines()[
+                self.line - 1].rstrip()
+            marker = " " * (self.column - 1) + "^"
+            return f"{self.source.filename}:{self.line}:{self.column}\n{file_line}\n{marker}"
         else:
-            return f"{self.filename.filename}:{self.line}:{self.column}"
+            return f"{self.source.filename}:{self.line}:{self.column}"
 
 
 @dataclass(slots=True)
