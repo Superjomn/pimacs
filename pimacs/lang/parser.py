@@ -329,7 +329,7 @@ class PimacsTransformer(Transformer):
         assert isinstance(cond, ir.Expr)
         assert isinstance(true_expr, ir.Expr)
         assert isinstance(false_expr, ir.Expr)
-        return ir.SelectExpr(cond=cond, true_expr=true_expr, false_expr=false_expr, loc=cond.loc)
+        return ir.SelectExpr(cond=cond, then_expr=true_expr, else_expr=false_expr, loc=cond.loc)
 
     def guard_stmt(self, items):
         func_call = items[0]
@@ -473,8 +473,8 @@ class BuildIR(IRMutator):
     def visit_SelectExpr(self, node: ir.SelectExpr):
         node = super().visit_SelectExpr(node)
         node.cond.add_user(node)
-        node.true_expr.add_user(node)
-        node.false_expr.add_user(node)
+        node.then_expr.add_user(node)
+        node.else_expr.add_user(node)
         return node
 
     def visit_FuncDecl(self, node: ir.FuncDecl):

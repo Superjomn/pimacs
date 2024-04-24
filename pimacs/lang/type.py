@@ -9,6 +9,7 @@ class TypeId(Enum):
     BOOL = 'Bool'
     STRING = 'Str'
     CUSTOMED = 'Customed'
+    Unk = 'Unk'
     NIL = 'nil'
 
 
@@ -40,6 +41,7 @@ Customed = Type(TypeId.CUSTOMED)
 Nil = Type(TypeId.NIL)
 # Lisp type is a special type that is used to represent the type of a lisp object
 LispType = Type(TypeId.CUSTOMED, '__LispObject__')
+Unk = Type(TypeId.Unk)
 
 STR_TO_PRIMITIVE_TYPE = {
     'Int': Int,

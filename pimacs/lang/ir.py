@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, List, Optional
 
 import pimacs.lang.type as _type
-from pimacs.lang.type import Type
+from pimacs.lang.type import Type, TypeId
 
 
 @dataclass
@@ -106,7 +106,7 @@ class VarRef(Expr):
 
     @property
     def is_placeholder(self) -> bool:
-        return self.name
+        return bool(self.name)
 
     @property
     def is_ref(self) -> bool:
@@ -117,6 +117,7 @@ class VarRef(Expr):
         return self.name.startswith('%')
 
     def get_type(self) -> Type:
+        assert self.decl is not None and self.decl.type is not None
         return self.decl.type
 
     def verify(self):
@@ -323,16 +324,17 @@ class BinaryOp(Expr):
             return self.left.get_type()
         # handle type conversion
         type_conversions = {
-            (Type.INT, Type.FLOAT): _type.Float,
-            (Type.FLOAT, Type.INT): _type.Float,
-            (Type.INT, Type.BOOL): _type.Int,
-            (Type.BOOL, Type.INT): _type.Int,
+            (TypeId.INT, TypeId.FLOAT): _type.Float,
+            (TypeId.FLOAT, TypeId.INT): _type.Float,
+            (TypeId.INT, TypeId.BOOL): _type.Int,
+            (TypeId.BOOL, TypeId.INT): _type.Int,
         }
         ret = type_conversions.get(
-            (self.left.get_type(), self.right.get_type()), None)
+            (self.left.get_type().type_id, self.right.get_type().type_id), _type.Unk)
         if ret is None:
             raise Exception(
                 f"{self.loc}:\nType mismatch: {self.left.get_type()} and {self.right.get_type()}")
+        return _type.Unk
 
     def verify(self):
         self.left.verify()
@@ -375,6 +377,8 @@ class FuncCall(Expr):
     args: Optional[List[CallParam | Expr]] = None
 
     def get_type(self) -> Type:
+        assert isinstance(self.func, FuncDecl)
+        assert self.func.return_type is not None
         return self.func.return_type
 
     def verify(self):
@@ -431,8 +435,8 @@ class DocString(Stmt):
 @dataclass(slots=True)
 class SelectExpr(Expr):
     cond: Expr
-    true_expr: Expr
-    false_expr: Expr
+    then_expr: Expr
+    else_expr: Expr
 
     def get_type(self) -> Type:
         if self.then_expr.get_type() == self.else_expr.get_type():

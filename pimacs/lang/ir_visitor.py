@@ -92,8 +92,8 @@ class IRVisitor:
 
     def visit_SelectExpr(self, node: ir.SelectExpr):
         self.visit(node.cond)
-        self.visit(node.true_expr)
-        self.visit(node.false_expr)
+        self.visit(node.then_expr)
+        self.visit(node.else_expr)
 
     def visit_GuardStmt(self, node: ir.GuardStmt):
         self.visit(node.header)
@@ -117,8 +117,8 @@ class IRMutator:
 
     def visit_SelectExpr(self, node: ir.SelectExpr):
         node.cond = self.visit(node.cond)
-        node.true_expr = self.visit(node.true_expr)
-        node.false_expr = self.visit(node.false_expr)
+        node.true_expr = self.visit(node.then_expr)
+        node.false_expr = self.visit(node.else_expr)
         return node
 
     def visit_VarDecl(self, node: ir.VarDecl):
@@ -401,11 +401,11 @@ class IRPrinter(IRVisitor):
         self.put(f'"{node.content}"')
 
     def visit_SelectExpr(self, node: ir.SelectExpr):
-        self.visit(node.true_expr)
+        self.visit(node.then_expr)
         self.put(" if ")
         self.visit(node.cond)
         self.put(" else ")
-        self.visit(node.false_expr)
+        self.visit(node.else_expr)
 
     def visit_GuardStmt(self, node: ir.GuardStmt):
         self.put("guard ")
