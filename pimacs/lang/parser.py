@@ -20,7 +20,7 @@ def get_lark_parser():
 
 
 def get_parser(code:Optional[str]=None, filename: str = "<pimacs>"):
-    source = ir.PlainCode(code) if code else ir.FileName(filename)
+    source : ir.PlainCode | ir.FileName = ir.PlainCode(code) if code else ir.FileName(filename)
     dsl_grammar = open(os.path.join(
         os.path.dirname(__file__), 'grammar.g')).read()
     return Lark(dsl_grammar, parser='lalr', postlex=PythonIndenter(),
@@ -33,7 +33,7 @@ def parse(code: str | None = None, filename: str = "<pimacs>", build_ir=True):
         parser = get_parser(code=code)
     else:
         code = open(filename).read()
-        source = ir.FileName(filename)
+        source = ir.FileName(filename) # type: ignore
         parser= get_parser(code=None, filename=filename)
 
     stmts = parser.parse(code)
@@ -71,9 +71,6 @@ class PimacsTransformer(Transformer):
         name: str = safe_get(items, 0, None)
         type_ = safe_get(items, 1, None)
         default = safe_get(items, 2, None)
-
-        if name:
-            name = name.value
 
         return ir.ArgDecl(name=name, type=type_, default=default, loc=ir.Location(self.source, items[0].line, items[0].column))
 
@@ -121,9 +118,6 @@ class PimacsTransformer(Transformer):
 
         return ir.Block(stmts=stmts, doc_string=doc_string, loc=stmts[0].loc)
 
-    def assign_stmt(self, items) -> ir.AssignStmt:
-        return items
-
     def return_stmt(self, items) -> ir.ReturnStmt:
         assert len(items) == 2
         loc = ir.Location(self.source, items[0].line, items[0].column)
@@ -131,7 +125,7 @@ class PimacsTransformer(Transformer):
             return ir.ReturnStmt(value=items[1], loc=loc)
         return ir.ReturnStmt(value=None, loc=loc)
 
-    def func_call(self, items) -> ir.FuncDecl:
+    def func_call(self, items) -> ir.FuncCall:
         if isinstance(items[0], ir.VarRef):
             name = items[0].name
             loc = items[0].loc
@@ -140,7 +134,6 @@ class PimacsTransformer(Transformer):
             loc = ir.Location(self.source, items[0].line, items[0].column)
         assert name
         args = items[1]
-        print(f"call args: {args}")
         return ir.FuncCall(func=name, args=args, loc=loc)
 
     def func_call_name(self, items) -> str:
@@ -153,10 +146,12 @@ class PimacsTransformer(Transformer):
         return ir.CallParam(name="", value=content, loc=content.loc)
 
     def call_params(self, items: List[lark.Tree]) -> List[ir.CallParam]:
-        return items
+        for item in items:
+            assert isinstance(item, ir.CallParam)
+        return items # type: ignore
 
     def string(self, items: List[lark.lexer.Token]):
-        loc = ir.Location(self.source, items[0].line, items[0].column)
+        loc = ir.Location(self.source, items[0].line, items[0].column) # type: ignore
         return ir.Constant(value=items[0].value, loc=loc)
 
     def variable(self, items) -> ir.VarRef:
@@ -206,7 +201,7 @@ class PimacsTransformer(Transformer):
                 else:
                     raise ValueError(f"{var.loc}\nUnknown constant type {var.init.value}")
             else:
-                var.type =  var.init.type
+                var.type =  var.init.type # type: ignore
 
         return var
 
@@ -367,7 +362,7 @@ class Symbol:
     name: str # the name without "self." prefix if it is a member
     kind: Kind
 
-SymbolItem = ir.FuncDecl | ir.ClassDef | ir.VarDecl | ir.LispVarRef
+SymbolItem = ir.FuncDecl | ir.ClassDef | ir.VarDecl | ir.LispVarRef | ir.ArgDecl
 @dataclass
 class Scope:
     data : Dict[Symbol, SymbolItem] = field(default_factory=dict)
@@ -404,7 +399,7 @@ class SymbolTable:
         return item
 
     def get_symbol(self, symbol:Optional[Symbol]=None, name:Optional[str]=None,
-                   kind:Optional[Symbol.Kind | Set[Symbol.Kind]] =None) -> Optional[Symbol]:
+                   kind:Optional[Symbol.Kind | List[Symbol.Kind]] =None) -> Optional[Symbol]:
         symbols = {symbol}
         if not symbol:
             assert name and kind
@@ -415,6 +410,7 @@ class SymbolTable:
                 ret = scope.get(symbol)
                 if ret:
                     return ret
+        return None
 
     def contains(self, symbol:Symbol) -> bool:
         return any(symbol in scope for scope in reversed(self.scopes))
@@ -452,11 +448,11 @@ class BuildIR(IRMutator):
             var = self.sym_tbl.get_symbol(name=node.name[5:], kind=Symbol.Kind.Member)
             if var is None:
                 raise KeyError(f"{node.loc}\nMember {node.name} is not declared")
-            var = ir.VarRef(decl=var, loc=node.loc)
+            var = ir.VarRef(decl=var, loc=node.loc) # type: ignore
             return var
 
         if sym := self.sym_tbl.get_symbol(name = node.name, kind=[Symbol.Kind.Var, Symbol.Kind.Arg]):
-            var = ir.VarRef(decl=sym, loc=node.loc)
+            var = ir.VarRef(decl=sym, loc=node.loc) # type: ignore
             return sym
         else:
             raise KeyError(f"{node.loc}\nSymbol {node.name} not found")
@@ -530,13 +526,13 @@ class BuildIR(IRMutator):
                 if func.type == _type.LispType:
                     func = ir.VarRef(decl=func, loc=func.loc)
             elif func_name.startswith('%'): # lisp funccall
-                func = func_name # a lisp symbol
+                func = func_name # type: ignore
 
             args = [self.visit(arg) for arg in node.args] if node.args else []
             print(f"** func call {func} {args}")
 
             assert func is not None
-            new_node =  ir.FuncCall(func=func, args=args, loc=node.loc)
+            new_node =  ir.FuncCall(func=func, args=args, loc=node.loc) # type: ignore
             for arg in args:
                 arg.add_user(new_node)
             return new_node

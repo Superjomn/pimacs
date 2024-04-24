@@ -2,18 +2,21 @@ import logging
 from contextlib import contextmanager
 
 import pimacs.lang.ir as ir
+import pimacs.lang.type as _type
 
 
 class IRVisitor:
-    def visit(self, node: ir.IrNode):
+    def visit(self, node: ir.IrNode | _type.Type | str | None):
         if node is None:
             return
+        if node is str:
+            return node
         logging.debug(f"Visiting {node.__class__.__name__}: {node}")
         method_name = f"visit_{node.__class__.__name__}"
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
-    def generic_visit(self, node: ir.IrNode):
+    def generic_visit(self, node: ir.IrNode | _type.Type | str):
         raise Exception(f"No visit_{node.__class__.__name__} method")
 
     def visit_FileName(self, node: ir.FileName):
@@ -101,7 +104,7 @@ class IRVisitor:
 
 
 class IRMutator:
-    def visit(self, node: ir.IrNode):
+    def visit(self, node: ir.IrNode | _type.Type | str | None):
         if node is None:
             return
         logging.debug(f"Visiting {node.__class__.__name__}: {node}")
@@ -109,7 +112,7 @@ class IRMutator:
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
-    def generic_visit(self, node: ir.IrNode):
+    def generic_visit(self, node: ir.IrNode | _type.Type | str):
         raise Exception(f"No visit_{node.__class__.__name__} method")
 
     def visit_FileName(self, node: ir.FileName):
@@ -117,8 +120,12 @@ class IRMutator:
 
     def visit_SelectExpr(self, node: ir.SelectExpr):
         node.cond = self.visit(node.cond)
-        node.true_expr = self.visit(node.then_expr)
-        node.false_expr = self.visit(node.else_expr)
+        node.then_expr = self.visit(node.then_expr)
+        node.else_expr = self.visit(node.else_expr)
+        return node
+
+    def visit_CallParam(self, node: ir.CallParam):
+        node.value = self.visit(node.value)
         return node
 
     def visit_VarDecl(self, node: ir.VarDecl):
@@ -308,9 +315,6 @@ class IRPrinter(IRVisitor):
                 self.visit(arg)
         self.put(")")
 
-    def visit_CallParam(self, node: ir.CallParam):
-        node.value = self.visit(node.value)
-        return node
 
     def visit_Block(self, node: ir.Block):
         with self.indent_guard():
