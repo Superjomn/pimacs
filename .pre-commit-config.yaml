@@ -12,11 +12,6 @@ repos:
     hooks:
     - id: clang-format
 
--   repo: https://github.com/pre-commit/mirrors-autopep8
-    rev: ''
-    hooks:
-    - id: autopep8
-
 -   repo: https://github.com/pycqa/isort
     rev: ''
     hooks:

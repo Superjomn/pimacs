@@ -8,7 +8,7 @@ class IRVisitor:
     def visit(self, node: ir.IrNode):
         if node is None:
             return
-        logging.warning(f"Visiting {node.__class__.__name__}: {node}")
+        logging.debug(f"Visiting {node.__class__.__name__}: {node}")
         method_name = f"visit_{node.__class__.__name__}"
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
@@ -24,7 +24,8 @@ class IRVisitor:
         self.visit(node.init)
 
     def visit_Constant(self, node: ir.Constant):
-        self.visit(node.value)
+        if node.value is not None:
+            self.visit(node.value)
 
     def visit_int(self, node: int):
         pass
@@ -56,7 +57,7 @@ class IRVisitor:
         self.visit(node.right)
 
     def visit_UnaryOp(self, node: ir.UnaryOp):
-        self.visit(node.expr)
+        self.visit(node.value)
 
     def visit_VarRef(self, node: ir.VarRef):
         pass
@@ -97,6 +98,112 @@ class IRVisitor:
     def visit_GuardStmt(self, node: ir.GuardStmt):
         self.visit(node.header)
         self.visit(node.body)
+
+
+class IRMutator:
+    def visit(self, node: ir.IrNode):
+        if node is None:
+            return
+        logging.debug(f"Visiting {node.__class__.__name__}: {node}")
+        method_name = f"visit_{node.__class__.__name__}"
+        visitor = getattr(self, method_name, self.generic_visit)
+        return visitor(node)
+
+    def generic_visit(self, node: ir.IrNode):
+        raise Exception(f"No visit_{node.__class__.__name__} method")
+
+    def visit_FileName(self, node: ir.FileName):
+        return node
+
+    def visit_SelectExpr(self, node: ir.SelectExpr):
+        node.cond = self.visit(node.cond)
+        node.true_expr = self.visit(node.true_expr)
+        node.false_expr = self.visit(node.false_expr)
+        return node
+
+    def visit_VarDecl(self, node: ir.VarDecl):
+        node.type = self.visit(node.type)
+        node.init = self.visit(node.init)
+        return node
+
+    def visit_Constant(self, node: ir.Constant):
+        if node.value is not None:
+            node.value = self.visit(node.value)
+
+    def visit_int(self, node: int):
+        return node
+
+    def visit_float(self, node: float):
+        return node
+
+    def visit_Type(self, node: ir.Type):
+        return node
+
+    def visit_FuncDecl(self, node: ir.FuncDecl):
+        for i, decorator in enumerate(node.decorators):
+            node.decorators[i] = self.visit(decorator)
+
+        for i, arg in enumerate(node.args):
+            node.args[i] = self.visit(arg)
+        node.body = self.visit(node.body)
+        return node
+
+    def visit_Decorator(self, node: ir.Decorator):
+        return node
+
+    def visit_Block(self, node: ir.Block):
+        node.doc_string = self.visit(node.doc_string)
+        for i, stmt in enumerate(node.stmts):
+            node.stmts[i] = self.visit(stmt)
+        return node
+
+    def visit_BinaryOp(self, node: ir.BinaryOp):
+        node.left = self.visit(node.left)
+        node.right = self.visit(node.right)
+        return node
+
+    def visit_UnaryOp(self, node: ir.UnaryOp):
+        node.value = self.visit(node.value)
+        return node
+
+    def visit_VarRef(self, node: ir.VarRef):
+        return node
+
+    def visit_IfStmt(self, node: ir.IfStmt):
+        node.cond = self.visit(node.cond)
+        node.then_branch = self.visit(node.then_branch)
+        node.else_branch = self.visit(node.else_branch)
+        return node
+
+    def visit_ReturnStmt(self, node: ir.ReturnStmt):
+        node.value = self.visit(node.value)
+        return node
+
+    def visit_File(self, node: ir.File):
+        for i, stmt in enumerate(node.stmts):
+            node.stmts[i] = self.visit(stmt)
+        return node
+
+    def visit_AssignStmt(self, node: ir.AssignStmt):
+        node.target = self.visit(node.target)
+        node.value = self.visit(node.value)
+        return node
+
+    def visit_ClassDef(self, node: ir.ClassDef):
+        for i, stmt in enumerate(node.body):
+            node.body[i] = self.visit(stmt)
+        return node
+
+    def visit_LispVarRef(self, node: ir.LispVarRef):
+        return node
+
+    def visit_DocString(self, node: ir.DocString):
+        return node
+
+    def visit_GuardStmt(self, node: ir.GuardStmt):
+        node.header = self.visit(node.header)
+        node.body = self.visit(node.body)
+        return node
 
 
 class StringStream:
@@ -142,7 +249,10 @@ class IRPrinter(IRVisitor):
             self.visit(node.init)
 
     def visit_Constant(self, node: ir.Constant):
-        self.put(str(node.value))
+        if node.value is not None:
+            self.put(str(node.value))
+        else:
+            self.put("nil")
 
     def visit_Type(self, node: ir.Type):
         self.put(str(node))
@@ -171,6 +281,7 @@ class IRPrinter(IRVisitor):
         self.visit(node.body)
 
     def visit_ArgDecl(self, node: ir.ArgDecl):
+        print(f"** arg decl: {node}")
         self.put(f"{node.name}")
         if node.type is not None:
             self.put(" :")
@@ -180,13 +291,26 @@ class IRPrinter(IRVisitor):
             self.visit(node.default)
 
     def visit_FuncCall(self, node: ir.FuncCall):
-        self.put(f"{node.func}(")
+        if isinstance(node.func, str):
+            self.put(f"{node.func}")
+        elif isinstance(node.func, ir.ArgDecl):
+            self.put(f"{node.func.name}")
+        elif isinstance(node.func, ir.VarRef):
+            self.put(f"{node.func.name}")
+        else:
+            raise Exception(f"{node.loc}\nInvalid function call: {node.func}")
+
+        self.put("(")
         if node.args:
             for i, arg in enumerate(node.args):
                 if i > 0:
                     self.put(", ")
                 self.visit(arg)
         self.put(")")
+
+    def visit_CallParam(self, node: ir.CallParam):
+        node.value = self.visit(node.value)
+        return node
 
     def visit_Block(self, node: ir.Block):
         with self.indent_guard():
@@ -207,7 +331,7 @@ class IRPrinter(IRVisitor):
     def visit_UnaryOp(self, node: ir.UnaryOp):
         self.put("(")
         self.put(f"{node.op.value}")
-        self.visit(node.expr)
+        self.visit(node.value)
         self.put(")")
 
     def visit_VarRef(self, node: ir.VarRef):
@@ -234,7 +358,7 @@ class IRPrinter(IRVisitor):
             self.visit(node.value)
 
     def visit_File(self, node: ir.File):
-        for stmt in node.body:
+        for stmt in node.stmts:
             if isinstance(stmt, ir.FuncDecl):
                 self.put("\n")
             self.put_indent()
@@ -288,6 +412,9 @@ class IRPrinter(IRVisitor):
         self.visit(node.header)
         self.put(":\n")
         self.visit(node.body)
+
+    def visit_CallParam(self, node: ir.CallParam):
+        self.visit(node.value)
 
     @contextmanager
     def indent_guard(self):

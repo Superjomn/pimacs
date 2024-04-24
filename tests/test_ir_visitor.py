@@ -3,6 +3,7 @@ from io import StringIO
 import pytest
 from code_snippets import snippets
 
+import pimacs.lang.ir as ir
 from pimacs import BUILTIN_SOURCE_ROOT, SOURCE_ROOT
 from pimacs.lang.ir_visitor import IRPrinter, IRVisitor
 from pimacs.lang.parser import get_lark_parser, get_parser, parse
@@ -23,7 +24,7 @@ def test_basic():
 
 def test_IRPrinter_func():
     printer = IRPrinter(StringIO())
-    file = parse(snippets.func_case)
+    file = parse(code=snippets.func_case, build_ir=False)
     printer(file)
     output = printer.os.getvalue()
 
@@ -33,7 +34,7 @@ def test_IRPrinter_func():
         '''
 def hello-0 (name :Str) -> nil:
     var a = "Hello " + name
-    print("hello %s")
+    print("hello %s", a)
 
 
 def fib (n :Int) -> Int:
@@ -47,16 +48,17 @@ def fib (n :Int) -> Int:
 @pytest.mark.parametrize("snippet_key, target", [
     ("decorator_case1",
      '''
-@some-decorator(100)
+@some-decorator(100, 200)
 @interactive("P:")
 def hello (name :Str) -> nil:
-    print("Hello %s")
-'''),
+    print("Hello %s", name)
+'''
+     ),
     ("decorator_case",
      '''
 @interactive
 def hello (name :Str) -> nil:
-    print("Hello %s")
+    print("Hello %s", name)
 '''
      ),
 
@@ -100,18 +102,17 @@ def hello (name :Str) -> nil:
 def test_printer(snippet_key, target):
     code = snippets[snippet_key]
     printer = IRPrinter(StringIO())
-    file = parse(code)
-    print('file', file)
+    file = parse(code=code, build_ir=False)
     printer(file)
     output = printer.os.getvalue()
 
     assert output.strip() == target.strip(), "\n"+output
 
 
-@pytest.mark.parametrize("file", [BUILTIN_SOURCE_ROOT / "org-element.pis",
-                                  BUILTIN_SOURCE_ROOT / "buffer.pis", ])
-def test_parse_file(file: str):
-    file = parse(filename=file)
+@pytest.mark.parametrize("filename", [BUILTIN_SOURCE_ROOT / "org-element.pis",
+                                      BUILTIN_SOURCE_ROOT / "buffer.pis", ])
+def test_parse_file(filename: str):
+    file = parse(filename=filename, build_ir=False)
     printer = IRPrinter(StringIO())
     printer(file)
     output = printer.os.getvalue()

@@ -103,7 +103,6 @@ call_param: expr                -> value_param
           | call_param_name "=" expr       -> key_value_param
 call_params: call_param ("," call_param)*
 call_param_name: NAME
-func_call_name: NAME
 
 return_stmt: RETURN [expr]
 

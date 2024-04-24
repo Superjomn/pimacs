@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -10,10 +11,16 @@ from pimacs.lang.type import Type
 @dataclass
 class IrNode(ABC):
     loc: Optional["Location"] = field(repr=False)
+    # The nodes using this node
+    users: List["IrNode"] = field(default_factory=list, repr=False, init=False)
 
     @abstractmethod
     def verify(self):
         pass
+
+    def add_user(self, user: "IrNode"):
+        if user not in self.users:
+            self.users.append(user)
 
 
 @dataclass
@@ -35,13 +42,37 @@ class FileName:
 
 
 @dataclass(slots=True)
+class PlainCode:
+    content: str
+
+    def __post_init__(self):
+        assert isinstance(self.content, str)
+
+
+@dataclass(slots=True)
 class Location:
-    filename: FileName
+    source: FileName | PlainCode
     line: int
     column: int
 
+    def __post_init__(self):
+        assert isinstance(self.source, FileName) or isinstance(
+            self.source, PlainCode)
+
     def __str__(self):
-        return f"{self.filename}:{self.line}:{self.column}"
+        if isinstance(self.source, PlainCode):
+            file_line = self.source.content.splitlines()[
+                self.line - 1].rstrip()
+            marker = " " * (self.column - 1) + "^"
+            return f"<code>:{self.line}:{self.column}\n{file_line}\n{marker}"
+
+        if os.path.exists(self.source.filename):
+            file_line = open(self.source.filename).readlines()[
+                self.line - 1].rstrip()
+            marker = " " * (self.column - 1) + "^"
+            return f"{self.source.filename}:{self.line}:{self.column}\n{file_line}\n{marker}"
+        else:
+            return f"{self.source.filename}:{self.line}:{self.column}"
 
 
 @dataclass(slots=True)
@@ -73,12 +104,15 @@ class VarRef(Expr):
     type: Optional[Type] = None
     name: str = ""
 
+    @property
     def is_placeholder(self) -> bool:
         return self.name
 
+    @property
     def is_ref(self) -> bool:
         return self.decl is not None
 
+    @property
     def is_lisp(self) -> bool:
         return self.name.startswith('%')
 
@@ -94,6 +128,10 @@ class LispVarRef(VarRef):
     def __init__(self, name: str, loc: Location):
         self.loc = loc
         self.name = name[1:]
+        self.type = _type.LispType
+
+    def get_type(self) -> Type:
+        return _type.LispType
 
     def __repr__(self):
         return f"LispVal({self.name})"
@@ -104,6 +142,14 @@ class ArgDecl(Stmt):
     name: str
     type: Optional[Type] = None
     default: Optional[Expr] = None
+
+    class Kind(Enum):
+        normal = 0
+        # For class methods
+        cls_placeholder = 1
+        self_placeholder = 2
+
+    kind: Kind = Kind.normal
 
     def verify(self):
         if self.default is not None and self.type != self.default.get_type():
@@ -125,10 +171,10 @@ class Block(Stmt):
 
 @dataclass(slots=True)
 class File(Stmt):
-    body: List[Stmt]
+    stmts: List[Stmt]
 
     def verify(self):
-        for stmt in self.body:
+        for stmt in self.stmts:
             stmt.verify()
 
 
@@ -140,13 +186,58 @@ class FuncDecl(Stmt):
     return_type: Optional[Type] = None
     decorators: List["Decorator"] = field(default_factory=list)
 
+    class Kind(Enum):
+        Unknown = -1
+        Func = 0
+        Method = 1  # class method
+
+    kind: Kind = field(default=Kind.Func, repr=False)
+
     def verify(self):
         for arg in self.args:
             arg.verify()
         self.body.verify()
 
+        self._verify_decorators_unique()
         for decorator in self.decorators:
             decorator.verify()
+
+        if self.is_staticmethod and self.is_property:
+            raise Exception(
+                f"{self.loc}:\nA method can't be both a staticmethod and a property")
+
+    @property
+    def is_staticmethod(self) -> bool:
+        "Return True if the function is a @staticmethod."
+        for decorator in self.decorators:
+            if decorator.action == "staticmethod":
+                return True
+        return False
+
+    @property
+    def is_property(self) -> bool:
+        "Return True if the function is a @property."
+        for decorator in self.decorators:
+            if decorator.action == "property":
+                return True
+        return False
+
+    @property
+    def is_classmethod(self) -> bool:
+        "Return True if the function is a @classmethod."
+        for decorator in self.decorators:
+            print(f"**decorators: {decorator.action}")
+            if decorator.action == "classmethod":
+                return True
+        return False
+
+    def _verify_decorators_unique(self):
+        seen = set()
+        for decorator in self.decorators:
+            if decorator.action in seen:
+                raise Exception(
+                    f"{self.loc}:\nDuplicate decorator: {decorator.action}")
+            seen.add(decorator.action)
 
 
 @dataclass(slots=True)
@@ -256,13 +347,13 @@ class UnaryOperator(Enum):
 @dataclass(slots=True)
 class UnaryOp(Expr):
     op: UnaryOperator
-    expr: Expr
+    value: Expr
 
     def get_type(self) -> Type:
-        return self.expr.get_type()
+        return self.value.get_type()
 
     def verify(self):
-        self.expr.verify()
+        self.value.verify()
 
 
 @dataclass(slots=True)
@@ -279,7 +370,8 @@ class CallParam(Expr):
 
 @dataclass(slots=True)
 class FuncCall(Expr):
-    func: FuncDecl | str
+    # ArgDecl as func for self/cls placeholder cases
+    func: FuncDecl | str | ArgDecl
     args: Optional[List[CallParam | Expr]] = None
 
     def get_type(self) -> Type:
