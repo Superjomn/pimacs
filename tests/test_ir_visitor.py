@@ -118,11 +118,3 @@ def test_parse_file(filename: str):
     output = printer.os.getvalue()
 
     print(output)
-
-
-test_parse_file(BUILTIN_SOURCE_ROOT / "org-element.pis")
-#test_parse_file(BUILTIN_SOURCE_ROOT / "buffer.pis")
-
-
-# test_IRPrinter_func()
-#test_printer("decorator_case1", '')
