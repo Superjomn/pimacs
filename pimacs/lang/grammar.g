@@ -21,9 +21,9 @@ file_input: (_NEWLINE | statement)*
 var_decl: VAR NAME [":" type] ["=" expr]
 let_decl: LET NAME [":" type] ["=" expr]
 
-if_stmt: "if" expr ":" block elif_block* else_block?
-elif_block: "elif" expr ":" block
-else_block: "else" ":" block
+if_stmt: IF expr ":" block elif_block* else_block?
+elif_block: ELIF expr ":" block
+else_block: ELSE ":" block
 
 assign_stmt: dotted_name "=" expr
 
@@ -131,6 +131,9 @@ RETURN: "return"
 LET: "let"
 VAR: "var"
 NOT: "not"
+IF: "if"
+ELIF: "elif"
+ELSE: "else"
 
 %import common.WS_INLINE
 

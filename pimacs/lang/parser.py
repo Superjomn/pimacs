@@ -2,6 +2,7 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
+from pprint import pprint
 from typing import Dict, List, Optional, Set
 
 import lark
@@ -237,9 +238,24 @@ class PimacsTransformer(Transformer):
         return ir.Constant(value=None, loc=None)
 
     def if_stmt(self, items):
-        cond = items[0]
-        block = items[1]
-        return ir.IfStmt(cond=cond, then_branch=block, loc=cond.loc)
+        loc = ir.Location(self.source, items[0].line, items[0].column)
+        cond = items[1]
+        then_block = items[2]
+
+        elif_blocks = []
+        else_block = None
+        for i in range(3, len(items)):
+            rule: lark.tree.Tree = items[i]
+            rule_kind:str = items[i].data
+
+            if rule_kind == 'else_block':
+                else_block = rule.children[1]
+            elif rule_kind == 'elif_block':
+                elif_cond = rule.children[1]
+                elif_block = rule.children[2]
+                elif_blocks.append((elif_cond, elif_block))
+
+        return ir.IfStmt(cond=cond, then_branch=then_block, elif_branches=elif_blocks, else_branch=else_block, loc=loc)
 
     def add(self, items):
         return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.ADD, loc=items[0].loc)
@@ -529,7 +545,6 @@ class BuildIR(IRMutator):
                 func = func_name # type: ignore
 
             args = [self.visit(arg) for arg in node.args] if node.args else []
-            print(f"** func call {func} {args}")
 
             assert func is not None
             new_node =  ir.FuncCall(func=func, args=args, loc=node.loc) # type: ignore

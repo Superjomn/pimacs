@@ -22,5 +22,7 @@ def basic-if-else(v: Int):
     # CHECK: elif v < 10:
     elif v < 10:
         %message("0 < v < 10")
+    # CHECK: else:
     else:
+    # CHECK-NEXT: %message("v >= 10")
         %message("v >= 10")

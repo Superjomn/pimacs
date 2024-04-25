@@ -69,6 +69,9 @@ class IRVisitor:
         self.visit(node.cond)
         if node.then_branch is not None:
             self.visit(node.then_branch)
+        for (cond, block) in node.elif_branches:
+            self.visit(cond)
+            self.visit(block)
         if node.else_branch is not None:
             self.visit(node.else_branch)
 
@@ -179,6 +182,10 @@ class IRMutator:
     def visit_IfStmt(self, node: ir.IfStmt):
         node.cond = self.visit(node.cond)
         node.then_branch = self.visit(node.then_branch)
+        elif_branches = []
+        for cond, block in node.elif_branches:
+            elif_branches.append((self.visit(cond), self.visit(block)))
+
         node.else_branch = self.visit(node.else_branch)
         return node
 
@@ -288,7 +295,6 @@ class IRPrinter(IRVisitor):
         self.visit(node.body)
 
     def visit_ArgDecl(self, node: ir.ArgDecl):
-        print(f"** arg decl: {node}")
         self.put(f"{node.name}")
         if node.type is not None:
             self.put(" :")
@@ -351,7 +357,14 @@ class IRPrinter(IRVisitor):
         self.visit(node.cond)
         self.put(":\n")
         self.visit(node.then_branch)
+        for (cond, block) in node.elif_branches:
+            self.put_indent()
+            self.put("elif ")
+            self.visit(cond)
+            self.put(":\n")
+            self.visit(block)
         if node.else_branch is not None:
+            self.put_indent()
             self.put("else:\n")
             self.visit(node.else_branch)
 

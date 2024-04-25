@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 import pimacs.lang.type as _type
 from pimacs.lang.type import Type, TypeId
@@ -245,6 +245,7 @@ class FuncDecl(Stmt):
 class IfStmt(Stmt):
     cond: Expr
     then_branch: Block
+    elif_branches: List[Tuple[Expr, Block]] = field(default_factory=list)
     else_branch: Optional[Block] = None
 
     def verify(self):
