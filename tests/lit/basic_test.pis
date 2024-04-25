@@ -1,0 +1,26 @@
+# CHECK: def foo ():
+def foo():
+    # CHECK-NEXT: var a0 :Int = 0
+    var a0: Int = 0
+    var a1 = 0
+    var a2
+
+# CHECK: def basic-control-flow (a :Int, b :Int) -> Int:
+def basic-control-flow(a:Int, b:Int) -> Int:
+    # CHECK-NEXT: return a if a > b else b
+    return a if a > b else b
+
+# CHECK: def basic-emacs-call (name :Str, age :Int) -> nil:
+def basic-emacs-call(name:Str, age:Int) -> nil:
+    # CHECK-NEXT: %message(%format-string("name: %s, age: %s", name, age))
+    %message(%format-string("name: %s, age: %s", name, age))
+
+# CHECK: def basic-if-else (v :Int):
+def basic-if-else(v: Int):
+    if v < 0:
+        %message("v < 0")
+    # CHECK: elif v < 10:
+    elif v < 10:
+        %message("0 < v < 10")
+    else:
+        %message("v >= 10")
