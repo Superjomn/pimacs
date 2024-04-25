@@ -34,6 +34,12 @@ jobs:
         run: |
           mypy .
 
+      - name: Test with FileCheck
+        run: |
+          export PYTHONPATH=$PWD
+          cd tests/lit
+          ./lit_test.sh
+
       - name: Test with pytest
         run: |
           export PYTHONPATH=$PWD
