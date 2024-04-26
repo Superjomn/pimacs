@@ -69,28 +69,13 @@ class PimacsTransformer(Transformer):
         return items
 
     def func_arg(self, items) -> ir.ArgDecl:
-        name: str = safe_get(items, 0, None)
+        name_token = safe_get(items, 0, None)
+        name = name_token.value if name_token else None
         type_ = safe_get(items, 1, None)
         default = safe_get(items, 2, None)
 
         return ir.ArgDecl(name=name, type=type_, default=default, loc=ir.Location(self.source, items[0].line, items[0].column))
 
-    '''
-    def func_params(self, items):
-        return items[0]
-
-    def func_param(self, items):
-        name: str = items[0].value
-        type = safe_get(items, 1, None)
-        default = safe_get(items, 2, None)
-
-        if type is None:
-            type = _type.Nil
-
-        loc = ir.Location(self.filename, items[0].line, items[0].column)
-
-        return ir.ArgDecl(name=name, type=type, default=default, loc=loc)
-    '''
 
     def type_base(self, items):
         return items[0]
@@ -469,7 +454,7 @@ class BuildIR(IRMutator):
 
         if sym := self.sym_tbl.get_symbol(name = node.name, kind=[Symbol.Kind.Var, Symbol.Kind.Arg]):
             var = ir.VarRef(decl=sym, loc=node.loc) # type: ignore
-            return sym
+            return var
         else:
             raise KeyError(f"{node.loc}\nSymbol {node.name} not found")
 

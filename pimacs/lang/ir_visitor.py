@@ -139,6 +139,10 @@ class IRMutator:
     def visit_Constant(self, node: ir.Constant):
         if node.value is not None:
             node.value = self.visit(node.value)
+        return node
+
+    def visit_str(self, node: str):
+        return node
 
     def visit_int(self, node: int):
         return node
@@ -345,7 +349,7 @@ class IRPrinter(IRVisitor):
         self.put(")")
 
     def visit_VarRef(self, node: ir.VarRef):
-        if node.name is not None:
+        if node.name:
             self.put(node.name)
         elif node.decl is not None:
             self.put(node.decl.name)
