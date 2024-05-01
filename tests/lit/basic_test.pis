@@ -45,9 +45,9 @@ class Fruit:
 
     # CHECK: def __init__ (self, name :Str, size :Str):
     def __init__(self, name:Str, size:Str):
-        # CHECK-NEXT: self.name = name
+        # CHECK-NEXT: self.-name = name
         self.-name = name
-        # CHECK-NEXT: self.size = size
+        # CHECK-NEXT: self.-size = size
         self.-size = size
 
     @property
