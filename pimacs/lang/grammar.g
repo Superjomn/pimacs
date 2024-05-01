@@ -114,9 +114,15 @@ type: type_base ["?"]
 type_base: PRIMITIVE_TYPE
          | custom_type
          | complex_type
+         | list_type
+         | dict_type
+         | set_type
 variadic_type: type "..."
 basic_type: PRIMITIVE_TYPE | custom_type
 complex_type: NAME "[" type_list "]"
+list_type: "[" type "]"
+dict_type: "{" type ":" type "}"
+set_type: "{" type "}"
 
 custom_type: NAME  // Allows for user-defined types, including generics
 

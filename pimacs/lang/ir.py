@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, Union
 
 import pimacs.lang.type as _type
 from pimacs.lang.type import Type, TypeId
@@ -99,7 +99,7 @@ class VarRef(Expr):
     ''' A placeholder for a variable.
     It is used by lexer to represent a variable. Then in the parser, it will be replaced by one with VarDecl and other meta data.
     '''
-    decl: Optional[VarDecl] = None
+    decl: Optional[Union[VarDecl, "ArgDecl"]] = None
     value: Optional[Expr] = None
     type: Optional[Type] = None
     name: str = ""
@@ -178,6 +178,19 @@ class File(Stmt):
         for stmt in self.stmts:
             stmt.verify()
 
+class UnresolvedFuncDecl(Expr):
+    def __init__(self, name: str, loc: Location):
+        self.loc = loc
+        self.name = name
+
+    def get_type(self) -> Type:
+        return _type.Unk
+
+    def verify(self):
+        pass
+
+    def __repr__(self):
+        return f"UnresolvedRef({self.name})"
 
 @dataclass(slots=True)
 class FuncDecl(Stmt):
@@ -466,3 +479,18 @@ class GuardStmt(Stmt):
     def verify(self):
         self.header.verify()
         self.body.verify()
+
+
+@dataclass
+class MemberRef(Expr):
+    obj: VarRef
+    member: VarRef
+
+    def get_type(self) -> Type :
+        if isinstance(self.member, VarRef):
+            return self.member.get_type()
+        return _type.Unk
+
+    def verify(self):
+        self.obj.verify()
+        self.member.verify()

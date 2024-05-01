@@ -5,6 +5,15 @@ def foo():
     var a1 = 0
     var a2
 
+# CHECK: def basic-types ():
+# CHECK-NEXT: var a :[Int]
+# CHECK-NEXT: var b :{Int}
+# CHECK-NEXT: var c :{Str:Int}
+def basic-types():
+    var a: [Int] # list
+    var b: {Int} # set
+    var c: {Str : Int} # dict
+
 # CHECK: def basic-control-flow (a :Int, b :Int) -> Int:
 def basic-control-flow(a:Int, b:Int) -> Int:
     # CHECK-NEXT: return a if a > b else b
@@ -24,5 +33,30 @@ def basic-if-else(v: Int):
         %message("0 < v < 10")
     # CHECK: else:
     else:
-    # CHECK-NEXT: %message("v >= 10")
+        # CHECK-NEXT: %message("v >= 10")
         %message("v >= 10")
+
+# CHECK: class Fruit:
+class Fruit:
+    var -shape: [Int]
+    var -size: Int
+    var -weight: Int
+    var -name: Str
+
+    # CHECK: def __init__ (self, name :Str, size :Str):
+    def __init__(self, name:Str, size:Str):
+        # CHECK-NEXT: self.name = name
+        self.-name = name
+        # CHECK-NEXT: self.size = size
+        self.-size = size
+
+    @property
+    def name(self) -> Str:
+        return self.-name
+
+    @property
+    def size(self) -> Int:
+        return self.-size
+
+# CHECK: let apple = Fruit("Apple", 12)
+let apple = Fruit("Apple", 12)
