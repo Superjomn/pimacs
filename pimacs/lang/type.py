@@ -8,40 +8,68 @@ class TypeId(Enum):
     FLOAT = 'Float'
     BOOL = 'Bool'
     STRING = 'Str'
-    CUSTOMED = 'Customed'
     Unk = 'Unk'
+
+    # coumpound types
+    Set = 'Set'
+    Dict = 'Dict'
+    List = 'List'
+
     NIL = 'nil'
+
+    CUSTOMED = 'Customed'
 
 
 @dataclass(slots=True)
 class TypeBase:
     type_id: TypeId
-    _name: Optional[str] = None
+    name: Optional[str] = None
 
     def __str__(self):
-        return self._name or self.type_id.value
+        return self.name or self.type_id.value
 
 
 @dataclass(slots=True)
 class Type(TypeBase):
-    inner_types: Optional[List["Type"]] = None
+    inner_types: List["Type"] = field(default_factory=list)
 
     def __str__(self) -> str:
         if not self.inner_types:
-            return self._name or self.type_id.value
-        return f"{self._name or self.type_id.name.lower()}[{', '.join(map(str, self.inner_types))}]"
-
+            return self.name or self.type_id.value
+        return f"{self.name or self.type_id.name.lower()}[{', '.join(map(str, self.inner_types))}]"
 
 # Built-in types
 Int = Type(TypeId.INT)
 Float = Type(TypeId.FLOAT)
 Bool = Type(TypeId.BOOL)
 Str = Type(TypeId.STRING)
-Customed = Type(TypeId.CUSTOMED)
 Nil = Type(TypeId.NIL)
+Customed = Type(TypeId.CUSTOMED)
 # Lisp type is a special type that is used to represent the type of a lisp object
 LispType = Type(TypeId.CUSTOMED, '__LispObject__')
 Unk = Type(TypeId.Unk)
+
+@dataclass(slots=True)
+class SetType(Type):
+    type_id: TypeId = field(default=TypeId.Set, init=False)
+
+@dataclass(slots=True)
+class ListType(Type):
+    type_id: TypeId = field(default=TypeId.List, init=False)
+
+@dataclass(slots=True)
+class DictType(Type):
+    type_id: TypeId = field(default=TypeId.Dict, init=False)
+    key_type: Type | None = None
+    value_type: Type | None = None
+
+    def __str__(self) -> str:
+        assert self.key_type is not None
+        assert self.value_type is not None
+        return f"Dict[{self.key_type}, {self.value_type}]"
+
+
+
 
 STR_TO_PRIMITIVE_TYPE = {
     'Int': Int,

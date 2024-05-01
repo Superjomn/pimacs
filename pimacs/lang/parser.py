@@ -69,28 +69,13 @@ class PimacsTransformer(Transformer):
         return items
 
     def func_arg(self, items) -> ir.ArgDecl:
-        name: str = safe_get(items, 0, None)
+        name_token = safe_get(items, 0, None)
+        name = name_token.value if name_token else None
         type_ = safe_get(items, 1, None)
         default = safe_get(items, 2, None)
 
         return ir.ArgDecl(name=name, type=type_, default=default, loc=ir.Location(self.source, items[0].line, items[0].column))
 
-    '''
-    def func_params(self, items):
-        return items[0]
-
-    def func_param(self, items):
-        name: str = items[0].value
-        type = safe_get(items, 1, None)
-        default = safe_get(items, 2, None)
-
-        if type is None:
-            type = _type.Nil
-
-        loc = ir.Location(self.filename, items[0].line, items[0].column)
-
-        return ir.ArgDecl(name=name, type=type, default=default, loc=loc)
-    '''
 
     def type_base(self, items):
         return items[0]
@@ -98,6 +83,26 @@ class PimacsTransformer(Transformer):
     def type(self, items):
         assert len(items) == 1
         return items[0]
+
+    def set_type(self, items):
+        "The type of Set"
+        assert len(items) == 1
+        return _type.SetType(inner_types=items)
+
+    def dict_type(self, items):
+        '''
+        Type of Dict.
+        '''
+        assert len(items) == 2
+        return _type.DictType(key_type=items[0], value_type=items[1])
+
+    def list_type(self, items):
+        '''
+        Type of List.
+        '''
+        assert len(items) == 1
+        return _type.ListType(inner_types=items)
+
 
     def PRIMITIVE_TYPE(self, items) -> _type.Type:
         # This terminal is failed, because it is covered by the custom_type
@@ -108,7 +113,7 @@ class PimacsTransformer(Transformer):
         ret = _type.parse_primitive_type(items[0].value)
         if ret is not None:
             return ret
-        return _type.Type(type_id=_type.TypeId.CUSTOMED, _name=items[0].value)
+        return _type.Type(type_id=_type.TypeId.CUSTOMED, name=items[0].value)
 
     def block(self, items) -> ir.Block:
         stmts = list(filter(lambda x: x is not None, items))
@@ -378,7 +383,7 @@ class Symbol:
     name: str # the name without "self." prefix if it is a member
     kind: Kind
 
-SymbolItem = ir.FuncDecl | ir.ClassDef | ir.VarDecl | ir.LispVarRef | ir.ArgDecl
+SymbolItem = ir.FuncDecl | ir.ClassDef | ir.VarDecl | ir.LispVarRef | ir.ArgDecl | ir.VarRef
 @dataclass
 class Scope:
     data : Dict[Symbol, SymbolItem] = field(default_factory=dict)
@@ -415,7 +420,7 @@ class SymbolTable:
         return item
 
     def get_symbol(self, symbol:Optional[Symbol]=None, name:Optional[str]=None,
-                   kind:Optional[Symbol.Kind | List[Symbol.Kind]] =None) -> Optional[Symbol]:
+                   kind:Optional[Symbol.Kind | List[Symbol.Kind]] =None) -> Optional[SymbolItem]:
         symbols = {symbol}
         if not symbol:
             assert name and kind
@@ -461,15 +466,29 @@ class BuildIR(IRMutator):
         assert self.sym_tbl.current_scope.kind != Scope.Kind.Class
 
         if node.name.startswith('self.'):
-            var = self.sym_tbl.get_symbol(name=node.name[5:], kind=Symbol.Kind.Member)
-            if var is None:
+            # deal with members
+            member = self.sym_tbl.get_symbol(name=node.name[5:], kind=Symbol.Kind.Member)
+            if member is None:
                 raise KeyError(f"{node.loc}\nMember {node.name} is not declared")
-            var = ir.VarRef(decl=var, loc=node.loc) # type: ignore
-            return var
+            var = ir.VarRef(decl=member, loc=node.loc) # type: ignore
+
+            obj = self.sym_tbl.get_symbol(name='self', kind=Symbol.Kind.Arg)
+            assert obj, f"{node.loc}\nself is not found"
+            assert isinstance(obj, ir.ArgDecl)
+            return ir.MemberRef(obj=ir.VarRef(decl=obj, loc=node.loc), member=var, loc=node.loc)
 
         if sym := self.sym_tbl.get_symbol(name = node.name, kind=[Symbol.Kind.Var, Symbol.Kind.Arg]):
-            var = ir.VarRef(decl=sym, loc=node.loc) # type: ignore
-            return sym
+            if isinstance(sym, ir.VarDecl):
+                var = ir.VarRef(decl=sym, loc=node.loc) # type: ignore
+                self.sym_tbl.add_symbol(Symbol(name=node.name, kind=Symbol.Kind.Var), var)
+            elif isinstance(sym, ir.ArgDecl):
+                var = ir.VarRef(decl=sym, loc=node.loc)
+                self.sym_tbl.add_symbol(Symbol(name=node.name, kind=Symbol.Kind.Arg), var)
+            elif isinstance(sym, ir.VarRef):
+                var = sym
+            else:
+                raise ValueError(f"{node.loc}\nUnknown symbol type {sym}")
+            return var
         else:
             raise KeyError(f"{node.loc}\nSymbol {node.name} not found")
 

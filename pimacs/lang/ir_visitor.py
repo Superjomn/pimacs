@@ -105,6 +105,21 @@ class IRVisitor:
         self.visit(node.header)
         self.visit(node.body)
 
+    def visit_MemberRef(self, node: ir.MemberRef):
+        self.visit(node.obj)
+        self.visit(node.member)
+
+    def visit_ListType(self, node: _type.ListType):
+        for inner_type in node.inner_types:
+            self.visit(inner_type)
+    def visit_DictType(self, node: _type.DictType):
+        self.visit(node.key_type)
+        self.visit(node.value_type)
+
+    def visit_SetType(self, node: _type.SetType):
+        for inner_type in node.inner_types:
+            self.visit(inner_type)
+
 
 class IRMutator:
     def visit(self, node: ir.IrNode | _type.Type | str | None):
@@ -139,6 +154,10 @@ class IRMutator:
     def visit_Constant(self, node: ir.Constant):
         if node.value is not None:
             node.value = self.visit(node.value)
+        return node
+
+    def visit_str(self, node: str):
+        return node
 
     def visit_int(self, node: int):
         return node
@@ -218,6 +237,24 @@ class IRMutator:
         node.header = self.visit(node.header)
         node.body = self.visit(node.body)
         return node
+
+    def visit_MemberRef(self, node: ir.MemberRef):
+        node.obj = self.visit(node.obj)
+        node.member = self.visit(node.member)
+
+    def visit_ListType(self, node: _type.ListType):
+        node.inner_types = [self.visit(_) for _ in node.inner_types]
+        return node
+
+    def visit_DictType(self, node: _type.DictType):
+        node.key_type = self.visit(node.key_type)
+        node.value_type = self.visit(node.value_type)
+        return node
+
+    def visit_SetType(self, node: _type.SetType):
+        node.inner_types = [self.visit(_) for _ in node.inner_types]
+        return node
+
 
 
 class StringStream:
@@ -345,7 +382,7 @@ class IRPrinter(IRVisitor):
         self.put(")")
 
     def visit_VarRef(self, node: ir.VarRef):
-        if node.name is not None:
+        if node.name:
             self.put(node.name)
         elif node.decl is not None:
             self.put(node.decl.name)
@@ -432,6 +469,29 @@ class IRPrinter(IRVisitor):
 
     def visit_CallParam(self, node: ir.CallParam):
         self.visit(node.value)
+
+    def visit_MemberRef(self, node: ir.MemberRef):
+        self.visit(node.obj)
+        self.put(".")
+        self.visit(node.member)
+
+    def visit_DictType(self, node: _type.DictType):
+        self.put("{")
+        self.visit(node.key_type)
+        self.put(":")
+        self.visit(node.value_type)
+        self.put("}")
+
+    def visit_ListType(self, node: _type.ListType):
+        self.put("[")
+        self.visit(node.inner_types[0])
+        self.put("]")
+
+    def visit_SetType(self, node: _type.SetType):
+        self.put("{")
+        self.visit(node.inner_types[0])
+        self.put("}")
+
 
     @contextmanager
     def indent_guard(self):
