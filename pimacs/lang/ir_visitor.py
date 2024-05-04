@@ -50,7 +50,7 @@ class IRVisitor:
         self.visit(node.body)
 
     def visit_Decorator(self, node: ir.Decorator):
-        self.visit(node.action)
+        self.visit(node.action) # type: ignore
 
     def visit_Block(self, node: ir.Block):
         self.visit(node.doc_string)
@@ -67,10 +67,6 @@ class IRVisitor:
     def visit_VarRef(self, node: ir.VarRef):
         pass
 
-    def visit_FunCall(self, node: ir.FuncCall):
-        self.visit(node.func)
-        for arg in node.args:
-            self.visit(arg)
 
     def visit_LispFuncCall(self, node: ir.LispFuncCall):
         self.visit(node.func)
@@ -193,6 +189,7 @@ class IRMutator:
     def visit_FuncCall(self, node: ir.FuncCall):
         node.func = self.visit(node.func)
         node.args = [self.visit(_) for _ in node.args]
+        node.type_spec = [self.visit(_) for _ in node.type_spec]
         return node
 
     def visit_LispFuncCall(self, node: ir.LispFuncCall):
@@ -380,6 +377,14 @@ class IRPrinter(IRVisitor):
         else:
             raise Exception(f"{node.loc}\nInvalid function call: {node.func}")
 
+        if node.type_spec:
+            self.put('[')
+            for i, t in enumerate(node.type_spec):
+                if i > 0:
+                    self.put(", ")
+                self.visit(t)
+            self.put(']')
+
         self.put("(")
         for i, arg in enumerate(node.args):
             if i > 0:
@@ -467,6 +472,13 @@ class IRPrinter(IRVisitor):
             self.put(")")
         elif isinstance(node.action, str):
             self.put(f"@{node.action}")
+        elif isinstance(node.action, ir.Template):
+            self.put(f"@template[")
+            for i, t in enumerate(node.action.types):
+                if i > 0:
+                    self.put(", ")
+                self.visit(t)
+            self.put("]")
         else:
             raise Exception(f"Invalid decorator action: {node.action}")
 

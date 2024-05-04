@@ -391,6 +391,7 @@ class FuncCall(Expr):
     # ArgDecl as func for self/cls placeholder cases
     func: Union[FuncDecl, "UnresolvedFuncDecl", str]
     args: List[CallParam | Expr] = field(default_factory=list)
+    type_spec: List[Type] = field(default_factory=list)
 
     def get_type(self) -> Type:
         assert isinstance(self.func, FuncDecl)
@@ -401,6 +402,10 @@ class FuncCall(Expr):
         self.func.verify()
         for arg in self.args:
             arg.verify()
+
+@dataclass(slots=True)
+class Template:
+    types: List[_type.Type]
 
 @dataclass(slots=True)
 class LispFuncCall(Expr):
@@ -448,7 +453,7 @@ class ReturnStmt(Stmt):
 
 @dataclass(slots=True)
 class Decorator(Stmt):
-    action: FuncCall | str
+    action: FuncCall | str | Template
 
     def verify(self):
         self.action.verify()

@@ -68,6 +68,8 @@ class DictType(Type):
         return f"Dict[{self.key_type}, {self.value_type}]"
 
 
+def make_customed(name: str) -> Type:
+    return Type(TypeId.CUSTOMED, name)
 
 
 STR_TO_PRIMITIVE_TYPE = {

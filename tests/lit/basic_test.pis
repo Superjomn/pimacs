@@ -79,3 +79,18 @@ let pub-var = 0
 # CHECK-NEXT: let pub-var-1 = 0
 @pub(tolisp = "basic-module-pub-var")
 let pub-var-1 = 0
+
+# CHECK: @template[T0, T1]
+# CHECK-NEXT: def ty_foo (a :T0, b :T1) -> T0:
+@template[T0, T1]
+def ty_foo(a: T0, b: T1) -> T0:
+    return
+
+# CHECK: let v-of-foo = ty_foo[Int, Float]()
+let v-of-foo = ty_foo[Int, Float]()
+
+# CHECK: @template[T]
+@template[T]
+# CHECK-NEXT: def ty_foo1 () -> T:
+def ty_foo1() -> T:
+    return

@@ -135,7 +135,14 @@ class PimacsTransformer(Transformer):
             return ir.ReturnStmt(value=items[1], loc=loc)
         return ir.ReturnStmt(value=None, loc=loc)
 
+    def type_spec(self, items):
+        return items[0]
+
+    def type_list(self, items):
+        return items
+
     def func_call(self, items) -> ir.FuncCall | ir.LispFuncCall:
+        print('func_call items', items)
         if isinstance(items[0], ir.VarRef):
             name = items[0].name
             loc = items[0].loc
@@ -143,14 +150,22 @@ class PimacsTransformer(Transformer):
             name = items[0].value
             loc = ir.Location(self.source, items[0].line, items[0].column)
 
+        if len(items) == 2:
+            args = items[1]
+            type_spec = []
+        elif len(items) == 3:
+            type_spec = items[1]
+            args = items[2]
+
+        args = args if args else []
+
         if name.startswith('%'):
             assert loc
             func = ir.LispVarRef(name=name, loc=loc)
-            args = items[1] if items[1] else []
+            assert not type_spec
             return ir.LispFuncCall(func=func, args=args, loc=loc)
         else:
-            args = items[1] if items[1] else []
-            return ir.FuncCall(func=name, args=args, loc=loc)
+            return ir.FuncCall(func=name, args=args, loc=loc, type_spec=type_spec)
 
     def lisp_name(self, items):
         raise NotImplementedError()
@@ -314,14 +329,20 @@ class PimacsTransformer(Transformer):
         return ir.BinaryOp(left=items[0], right=items[1], op=ir.BinaryOperator.NE, loc=items[0].loc)
 
     def decorator(self, items):
+        print('items', items)
         action = None
+        args = []
         if isinstance(items[0], ir.FuncCall):
             action: ir.FuncCall = items[0]
             loc = action.loc
-        else:
-            assert isinstance(items[0].value, str)
-            action: str = items[0].value
-            loc = ir.Location(self.source, items[0].line, items[0].column)
+        elif isinstance(items[0], lark.Token):
+            if items[0].value == "template":
+                loc = ir.Location(self.source, items[0].line, items[0].column)
+                action = ir.Template(items[1])
+            else:
+                assert isinstance(items[0].value, str)
+                action: str = items[0].value
+                loc = ir.Location(self.source, items[0].line, items[0].column)
 
         return ir.Decorator(action=action, loc=loc)
 
@@ -378,6 +399,13 @@ class PimacsTransformer(Transformer):
         loc = ir.Location(self.source, items[0].line, items[0].column)
         assert isinstance(items[1], ir.Expr)
         return ir.UnaryOp(op=ir.UnaryOperator.NOT, value=items[1], loc=loc)
+
+    def type_placeholders(self, items):
+        return [_type.make_customed(name=item.value) for item in items]
+
+    def type_placeholder_list(self, items):
+        print(f"type_placeholder_list: {items}")
+        return items[0]
 
 
 def safe_get(items, index, default):

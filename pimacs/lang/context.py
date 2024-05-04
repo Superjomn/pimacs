@@ -77,7 +77,7 @@ class Symbol:
     name: str # the name without "self." prefix if it is a member
     kind: Kind
 
-SymbolItem = ir.FuncDecl | ir.ClassDef | ir.VarDecl | ir.LispVarRef | ir.ArgDecl | ir.VarRef
+SymbolItem = Any
 @dataclass
 class Scope:
     data : Dict[Symbol, SymbolItem] = field(default_factory=dict)
