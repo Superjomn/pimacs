@@ -13,7 +13,7 @@ file_input: (_NEWLINE | statement)*
           | for_loop
           | elisp_call
           | func_call
-          | "pass" -> pass
+          | PASS
           | return_stmt
           | assign_stmt
           | guard_stmt
@@ -31,10 +31,10 @@ while_loop: "while" expr ":" block
 
 for_loop: "for" NAME "in" expr ":" block
 
-?decorated: decorator+ (class_def | func_def)
+?decorated: decorator+ (class_def | func_def | var_decl | let_decl)
 decorator: "@" (dotted_name | func_call | "template" type_placeholder_list) _NEWLINE
 ?dotted_name: NAME ("." NAME)*
-?lisp_name: "%" NAME
+?lisp_name: "%" LISP_NAME
 
 // templated_func_def: [template] func_def
 // template: "@template" type_placeholder_list _NEWLINE
@@ -131,6 +131,7 @@ type_list: type ("," type)*
 PRIMITIVE_TYPE: "Int" | "Float" | "Str" | "Bool" | "Dict" | "List" | "Set"
 
 NAME: /%?[a-zA-Z_\-\/\+\-][a-zA-Z0-9_\-\/\+\-]*/
+LISP_NAME: (":" | "-" | "_" | LETTER | "!" | "?" | "*" | "+" | "/" | "<" | "=" | ">" | "&" | "%" | "$" | "#" | "@") ("-" | "_" | LETTER | DIGIT | "!" | "?" | "*" | "+" | "/" | "<" | "=" | ">" | "&" | "%" | "$" | "#" | "@" | ".")*
 NUMBER: /-?\d+(\.\d+)?/
 STRING: /"(?:\\.|[^"\\])*"/
 RETURN: "return"
@@ -140,8 +141,11 @@ NOT: "not"
 IF: "if"
 ELIF: "elif"
 ELSE: "else"
+PASS: "..."
 
 %import common.WS_INLINE
+%import common.LETTER
+%import common.DIGIT
 
 %ignore COMMENT  // Tells the parser to ignore anything matched by the COMMENT rule
 

@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, ClassVar, List, Optional, Tuple, Union
 
 import pimacs.lang.type as _type
 from pimacs.lang.type import Type, TypeId
@@ -10,9 +10,10 @@ from pimacs.lang.type import Type, TypeId
 
 @dataclass
 class IrNode(ABC):
-    loc: Optional["Location"] = field(repr=False)
+    loc: Optional["Location"] = field(repr=False, compare=False)
     # The nodes using this node
     users: List["IrNode"] = field(default_factory=list, repr=False, init=False)
+    sema_failed: bool = field(default=False, repr=False, init=False)
 
     @abstractmethod
     def verify(self):
@@ -21,6 +22,7 @@ class IrNode(ABC):
     def add_user(self, user: "IrNode"):
         if user not in self.users:
             self.users.append(user)
+
 
 
 @dataclass
@@ -83,6 +85,8 @@ class VarDecl(Stmt):
     # If not mutable, it is a constant declared by `let`
     mutable: bool = True
 
+    decorators : List["Decorator"] = field(default_factory=list)
+
     def verify(self):
         if self.type is None and self.init is None:
             raise Exception(
@@ -99,7 +103,7 @@ class VarRef(Expr):
     ''' A placeholder for a variable.
     It is used by lexer to represent a variable. Then in the parser, it will be replaced by one with VarDecl and other meta data.
     '''
-    decl: Optional[Union[VarDecl, "ArgDecl"]] = None
+    decl: Optional[Union[VarDecl, "ArgDecl", "UnresolvedVarDecl"]] = None
     value: Optional[Expr] = None
     type: Optional[Type] = None
     name: str = ""
@@ -117,8 +121,11 @@ class VarRef(Expr):
         return self.name.startswith('%')
 
     def get_type(self) -> Type:
-        assert self.decl is not None and self.decl.type is not None
-        return self.decl.type
+        if isinstance(self.decl, UnresolvedVarDecl):
+            return self.decl.target_type
+        else:
+            assert self.decl is not None and self.decl.type is not None
+            return self.decl.type
 
     def verify(self):
         pass
@@ -178,19 +185,6 @@ class File(Stmt):
         for stmt in self.stmts:
             stmt.verify()
 
-class UnresolvedFuncDecl(Expr):
-    def __init__(self, name: str, loc: Location):
-        self.loc = loc
-        self.name = name
-
-    def get_type(self) -> Type:
-        return _type.Unk
-
-    def verify(self):
-        pass
-
-    def __repr__(self):
-        return f"UnresolvedRef({self.name})"
 
 @dataclass(slots=True)
 class FuncDecl(Stmt):
@@ -333,17 +327,25 @@ class BinaryOp(Expr):
     op: "BinaryOperator"
     right: Expr
 
-    def get_type(self) -> Type:
-        if self.left.get_type() == self.right.get_type():
-            return self.left.get_type()
-        # handle type conversion
-        type_conversions = {
+    type:Optional[_type.Type] = field(init=False, default=None)
+
+    # handle type conversion
+    type_conversions : ClassVar[Any] = {
             (TypeId.INT, TypeId.FLOAT): _type.Float,
             (TypeId.FLOAT, TypeId.INT): _type.Float,
             (TypeId.INT, TypeId.BOOL): _type.Int,
             (TypeId.BOOL, TypeId.INT): _type.Int,
         }
-        ret = type_conversions.get(
+
+
+    def get_type(self) -> Type:
+        if self.type:
+            return self.type
+
+        if self.left.get_type() == self.right.get_type():
+            return self.left.get_type()
+
+        ret = BinaryOp.type_conversions.get(
             (self.left.get_type().type_id, self.right.get_type().type_id), _type.Unk)
         if ret is None:
             raise Exception(
@@ -387,8 +389,8 @@ class CallParam(Expr):
 @dataclass(slots=True)
 class FuncCall(Expr):
     # ArgDecl as func for self/cls placeholder cases
-    func: FuncDecl | str | ArgDecl
-    args: Optional[List[CallParam | Expr]] = None
+    func: Union[FuncDecl, "UnresolvedFuncDecl", str]
+    args: List[CallParam | Expr] = field(default_factory=list)
 
     def get_type(self) -> Type:
         assert isinstance(self.func, FuncDecl)
@@ -399,6 +401,40 @@ class FuncCall(Expr):
         self.func.verify()
         for arg in self.args:
             arg.verify()
+
+@dataclass(slots=True)
+class LispFuncCall(Expr):
+    ''' Call a lisp function, such as `%format("hello")` or
+
+    ```
+    let format = %format
+    format("hello)
+    ```
+    '''
+
+    func: LispVarRef
+    args: List[CallParam | Expr] = field(default_factory=list)
+
+    def __post_init__(self):
+        assert self.args is not None
+
+    def get_type(self) -> Type:
+        return _type.LispType
+
+    def verify(self):
+        return super().verify()
+
+class LispList(Expr):
+    def __init__(self, items: List[Expr], loc: Location):
+        self.items = items
+        self.loc = loc
+
+    def get_type(self) -> Type:
+        return _type.LispType
+
+    def verify(self):
+        for item in self.items:
+            item.verify()
 
 
 @dataclass(slots=True)
@@ -432,6 +468,8 @@ class AssignStmt(Stmt):
 class ClassDef(Stmt):
     name: str
     body: List[Stmt]
+
+    decorators: List["Decorator"] = field(default_factory=list)
 
     def verify(self):
         for stmt in self.body:
@@ -494,3 +532,27 @@ class MemberRef(Expr):
     def verify(self):
         self.obj.verify()
         self.member.verify()
+
+
+@dataclass(slots=True)
+class UnresolvedFuncDecl(Stmt):
+    name: str
+    return_type: Optional[Type] = None
+
+    def verify(self):
+        pass
+
+@dataclass(slots=True)
+class UnresolvedVarDecl(Stmt):
+    name: str
+    target_type: Type
+
+    def verify(self):
+        pass
+
+@dataclass(slots=True)
+class UnresolvedClassDef(Stmt):
+    name: str
+
+    def verify(self):
+        pass

@@ -7,3 +7,5 @@ function test {
 }
 
 test ./basic_test.pis
+test ./org-element.pis
+test ./buffer.pis
