@@ -19,7 +19,6 @@ class TypeId(Enum):
 
     CUSTOMED = 'Customed'
 
-
 @dataclass(slots=True)
 class TypeBase:
     type_id: TypeId

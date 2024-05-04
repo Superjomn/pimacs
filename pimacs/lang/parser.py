@@ -1,9 +1,10 @@
+import logging
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from pprint import pprint
-from typing import Dict, List, Optional, Set
+from typing import *
 
 import lark
 from lark import Lark, Transformer
@@ -11,7 +12,9 @@ from lark.indenter import PythonIndenter
 
 import pimacs.lang.ir as ir
 import pimacs.lang.type as _type
+from pimacs.lang.context import ModuleCtx, Scope, Symbol, SymbolTable
 from pimacs.lang.ir_visitor import IRMutator, IRVisitor
+from pimacs.lang.sema import Sema, catch_sema_error, report_sema_error
 
 
 def get_lark_parser():
@@ -124,6 +127,7 @@ class PimacsTransformer(Transformer):
 
         return ir.Block(stmts=stmts, doc_string=doc_string, loc=stmts[0].loc)
 
+
     def return_stmt(self, items) -> ir.ReturnStmt:
         assert len(items) == 2
         loc = ir.Location(self.source, items[0].line, items[0].column)
@@ -131,16 +135,28 @@ class PimacsTransformer(Transformer):
             return ir.ReturnStmt(value=items[1], loc=loc)
         return ir.ReturnStmt(value=None, loc=loc)
 
-    def func_call(self, items) -> ir.FuncCall:
+    def func_call(self, items) -> ir.FuncCall | ir.LispFuncCall:
         if isinstance(items[0], ir.VarRef):
             name = items[0].name
             loc = items[0].loc
         else:
             name = items[0].value
             loc = ir.Location(self.source, items[0].line, items[0].column)
-        assert name
-        args = items[1]
-        return ir.FuncCall(func=name, args=args, loc=loc)
+
+        if name.startswith('%'):
+            assert loc
+            func = ir.LispVarRef(name=name, loc=loc)
+            args = items[1] if items[1] else []
+            return ir.LispFuncCall(func=func, args=args, loc=loc)
+        else:
+            args = items[1] if items[1] else []
+            return ir.FuncCall(func=name, args=args, loc=loc)
+
+    def lisp_name(self, items):
+        raise NotImplementedError()
+
+    def lisp_symbol(self, items):
+        return ir.LispVarRef(name=items[0].value, loc=ir.Location(self.source, items[0].line, items[0].column))
 
     def func_call_name(self, items) -> str:
         return items[0]
@@ -216,8 +232,13 @@ class PimacsTransformer(Transformer):
         return ir.CallParam(name="", value=items[0], loc=items[0].loc)
 
     def key_value_param(self, items):
-        raise NotImplementedError()
-        return items
+        assert isinstance(items[0], lark.Tree)
+        tree: lark.Tree = items[0]
+        assert isinstance(tree.children[0], lark.lexer.Token)
+        name:str = tree.children[0].value
+        value = items[1]
+        loc = ir.Location(self.source, tree.children[0].line, tree.children[0].column)
+        return ir.CallParam(name=name, value=value, loc=loc)
 
     def expr(self, items):
         return items[0]
@@ -350,6 +371,7 @@ class PimacsTransformer(Transformer):
     def guard_stmt(self, items):
         func_call = items[0]
         body = items[1]
+
         return ir.GuardStmt(header=func_call, body=body, loc=func_call.loc)
 
     def not_cond(self, items):
@@ -362,94 +384,6 @@ def safe_get(items, index, default):
     if len(items) > index:
         return items[index]
     return default
-
-@dataclass(unsafe_hash=True)
-class Symbol:
-    '''
-    Reprsent any kind of symbol and is comparable.
-    '''
-    class Kind(Enum):
-        Unk = -1
-        Func = 0
-        Class = 1
-        Member = 2 # class member
-        Var = 3 # normal variable
-        Lisp = 4
-        Arg = 5
-
-        def __str__(self):
-            return self.name
-
-    name: str # the name without "self." prefix if it is a member
-    kind: Kind
-
-SymbolItem = ir.FuncDecl | ir.ClassDef | ir.VarDecl | ir.LispVarRef | ir.ArgDecl | ir.VarRef
-@dataclass
-class Scope:
-    data : Dict[Symbol, SymbolItem] = field(default_factory=dict)
-
-    class Kind(Enum):
-        Local = 0
-        Global = 1
-        Class = 2
-        Func = 3
-
-    kind:Kind = Kind.Local
-
-    def add(self, symbol: Symbol, item: SymbolItem):
-        if symbol in self.data:
-            raise KeyError(f"{item.loc}\nSymbol {symbol} already exists")
-        self.data[symbol] = item
-
-    def get(self, symbol: Symbol) -> SymbolItem| None:
-        return self.data.get(symbol, None)
-
-
-class SymbolTable:
-    def __init__(self):
-        self.scopes = [Scope(kind=Scope.Kind.Global)]
-
-    def push_scope(self, kind:Scope.Kind):
-        self.scopes.append(Scope(kind=kind))
-
-    def pop_scope(self):
-        self.scopes.pop()
-
-    def add_symbol(self, symbol:Symbol, item: SymbolItem):
-        self.scopes[-1].add(symbol=symbol, item=item)
-        return item
-
-    def get_symbol(self, symbol:Optional[Symbol]=None, name:Optional[str]=None,
-                   kind:Optional[Symbol.Kind | List[Symbol.Kind]] =None) -> Optional[SymbolItem]:
-        symbols = {symbol}
-        if not symbol:
-            assert name and kind
-            symbols= {Symbol(name=name, kind=kind)} if isinstance(kind, Symbol.Kind) else {Symbol(name=name, kind=k) for k in kind}
-
-        for symbol in symbols:
-            for scope in reversed(self.scopes):
-                ret = scope.get(symbol)
-                if ret:
-                    return ret
-        return None
-
-    def contains(self, symbol:Symbol) -> bool:
-        return any(symbol in scope for scope in reversed(self.scopes))
-
-    def contains_locally(self, symbol:Symbol) -> bool:
-        return self.scopes[-1].get(symbol) is not None
-
-    @property
-    def current_scope(self):
-        return self.scopes[-1]
-
-    @contextmanager
-    def scope_guard(self, kind=Scope.Kind.Local):
-        self.push_scope(kind)
-        try:
-            yield
-        finally:
-            self.pop_scope()
 
 
 class BuildIR(IRMutator):
@@ -473,17 +407,18 @@ class BuildIR(IRMutator):
             var = ir.VarRef(decl=member, loc=node.loc) # type: ignore
 
             obj = self.sym_tbl.get_symbol(name='self', kind=Symbol.Kind.Arg)
-            assert obj, f"{node.loc}\nself is not found"
-            assert isinstance(obj, ir.ArgDecl)
-            return ir.MemberRef(obj=ir.VarRef(decl=obj, loc=node.loc), member=var, loc=node.loc)
+            if not obj:
+                obj = ir.UnresolvedVarDecl(name='self', loc=node.loc, target_type=_type.Unk) # type: ignore
+                catch_sema_error(True, node, f"`self` is not declared")
+            return ir.MemberRef(obj=ir.VarRef(decl=obj, loc=node.loc), member=var, loc=node.loc) # type: ignore
 
         if sym := self.sym_tbl.get_symbol(name = node.name, kind=[Symbol.Kind.Var, Symbol.Kind.Arg]):
             if isinstance(sym, ir.VarDecl):
                 var = ir.VarRef(decl=sym, loc=node.loc) # type: ignore
-                self.sym_tbl.add_symbol(Symbol(name=node.name, kind=Symbol.Kind.Var), var)
+                #self.sym_tbl.add_symbol(Symbol(name=node.name, kind=Symbol.Kind.Var), var)
             elif isinstance(sym, ir.ArgDecl):
                 var = ir.VarRef(decl=sym, loc=node.loc)
-                self.sym_tbl.add_symbol(Symbol(name=node.name, kind=Symbol.Kind.Arg), var)
+                #self.sym_tbl.add_symbol(Symbol(name=node.name, kind=Symbol.Kind.Arg), var)
             elif isinstance(sym, ir.VarRef):
                 var = sym
             else:
@@ -503,9 +438,9 @@ class BuildIR(IRMutator):
 
     def visit_SelectExpr(self, node: ir.SelectExpr):
         node = super().visit_SelectExpr(node)
-        node.cond.add_user(node)
-        node.then_expr.add_user(node)
-        node.else_expr.add_user(node)
+        #node.cond.add_user(node)
+        #node.then_expr.add_user(node)
+        #node.else_expr.add_user(node)
         return node
 
     def visit_FuncDecl(self, node: ir.FuncDecl):
@@ -531,12 +466,28 @@ class BuildIR(IRMutator):
             return_type = self.visit(node.return_type)
             decorators = [self.visit(decorator) for decorator in node.decorators]
             new_node = ir.FuncDecl(name=node.name, args=args, body=body, return_type=return_type, loc=node.loc, decorators=decorators)
-            for arg in args:
-                arg.add_user(arg)
+            #for arg in args:
+                #arg.add_user(arg)
 
             # TODO: add users for the decorators
 
             return self.sym_tbl.add_symbol(symbol, new_node)
+
+    def build_elisp_list(self, items: List[ir.Expr]) -> ir.LispList:
+        ''' Lisp list could be a function call, all the raw lisp code should be wrapped in a lisp list.
+        A LispList could come from the following cases:
+        1. A lisp function call like `%(+ 1 2)`
+        2. A pimacs function call with the function name starts with `%`, such as `%message("hello")`
+        3. A pimacs function call with the function name come from a lisp variable, such as `message = %message; message("hello")`
+        '''
+        func = items[0]
+        loc = items[0].loc
+        assert loc
+        if isinstance(func, ir.LispVarRef):
+            return ir.LispList(items, loc=loc)
+
+        assert NotImplementedError(f"{loc}\nUnknown lisp function call {func}")
+        return ir.LispList(items, loc=loc)
 
     def visit_ClassDef(self, node: ir.ClassDef):
         assert self.sym_tbl.current_scope.kind == Scope.Kind.Global, f"{node.loc}\nClass should be in the global scope"
@@ -544,6 +495,7 @@ class BuildIR(IRMutator):
             symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
             assert not self.sym_tbl.contains_locally(symbol), f"{node.loc}\nClass {node.name} already exists"
             body = [self.visit(stmt) for stmt in node.body]
+
             node = ir.ClassDef(name=node.name, body=body, loc=node.loc)
             return self.sym_tbl.add_symbol(symbol, node)
 
@@ -553,23 +505,36 @@ class BuildIR(IRMutator):
             assert isinstance(func_name, str)
             func = self.sym_tbl.get_symbol(name=func_name, kind=[Symbol.Kind.Func, Symbol.Kind.Arg, Symbol.Kind.Var])
 
-            if not (func_name.startswith('%') or func):
-                assert func, f"{node.loc}\nTarget function {func_name} not found"
-            if isinstance(func, ir.ArgDecl):
-                assert func.kind in (ir.ArgDecl.Kind.cls_placeholder, ir.ArgDecl.Kind.self_placeholder), f"{node.loc}\nArg {func.name} should be a placeholder, but get {func.kind}"
+            if catch_sema_error(not func, node, f"Target function {func_name} not found"):
+                return node
+
             elif isinstance(func, ir.VarDecl):
-                if func.type == _type.LispType:
-                    func = ir.VarRef(decl=func, loc=func.loc)
-            elif func_name.startswith('%'): # lisp funccall
-                func = func_name # type: ignore
+                true_func = BuildIR.get_true_var(func)
+                if isinstance(true_func, ir.LispVarRef):
+                    if isinstance(true_func, ir.LispVarRef):
+                        return ir.LispFuncCall(func=true_func, args=node.args, loc=node.loc)
 
-            args = [self.visit(arg) for arg in node.args] if node.args else []
+                raise ValueError(f"{node.loc}\nUnknown lisp function call {func}")
 
-            assert func is not None
-            new_node =  ir.FuncCall(func=func, args=args, loc=node.loc) # type: ignore
-            for arg in args:
-                arg.add_user(new_node)
-            return new_node
+            else:
+                assert func is not None
+                new_node =  ir.FuncCall(func=func, args=node.args, loc=node.loc) # type: ignore
+                return new_node
+
+    @staticmethod
+    def get_true_var(node: ir.VarDecl | ir.VarRef) -> ir.VarDecl | ir.LispVarRef | ir.ArgDecl | ir.UnresolvedVarDecl | ir.Expr:
+        if isinstance(node, ir.VarDecl) and node.init:
+            return node.init
+        if isinstance(node, ir.VarRef):
+            assert node.decl
+            return node.decl
+        if isinstance(node, ir.LispVarRef):
+            return node
+
+        return node
+
+    def visit_LispFuncCall(self, node: ir.LispFuncCall):
+        return super().visit_LispFuncCall(node)
 
     def visit_Block(self, node: ir.Block):
         with self.sym_tbl.scope_guard():
@@ -589,19 +554,20 @@ class BuildIR(IRMutator):
     def visit_BinaryOp(self, node: ir.BinaryOp):
         node = super().visit_BinaryOp(node)
 
-        node.left.add_user(node)
-        node.right.add_user(node)
+        #node.left.add_user(node)
+        #node.right.add_user(node)
         return node
 
     def visit_UnaryOp(self, node: ir.UnaryOp):
         node = super().visit_UnaryOp(node)
-        node.value.add_user(node)
+        #node.value.add_user(node)
         return node
 
     def visit_CallParam(self, node: ir.CallParam):
         node = super().visit_CallParam(node)
-        node.value.add_user(node)
+        #node.value.add_user(node)
         return node
+
 
 
 

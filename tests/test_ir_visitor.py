@@ -107,14 +107,3 @@ def test_printer(snippet_key, target):
     output = printer.os.getvalue()
 
     assert output.strip() == target.strip(), "\n"+output
-
-
-@pytest.mark.parametrize("filename", [BUILTIN_SOURCE_ROOT / "org-element.pis",
-                                      BUILTIN_SOURCE_ROOT / "buffer.pis", ])
-def test_parse_file(filename: str):
-    file = parse(filename=filename, build_ir=False)
-    printer = IRPrinter(StringIO())
-    printer(file)
-    output = printer.os.getvalue()
-
-    print(output)

@@ -32,14 +32,14 @@ var c = nil
 def test_function_def():
     code = '''
 def hello-world(name:Str):
-    pass
+    return
 
 def hello-world(name:Str, age:Int):
-    pass
+    return
 
 def hello-world(name:Str, age:Int) -> nil:
     # some comment
-    pass
+    return
 
 def hello-world(name:Str, age:Int) -> nil:
     "Some docs"
@@ -54,11 +54,11 @@ def hello-world(name:Str, age:Int) -> nil:
 def test_control_flow():
     code = '''
 if x > 10:
-    pass
+    return
 elif x > 5:
-    pass
+    return
 else:
-    pass
+    return
 
 for i in range(10):
     var b = i * 2
@@ -119,20 +119,23 @@ def test_decorator():
     code = '''
 @decorator
 def hello-world():
-    pass
+    return
 
 @decorator(1, 2, 3)
 @decorator1
 @decorator2
 def hello-world():
-    pass
+    return
 
 @template [ T ]
 def templated_fn(a: T):
-    pass
+    return
 '''
     for token in lark_parser.lex(code):
         print('token:', repr(token))
     tree = lark_parser.parse(code)
     assert tree
     print(tree.pretty())
+
+
+test_function_def()

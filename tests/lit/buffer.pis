@@ -122,6 +122,7 @@ class Buffer:
         guard with-current-buffer(self.buf):
             %count-words(start, end)
 
+    # CHECK: def line-number-at-pos (self, pos :Int = nil, absolute :Bool = nil) -> Int:
     def line-number-at-pos(self, pos:Int?=nil, absolute:Bool?=nil) -> Int:
         guard with-current-buffer(self.buf):
             return %line-number-at-pos(pos, absolute)
