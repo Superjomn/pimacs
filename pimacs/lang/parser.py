@@ -12,10 +12,9 @@ from lark.indenter import PythonIndenter
 
 import pimacs.lang.ir as ir
 import pimacs.lang.type as _type
+from pimacs.lang.context import ModuleCtx, Scope, Symbol, SymbolTable
 from pimacs.lang.ir_visitor import IRMutator, IRVisitor
-
-from .context import ModuleCtx, Scope, Symbol, SymbolTable
-from .sema import Sema, catch_sema_error, report_sema_error
+from pimacs.lang.sema import Sema, catch_sema_error, report_sema_error
 
 
 def get_lark_parser():
