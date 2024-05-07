@@ -219,6 +219,9 @@ class IRMutator:
     def visit_VarRef(self, node: ir.VarRef):
         return node
 
+    def visit_UnresolvedVarRef(self, node: ir.UnresolvedVarRef):
+        return node
+
     def visit_IfStmt(self, node: ir.IfStmt):
         node.cond = self.visit(node.cond)
         node.then_branch = self.visit(node.then_branch)
@@ -502,6 +505,9 @@ class IRPrinter(IRVisitor):
 
     def visit_LispVarRef(self, node: ir.LispVarRef):
         self.put(f"%{node.name}")
+
+    def visit_UnresolvedVarRef(self, node: ir.UnresolvedVarRef):
+        self.put(f"{node.name}")
 
     def visit_DocString(self, node: ir.DocString):
         self.put(f'"{node.content}"')

@@ -103,7 +103,7 @@ class VarRef(Expr):
     ''' A placeholder for a variable.
     It is used by lexer to represent a variable. Then in the parser, it will be replaced by one with VarDecl and other meta data.
     '''
-    decl: Optional[Union[VarDecl, "ArgDecl", "UnresolvedVarDecl"]] = None
+    decl: Optional[Union[VarDecl, "ArgDecl", "UnresolvedVarRef"]] = None
     value: Optional[Expr] = None
     type: Optional[Type] = None
     name: str = ""
@@ -121,7 +121,7 @@ class VarRef(Expr):
         return self.name.startswith('%')
 
     def get_type(self) -> Type:
-        if isinstance(self.decl, UnresolvedVarDecl):
+        if isinstance(self.decl, UnresolvedVarRef):
             return self.decl.target_type
         else:
             assert self.decl is not None and self.decl.type is not None
@@ -548,12 +548,15 @@ class UnresolvedFuncDecl(Stmt):
         pass
 
 @dataclass(slots=True)
-class UnresolvedVarDecl(Stmt):
+class UnresolvedVarRef(Expr):
     name: str
-    target_type: Type
+    target_type: Type = field(default_factory=lambda: _type.Unk)
 
     def verify(self):
         pass
+
+    def get_type(self) -> Type:
+        return self.target_type
 
 @dataclass(slots=True)
 class UnresolvedClassDef(Stmt):

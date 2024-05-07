@@ -183,10 +183,6 @@ class PimacsTransformer(Transformer):
         else:
             return ir.FuncCall(func=name, args=args, loc=loc, type_spec=type_spec)
 
-    def lisp_name(self, items):
-        self._force_non_rule(items)
-        raise NotImplementedError()
-
     def lisp_symbol(self, items):
         self._force_non_rule(items)
         return ir.LispVarRef(name=items[0].value, loc=ir.Location(self.source, items[0].line, items[0].column))
@@ -216,18 +212,21 @@ class PimacsTransformer(Transformer):
         loc = ir.Location(self.source, items[0].line, items[0].column) # type: ignore
         return ir.Constant(value=items[0].value, loc=loc)
 
-    def variable(self, items) -> ir.VarRef:
+    def variable(self, items) -> ir.UnresolvedVarRef | ir.LispVarRef:
         self._force_non_rule(items)
+        if isinstance(items[0], (ir.LispVarRef, ir.UnresolvedVarRef)):
+            return items[0]
+        loc=ir.Location(self.source, items[0].line, items[0].column)
         assert len(items) == 1
-        if isinstance(items[0], ir.VarRef):
+        if isinstance(items[0], ir.UnresolvedVarRef):
             return items[0]
         name = items[0].value
         if name.startswith('%'):
-            return ir.LispVarRef(name=name, loc=ir.Location(self.source, items[0].line, items[0].column))
-        return ir.VarRef(name=items[0].value, loc=ir.Location(self.source, items[0].line, items[0].column))
+            return ir.LispVarRef(name=name, loc=loc)
+        return ir.UnresolvedVarRef(name=items[0].value, loc=loc)
 
     def var_decl(self, items) -> ir.VarDecl:
-        self._force_non_rule(items)
+        #self._force_non_rule(items)
         loc = ir.Location(self.source, items[0].line, items[0].column)
         name = items[1].value
         type = safe_get(items, 2, None)
@@ -283,8 +282,8 @@ class PimacsTransformer(Transformer):
         loc = ir.Location(self.source, items[0].line, items[0].column)
         return ir.CallParam(name=name, value=value, loc=loc)
 
-    def expr(self, items):
-        self._force_non_rule(items)
+    def expr(self, items) -> lark.Tree:
+        #self._force_non_rule(items)
         return items[0]
 
     def number(self, items: List[ir.Constant]):
@@ -403,9 +402,9 @@ class PimacsTransformer(Transformer):
         func_def.decorators = decorators
         return func_def
 
-    def dotted_name(self, items) -> ir.VarRef:
+    def dotted_name(self, items) -> ir.UnresolvedVarRef:
         self._force_non_rule(items)
-        return ir.VarRef(name=".".join([x.value for x in items]), loc=ir.Location(self.source, items[0].line, items[0].column))
+        return ir.UnresolvedVarRef(name=".".join([x.value for x in items]), loc=ir.Location(self.source, items[0].line, items[0].column))
 
     def assign_stmt(self, items):
         self._force_non_rule(items)
@@ -443,8 +442,8 @@ class PimacsTransformer(Transformer):
         false_expr = items[2]
 
         assert isinstance(cond, ir.Expr)
-        assert isinstance(true_expr, ir.Expr)
-        assert isinstance(false_expr, ir.Expr)
+        assert isinstance(true_expr, ir.Expr), f"{true_expr}"
+        assert isinstance(false_expr, ir.Expr), f"{false_expr}"
         return ir.SelectExpr(cond=cond, then_expr=true_expr, else_expr=false_expr, loc=cond.loc)
 
     def guard_stmt(self, items):
@@ -502,7 +501,7 @@ class BuildIR(IRMutator):
 
             obj = self.sym_tbl.get_symbol(name='self', kind=Symbol.Kind.Arg)
             if not obj:
-                obj = ir.UnresolvedVarDecl(name='self', loc=node.loc, target_type=_type.Unk) # type: ignore
+                obj = ir.UnresolvedVarRef(name='self', loc=node.loc, target_type=_type.Unk) # type: ignore
                 catch_sema_error(True, node, f"`self` is not declared")
             return ir.MemberRef(obj=ir.VarRef(decl=obj, loc=node.loc), member=var, loc=node.loc) # type: ignore
 
@@ -616,7 +615,7 @@ class BuildIR(IRMutator):
                 return new_node
 
     @staticmethod
-    def get_true_var(node: ir.VarDecl | ir.VarRef) -> ir.VarDecl | ir.LispVarRef | ir.ArgDecl | ir.UnresolvedVarDecl | ir.Expr:
+    def get_true_var(node: ir.VarDecl | ir.VarRef) -> ir.VarDecl | ir.LispVarRef | ir.ArgDecl | ir.UnresolvedVarRef | ir.Expr:
         if isinstance(node, ir.VarDecl) and node.init:
             return node.init
         if isinstance(node, ir.VarRef):

@@ -138,4 +138,5 @@ def templated_fn(a: T):
     print(tree.pretty())
 
 
-test_function_def()
+if __name__ == '__main__':
+    test_constant()
