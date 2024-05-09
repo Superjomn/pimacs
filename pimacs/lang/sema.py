@@ -60,6 +60,10 @@ class Sema(IRMutator):
         self.sym_tbl = SymbolTable()
         self._succeeded = True
 
+    @property
+    def succeed(self) -> bool:
+        return self._succeeded
+
     def report_error(self, node: ir.IrNode, message: str):
         report_sema_error(node, message)
         node.sema_failed = True
@@ -69,16 +73,15 @@ class Sema(IRMutator):
         node = super().visit_UnresolvedVarRef(node)
         if node.name.startswith("self."):
             # deal with members
-            member = self.sym_tbl.get_symbol(
-                name=node.name[5:], kind=Symbol.Kind.Member
-            )
+            var_name = node.name[5:]
+            member = self.sym_tbl.get_symbol(name=var_name, kind=Symbol.Kind.Member)
             if member is None:
                 raise KeyError(f"{node.loc}\nMember {node.name} is not declared")
             var = ir.VarRef(decl=member, loc=node.loc)  # type: ignore
 
             obj = self.sym_tbl.get_symbol(name="self", kind=Symbol.Kind.Arg)
             if not obj:
-                obj = ir.UnresolvedVarRef(name="self", loc=node.loc, target_type=_type.Unk)  # type: ignore
+                obj = ir.UnresolvedVarRef(name="self", loc=node.loc, target_type=_ty.Unk)  # type: ignore
                 catch_sema_error(True, node, f"`self` is not declared")
             return ir.MemberRef(obj=ir.VarRef(decl=obj, loc=node.loc), member=var, loc=node.loc)  # type: ignore
 
@@ -107,12 +110,18 @@ class Sema(IRMutator):
             self.sym_tbl.add_symbol(symbol, node)
         else:
             # Declare a local variable
-            self.sym_tbl.add_symbol(Symbol(name=node.name, kind=Symbol.Kind.Var), node)
+            if self.sym_tbl.contains_locally(
+                Symbol(name=node.name, kind=Symbol.Kind.Var)
+            ):
+                self.report_error(node, f"Variable {node.name} already exists")
+            else:
+                self.sym_tbl.add_symbol(
+                    Symbol(name=node.name, kind=Symbol.Kind.Var), node
+                )
 
         return self.verify_VarDecl(node)
 
     def verify_VarDecl(self, node: ir.VarDecl) -> ir.VarDecl:
-        super().visit_VarDecl(node)
         if node.sema_failed:
             return node
         if not node.init:
@@ -153,9 +162,9 @@ class Sema(IRMutator):
         return node
 
     def visit_FuncDecl(self, node: ir.FuncDecl):
-        node = super().visit_FuncDecl(node)
         within_class = self.sym_tbl.current_scope.kind is Scope.Kind.Class
         with self.sym_tbl.scope_guard(kind=Scope.Kind.Func):
+            node = super().visit_FuncDecl(node)
             symbol = Symbol(name=node.name, kind=Symbol.Kind.Func)
             # TODO[Superjomn]: support function overloading
             if self.sym_tbl.contains_locally(symbol):
@@ -178,24 +187,11 @@ class Sema(IRMutator):
                         )
                     self_arg.kind = ir.ArgDecl.Kind.self_placeholder
 
-            args = [self.visit(arg) for arg in args]
-            body = self.visit(node.body)
-            return_type = self.visit(node.return_type)
-            decorators = [self.visit(decorator) for decorator in node.decorators]
+            if any_failed(*node.args, node.body, *node.decorators):
+                node.sema_failed = True
 
-            new_node = ir.FuncDecl(
-                name=node.name,
-                args=args,
-                body=body,
-                return_type=return_type,
-                loc=node.loc,
-                decorators=decorators,
-            )
-            if any_failed(*args, body, *decorators):
-                new_node.sema_failed = True
-
-            new_node = self.sym_tbl.add_symbol(symbol, new_node)
-            return self.verify_FuncDecl(new_node)
+        node = self.sym_tbl.add_symbol(symbol, node)
+        return self.verify_FuncDecl(node)
 
     def verify_FuncDecl(self, node: ir.FuncDecl) -> ir.FuncDecl:
         if node.sema_failed:
@@ -206,15 +202,22 @@ class Sema(IRMutator):
         if len(arg_names) != len(set(arg_names)):
             self.report_error(node, f"Argument names should be unique, got {arg_names}")
         # check if argument types are valid
-        for arg in node.args:
+        for no, arg in enumerate(node.args):
             if arg.sema_failed:
                 continue
-            if not arg.type or arg.type is _ty.Unk:
+            if arg.name == "self" and arg.kind is ir.ArgDecl.Kind.self_placeholder:
+                pass
+            elif arg.name == "cls" and arg.kind is ir.ArgDecl.Kind.cls_placeholder:
+                pass
+            elif not arg.type or arg.type is _ty.Unk:
                 self.report_error(arg, f"Argument {arg.name} should have a type")
         # check if return type is valid
         if not node.return_type or node.return_type is _ty.Unk:
             node.return_type = _ty.Nil
-            if node.body.return_type is not _ty.Nil:
+            return_nil = (not node.body.return_type) or (
+                len(node.body.return_type) == 1 and node.body.return_type[0] is _ty.Nil
+            )
+            if not return_nil:
                 self.report_error(
                     node,
                     f"Function which returns non-nil values should set return type",
@@ -229,20 +232,18 @@ class Sema(IRMutator):
         return node
 
     def visit_ClassDef(self, node: ir.ClassDef):
-        node = super().visit_ClassDef(node)
         if self.sym_tbl.current_scope.kind is not Scope.Kind.Global:
             self.report_error(node, f"Class should be declared in the global scope")
 
         with self.sym_tbl.scope_guard(kind=Scope.Kind.Class):
-            symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
-            if self.sym_tbl.contains_locally(symbol):
-                self.report_error(node, f"Class {node.name} already exists")
+            node = super().visit_ClassDef(node)
 
-            body = [self.visit(stmt) for stmt in node.body]
+        symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
+        if self.sym_tbl.contains_locally(symbol):
+            self.report_error(node, f"Class {node.name} already exists")
 
-            node = ir.ClassDef(name=node.name, body=body, loc=node.loc)
-            node = self.sym_tbl.add_symbol(symbol, node)
-            return self.verify_ClassDef(node)
+        node = self.sym_tbl.add_symbol(symbol, node)
+        return self.verify_ClassDef(node)
 
     def verify_ClassDef(self, node: ir.ClassDef) -> ir.ClassDef:
         if node.sema_failed:
@@ -251,40 +252,34 @@ class Sema(IRMutator):
 
     def visit_FuncCall(self, node: ir.FuncCall):
         node = super().visit_FuncCall(node)
-        print(f"*** visit_FuncCall: {node}")
-        with self.sym_tbl.scope_guard():
-            func_name = node.func
-            assert isinstance(func_name, str)
-            func = self.sym_tbl.get_symbol(
-                name=func_name,
-                kind=[
-                    Symbol.Kind.Func,
-                    Symbol.Kind.Arg,
-                    Symbol.Kind.Var,
-                    Symbol.Kind.Class,
-                ],
-            )
-            if not func:
-                self.report_error(node, f"Target function/class {func_name} not found")
-                return self.verify_FuncCall(node, func)
-            elif isinstance(func, ir.VarDecl):
-                true_func = Sema.get_true_var(func)
+        func_name = node.func
+        assert isinstance(func_name, str)
+        func = self.sym_tbl.get_symbol(
+            name=func_name,
+            kind=[
+                Symbol.Kind.Func,
+                Symbol.Kind.Arg,
+                Symbol.Kind.Var,
+                Symbol.Kind.Class,
+            ],
+        )
+        if not func:
+            self.report_error(node, f"Target function/class {func_name} not found")
+            return self.verify_FuncCall(node, func)
+        elif isinstance(func, ir.VarDecl):
+            true_func = Sema.get_true_var(func)
+            if isinstance(true_func, ir.LispVarRef):
                 if isinstance(true_func, ir.LispVarRef):
-                    if isinstance(true_func, ir.LispVarRef):
-                        return self.verify_FuncCall(
-                            ir.LispFuncCall(
-                                func=true_func, args=node.args, loc=node.loc
-                            ),
-                            func,
-                        )
-                self.report_error(
-                    node, f"{node.loc}\nUnknown lisp function call {func}"
-                )
-                return node
-            else:
-                assert func is not None
-                node = ir.FuncCall(func=func, args=node.args, loc=node.loc)  # type: ignore
-                return self.verify_FuncCall(node, func)
+                    return self.verify_FuncCall(
+                        ir.LispFuncCall(func=true_func, args=node.args, loc=node.loc),
+                        func,
+                    )
+            self.report_error(node, f"{node.loc}\nUnknown lisp function call {func}")
+            return node
+        else:
+            assert func is not None
+            node = ir.FuncCall(func=func, args=node.args, loc=node.loc)  # type: ignore
+            return self.verify_FuncCall(node, func)
 
     def verify_FuncCall(
         self,
@@ -305,8 +300,9 @@ class Sema(IRMutator):
         return super().visit_LispFuncCall(node)
 
     def visit_Block(self, node: ir.Block):
-        node = super().visit_Block(node)
         with self.sym_tbl.scope_guard():
+            node = super().visit_Block(node)
+
             if any_failed(*node.stmts):
                 node.sema_failed = True
         return self.verify_Block(node)
@@ -328,9 +324,12 @@ class Sema(IRMutator):
         node = super().visit_ArgDecl(node)
         assert (
             self.sym_tbl.current_scope.kind is Scope.Kind.Func
-        ), f"{node.loc}\nArgDecl should be in a function"
+        ), f"{node.loc}\nArgDecl should be in a function, but get {self.sym_tbl.current_scope.kind}"
         symbol = Symbol(name=node.name, kind=Symbol.Kind.Arg)
-        node = self.sym_tbl.add_symbol(symbol, node)
+        if self.sym_tbl.contains_locally(symbol):
+            self.report_error(node, f"Argument {node.name} already exists")
+        else:
+            node = self.sym_tbl.add_symbol(symbol, node)
         return self.verify_ArgDecl(node)
 
     def verify_ArgDecl(self, node: ir.ArgDecl) -> ir.ArgDecl:
@@ -341,10 +340,10 @@ class Sema(IRMutator):
                     f"{node.loc}\nArg {node.name} should have a type or a default value",
                 )
             elif node.default is not None and node.type is not _ty.Unk:
-                if node.default.get_type() is not node.type:
+                if not can_assign_type(node.type, node.default.get_type()):
                     self.report_error(
                         node,
-                        f"{node.loc}\nCannot assign {node.default.get_type()} to {node.type}",
+                        f"Cannot assign {node.default.get_type()} to {node.type}",
                     )
         return node
 

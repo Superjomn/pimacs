@@ -24,9 +24,9 @@ class IRVisitor:
 
     def visit_VarDecl(self, node: ir.VarDecl):
         self.visit(node.type)
-        self.visit(node.init)
         for decorator in node.decorators:
             self.visit(decorator)
+        self.visit(node.init)
 
     def visit_Constant(self, node: ir.Constant):
         if node.value is not None:
@@ -251,8 +251,7 @@ class IRMutator:
         return node
 
     def visit_ClassDef(self, node: ir.ClassDef):
-        for i, stmt in enumerate(node.body):
-            node.body[i] = self.visit(stmt)
+        node.body = [self.visit(_) for _ in node.body]
         return node
 
     def visit_LispVarRef(self, node: ir.LispVarRef):
@@ -271,7 +270,7 @@ class IRMutator:
         node.member = self.visit(node.member)
 
     def visit_ListType(self, node: _type.ListType):
-        node.inner_types = [self.visit(_) for _ in node.inner_types]
+        node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
         return node
 
     def visit_DictType(self, node: _type.DictType):
@@ -280,7 +279,7 @@ class IRMutator:
         return node
 
     def visit_SetType(self, node: _type.SetType):
-        node.inner_types = [self.visit(_) for _ in node.inner_types]
+        node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
         return node
 
 
@@ -377,9 +376,14 @@ class IRPrinter(IRVisitor):
     def visit_FuncCall(self, node: ir.FuncCall):
         if isinstance(node.func, str):
             self.put(f"{node.func}")
-        elif isinstance(node.func, ir.ArgDecl):
-            self.put(f"{node.func.name}")
         elif isinstance(node.func, ir.VarRef):
+            self.put(f"{node.func.name}")
+        elif isinstance(node.func, ir.FuncDecl):
+            self.put(f"{node.func.name}")
+        elif isinstance(node.func, ir.ClassDef):
+            self.put(f"{node.func.name}")
+        elif isinstance(node.func, ir.ArgDecl):
+            # for cls(...) call
             self.put(f"{node.func.name}")
         else:
             raise Exception(f"{node.loc}\nInvalid function call: {node.func}")
@@ -499,6 +503,7 @@ class IRPrinter(IRVisitor):
             if no >= 1:
                 self.put_indent()
             self.visit(decorator)
+            self.put("\n")
         self.put(f"class {node.name}:\n")
         with self.indent_guard():
             for stmt in node.body:

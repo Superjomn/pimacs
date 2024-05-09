@@ -197,8 +197,8 @@ class File(Stmt):
 @dataclass(slots=True)
 class FuncDecl(Stmt):
     name: str
-    args: List[ArgDecl]
     body: Block
+    args: List[ArgDecl] = field(default_factory=list)
     return_type: Optional[Type] = None
     decorators: List["Decorator"] = field(default_factory=list)
 
@@ -208,6 +208,9 @@ class FuncDecl(Stmt):
         Method = 1  # class method
 
     kind: Kind = field(default=Kind.Func, repr=False)
+
+    def __post_init__(self):
+        assert self.args is not None
 
     def verify(self):
         for arg in self.args:
@@ -243,7 +246,6 @@ class FuncDecl(Stmt):
     def is_classmethod(self) -> bool:
         "Return True if the function is a @classmethod."
         for decorator in self.decorators:
-            print(f"**decorators: {decorator.action}")
             if decorator.action == "classmethod":
                 return True
         return False
@@ -307,6 +309,8 @@ class Constant(Expr):
             return _type.Str
         if isinstance(self.value, bool):
             return _type.Bool
+        if self.value is None:
+            return _type.Nil
         raise Exception(f"Unknown constant type: {self.value}")
 
     def verify(self):
@@ -419,6 +423,8 @@ class FuncCall(Expr):
             return self.func.return_type
         elif isinstance(self.func, ClassDef):
             return get_custom_type(self.func)
+        elif isinstance(self.func, ArgDecl):
+            return _type.Unk
         else:
             raise Exception(f"Unknown function type: {type(self.func)}: {self.func}")
 
@@ -525,9 +531,7 @@ class SelectExpr(Expr):
     def get_type(self) -> Type:
         if self.then_expr.get_type() == self.else_expr.get_type():
             return self.then_expr.get_type()
-        raise Exception(
-            f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {self.else_expr.get_type()}"
-        )
+        return _type.Unk
 
     def verify(self):
         self.cond.verify()

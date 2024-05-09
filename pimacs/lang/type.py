@@ -32,6 +32,7 @@ class TypeBase:
 @dataclass(slots=True, unsafe_hash=True)
 class Type(TypeBase):
     inner_types: Tuple["Type", ...] = field(default_factory=tuple)
+    is_optional: bool = False  # Optional type such as Int?
 
     def __str__(self) -> str:
         if not self.inner_types:

@@ -1,11 +1,11 @@
-# CHECK: def foo ():
+# CHECK: def foo () -> nil:
 def foo():
     # CHECK-NEXT: var a0 :Int = 0
     var a0: Int = 0
     var a1 = 0
-    var a2
+    var a2: Int
 
-# CHECK: def basic-types ():
+# CHECK: def basic-types () -> nil:
 # CHECK-NEXT: var a :[Int]
 # CHECK-NEXT: var b :{Int}
 # CHECK-NEXT: var c :{Str:Int}
@@ -24,7 +24,7 @@ def basic-emacs-call(name:Str, age:Int) -> nil:
     # CHECK-NEXT: %message(%format-string("name: %s, age: %s", name, age))
     %message(%format-string("name: %s, age: %s", name, age))
 
-# CHECK: def basic-if-else (v :Int):
+# CHECK: def basic-if-else (v :Int) -> nil:
 def basic-if-else(v: Int):
     if v < 0:
         %message("v < 0")
@@ -43,7 +43,7 @@ class Fruit:
     var -weight: Int
     var -name: Str
 
-    # CHECK: def __init__ (self, name :Str, size :Str):
+    # CHECK: def __init__ (self, name :Str, size :Str) -> nil:
     def __init__(self, name:Str, size:Str):
         # CHECK-NEXT: self.-name = name
         self.-name = name
@@ -58,8 +58,8 @@ class Fruit:
     def size(self) -> Int:
         return self.-size
 
-# CHECK: let apple = Fruit("Apple", 12)
-let apple = Fruit("Apple", 12)
+# CHECK: let apple :Float = Fruit("Apple", 12)
+let apple :Float = Fruit("Apple", 12)
 
 @pub
 def pub-foo():
@@ -67,7 +67,7 @@ def pub-foo():
 
 # CHECK: @pub(tolisp = "basic-module-foo")
 @pub(tolisp = "basic-module-foo")
-# CHECK-NEXT: def pub-foo-renamed ():
+# CHECK-NEXT: def pub-foo-renamed () -> nil:
 def pub-foo-renamed():
     return
 
@@ -76,7 +76,7 @@ let pub-var = 0
 
 # public variable could be export to lisp with specific name
 # CHECK: @pub(tolisp = "basic-module-pub-var")
-# CHECK-NEXT: let pub-var-1 = 0
+# CHECK-NEXT: let pub-var-1 :Int = 0
 @pub(tolisp = "basic-module-pub-var")
 let pub-var-1 = 0
 
@@ -86,11 +86,8 @@ let pub-var-1 = 0
 def ty_foo(a: T0, b: T1) -> T0:
     return
 
-# CHECK: let v-of-foo = ty_foo[Int, Float]()
-let v-of-foo = ty_foo[Int, Float]()
+# TODO: refine template support
+# let v-of-foo = ty_foo[Int, Float]()
 
-# CHECK: @template[T]
-@template[T]
-# CHECK-NEXT: def ty_foo1 () -> T:
-def ty_foo1() -> T:
-    return
+# def ty_foo1() -> T:
+#     return

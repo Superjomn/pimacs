@@ -8,16 +8,16 @@ from pimacs.lang.parser import parse
 
 
 @click.command()
-@click.option("--filename", type=str)
-@click.option("--buildir", type=bool, default=False)
+@click.argument("filename", type=str)
 @click.option("--sema", type=bool, default=False)
-def main(filename: str, buildir: bool, sema: bool):
-    file = parse(filename=filename, build_ir=buildir, sema=sema)
-    printer = IRPrinter(StringIO())
-    printer(file)
-    output = printer.os.getvalue()
+def main(filename: str, sema: bool):
+    file = parse(filename=filename, sema=sema)
+    if file:
+        printer = IRPrinter(StringIO())
+        printer(file)
 
-    print(output)
+        output = printer.os.getvalue()
+        print(output)
 
 
 if __name__ == "__main__":

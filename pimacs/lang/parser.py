@@ -37,8 +37,8 @@ def get_parser(code: Optional[str] = None, filename: str = "<pimacs>"):
 
 
 def parse(
-    code: str | None = None, filename: str = "<pimacs>", build_ir=True, sema=False
-):
+    code: str | None = None, filename: str = "<pimacs>", sema=False
+) -> ir.File | None:
     if code:
         source = ir.PlainCode(code)
         parser = get_parser(code=code)
@@ -49,10 +49,13 @@ def parse(
 
     stmts = parser.parse(code)
     the_ir = ir.File(stmts=stmts, loc=ir.Location(source, 0, 0))
-    if build_ir:
-        the_ir = BuildIR().visit(the_ir)
+
     if sema:
-        the_ir = Sema().visit(the_ir)
+        sema = Sema()
+        the_ir = sema.visit(the_ir)
+        if sema.succeed:
+            return the_ir
+        return None
     return the_ir
 
 
@@ -75,7 +78,9 @@ class PimacsTransformer(Transformer):
         if block is None:
             raise Exception(f"{loc}:\nFunction {name} must have a block")
 
-        return ir.FuncDecl(name=name, args=args, body=block, return_type=type, loc=loc)
+        return ir.FuncDecl(
+            name=name, args=args or [], body=block, return_type=type, loc=loc
+        )
 
     def func_args(self, items):
         self._force_non_rule(items)
@@ -101,8 +106,12 @@ class PimacsTransformer(Transformer):
 
     def type(self, items):
         self._force_non_rule(items)
-        assert len(items) == 1
-        return items[0]
+        if len(items) == 1:
+            return items[0]
+        else:
+            assert len(items) == 2
+            items[0].is_optional = True
+            return items[0]
 
     def set_type(self, items):
         "The type of Set"
@@ -521,226 +530,3 @@ def safe_get(items, index, default):
     if len(items) > index:
         return items[index]
     return default
-
-
-class BuildIR(IRMutator):
-    """
-    Clean up the symbols in the IR, like unify the VarRef or FuncDecl with the same name in the same scope.
-    """
-
-    # NOTE, the ir nodes should be created when visited.
-
-    def __init__(self):
-        self.sym_tbl = SymbolTable()
-
-    def visit_VarRef(self, node: ir.VarRef):
-        assert self.sym_tbl.current_scope.kind != Scope.Kind.Class
-
-        if node.name.startswith("self."):
-            # deal with members
-            member = self.sym_tbl.get_symbol(
-                name=node.name[5:], kind=Symbol.Kind.Member
-            )
-            if member is None:
-                raise KeyError(f"{node.loc}\nMember {node.name} is not declared")
-            var = ir.VarRef(decl=member, loc=node.loc)  # type: ignore
-
-            obj = self.sym_tbl.get_symbol(name="self", kind=Symbol.Kind.Arg)
-            if not obj:
-                obj = ir.UnresolvedVarRef(name="self", loc=node.loc, target_type=_type.Unk)  # type: ignore
-                catch_sema_error(True, node, f"`self` is not declared")
-            return ir.MemberRef(obj=ir.VarRef(decl=obj, loc=node.loc), member=var, loc=node.loc)  # type: ignore
-
-        if sym := self.sym_tbl.get_symbol(
-            name=node.name, kind=[Symbol.Kind.Var, Symbol.Kind.Arg]
-        ):
-            if isinstance(sym, ir.VarDecl):
-                var = ir.VarRef(decl=sym, loc=node.loc)  # type: ignore
-                # self.sym_tbl.add_symbol(Symbol(name=node.name, kind=Symbol.Kind.Var), var)
-            elif isinstance(sym, ir.ArgDecl):
-                var = ir.VarRef(decl=sym, loc=node.loc)
-                # self.sym_tbl.add_symbol(Symbol(name=node.name, kind=Symbol.Kind.Arg), var)
-            elif isinstance(sym, ir.VarRef):
-                var = sym
-            else:
-                raise ValueError(f"{node.loc}\nUnknown symbol type {sym}")
-            return var
-        else:
-            raise KeyError(f"{node.loc}\nSymbol {node.name} not found")
-
-    def visit_VarDecl(self, node: ir.VarDecl):
-        if self.sym_tbl.current_scope.kind is Scope.Kind.Class:
-            symbol = Symbol(name=node.name, kind=Symbol.Kind.Member)
-            self.sym_tbl.add_symbol(symbol, node)
-        else:
-            self.sym_tbl.add_symbol(Symbol(name=node.name, kind=Symbol.Kind.Var), node)
-
-        return node
-
-    def visit_SelectExpr(self, node: ir.SelectExpr):
-        node = super().visit_SelectExpr(node)
-        # node.cond.add_user(node)
-        # node.then_expr.add_user(node)
-        # node.else_expr.add_user(node)
-        return node
-
-    def visit_FuncDecl(self, node: ir.FuncDecl):
-        within_class = self.sym_tbl.current_scope.kind is Scope.Kind.Class
-        with self.sym_tbl.scope_guard(kind=Scope.Kind.Func):
-            symbol = Symbol(name=node.name, kind=Symbol.Kind.Func)
-            assert not self.sym_tbl.contains_locally(
-                symbol
-            ), f"{node.loc}\nFunction {node.name} already exists"
-            args = node.args if node.args else []
-            if within_class:
-                # This function is a member function
-                if node.is_classmethod:
-                    cls_arg = args[0]  # cls placeholder
-                    assert (
-                        cls_arg.name == "cls"
-                    ), f"{node.loc}\nClass method should have the first arg named 'cls'"
-                    cls_arg.kind = ir.ArgDecl.Kind.cls_placeholder
-                elif not node.is_staticmethod:
-                    self_arg = args[0]  # self placeholder
-                    assert (
-                        self_arg.name == "self"
-                    ), f"{node.loc}\nMethod should have the first arg named 'self'"
-                    self_arg.kind = ir.ArgDecl.Kind.self_placeholder
-
-            args = [self.visit(arg) for arg in args]
-
-            body = self.visit(node.body)
-            return_type = self.visit(node.return_type)
-            decorators = [self.visit(decorator) for decorator in node.decorators]
-            new_node = ir.FuncDecl(
-                name=node.name,
-                args=args,
-                body=body,
-                return_type=return_type,
-                loc=node.loc,
-                decorators=decorators,
-            )
-            # for arg in args:
-            # arg.add_user(arg)
-
-            # TODO: add users for the decorators
-
-            return self.sym_tbl.add_symbol(symbol, new_node)
-
-    def build_elisp_list(self, items: List[ir.Expr]) -> ir.LispList:
-        """Lisp list could be a function call, all the raw lisp code should be wrapped in a lisp list.
-        A LispList could come from the following cases:
-        1. A lisp function call like `%(+ 1 2)`
-        2. A pimacs function call with the function name starts with `%`, such as `%message("hello")`
-        3. A pimacs function call with the function name come from a lisp variable, such as `message = %message; message("hello")`
-        """
-        func = items[0]
-        loc = items[0].loc
-        assert loc
-        if isinstance(func, ir.LispVarRef):
-            return ir.LispList(items, loc=loc)
-
-        assert NotImplementedError(f"{loc}\nUnknown lisp function call {func}")
-        return ir.LispList(items, loc=loc)
-
-    def visit_ClassDef(self, node: ir.ClassDef):
-        assert (
-            self.sym_tbl.current_scope.kind == Scope.Kind.Global
-        ), f"{node.loc}\nClass should be in the global scope"
-        with self.sym_tbl.scope_guard(kind=Scope.Kind.Class):
-            symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
-            assert not self.sym_tbl.contains_locally(
-                symbol
-            ), f"{node.loc}\nClass {node.name} already exists"
-            body = [self.visit(stmt) for stmt in node.body]
-
-            node = ir.ClassDef(name=node.name, body=body, loc=node.loc)
-            return self.sym_tbl.add_symbol(symbol, node)
-
-    def visit_FuncCall(self, node: ir.FuncCall):
-        with self.sym_tbl.scope_guard():
-            func_name = node.func
-            assert isinstance(func_name, str)
-            func = self.sym_tbl.get_symbol(
-                name=func_name,
-                kind=[Symbol.Kind.Func, Symbol.Kind.Arg, Symbol.Kind.Var],
-            )
-
-            if catch_sema_error(
-                not func, node, f"Target function {func_name} not found"
-            ):
-                return node
-
-            elif isinstance(func, ir.VarDecl):
-                true_func = BuildIR.get_true_var(func)
-                if isinstance(true_func, ir.LispVarRef):
-                    if isinstance(true_func, ir.LispVarRef):
-                        return ir.LispFuncCall(
-                            func=true_func, args=node.args, loc=node.loc
-                        )
-
-                raise ValueError(f"{node.loc}\nUnknown lisp function call {func}")
-
-            else:
-                assert func is not None
-                new_node = ir.FuncCall(func=func, args=node.args, loc=node.loc)  # type: ignore
-                return new_node
-
-    @staticmethod
-    def get_true_var(
-        node: ir.VarDecl | ir.VarRef,
-    ) -> ir.VarDecl | ir.LispVarRef | ir.ArgDecl | ir.UnresolvedVarRef | ir.Expr:
-        if isinstance(node, ir.VarDecl) and node.init:
-            return node.init
-        if isinstance(node, ir.VarRef):
-            assert node.decl
-            return node.decl
-        if isinstance(node, ir.LispVarRef):
-            return node
-
-        return node
-
-    def visit_LispFuncCall(self, node: ir.LispFuncCall):
-        return super().visit_LispFuncCall(node)
-
-    def visit_Block(self, node: ir.Block):
-        with self.sym_tbl.scope_guard():
-            return super().visit_Block(node)
-
-    def visit_ArgDecl(self, node: ir.ArgDecl):
-        assert (
-            self.sym_tbl.current_scope.kind == Scope.Kind.Func
-        ), f"{node.loc}\nArgDecl should be in a function"
-        # check type
-        if node.kind not in (
-            ir.ArgDecl.Kind.cls_placeholder,
-            ir.ArgDecl.Kind.self_placeholder,
-        ):
-            if not node.type:
-                if not node.default:
-                    raise ValueError(
-                        f"{node.loc}\nArg {node.name} should have a type or a default value"
-                    )
-
-        symbol = Symbol(name=node.name, kind=Symbol.Kind.Arg)
-        return self.sym_tbl.add_symbol(symbol, node)
-
-    def visit_BinaryOp(self, node: ir.BinaryOp):
-        node = super().visit_BinaryOp(node)
-
-        # node.left.add_user(node)
-        # node.right.add_user(node)
-        return node
-
-    def visit_UnaryOp(self, node: ir.UnaryOp):
-        node = super().visit_UnaryOp(node)
-        # node.value.add_user(node)
-        return node
-
-    def visit_CallParam(self, node: ir.CallParam):
-        node = super().visit_CallParam(node)
-        # node.value.add_user(node)
-        return node
-
-
-# TODO: Unify the Constants to one single node for each value

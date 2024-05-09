@@ -110,7 +110,7 @@ pair: expr ":" expr
 pair_list: pair (_NEWLINE | "," [_NEWLINE] pair)* ["," [_NEWLINE]]
 
 
-type: type_base ["?"]
+type: type_base [QUESTION]
 type_base: PRIMITIVE_TYPE
          | custom_type
          | complex_type
@@ -144,6 +144,7 @@ ELIF: "elif"
 ELSE: "else"
 PASS: "..."
 TEMPLATE: "template"
+QUESTION: "?"
 
 %import common.WS_INLINE
 %import common.LETTER

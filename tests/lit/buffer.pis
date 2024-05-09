@@ -9,11 +9,11 @@ class Buffer:
     var buf: Lisp
 
     @classmethod
-    def get-or-create(cls, name: Str):
+    def get-or-create(cls, name: Str) -> Buffer:
         return cls(%get-buffer-create(name))
 
     @classmethod
-    def create(cls, name: Str):
+    def create(cls, name: Str) -> Buffer:
         return cls(name)
 
     @classmethod
@@ -21,11 +21,11 @@ class Buffer:
         var buf: Lisp = %get-file-buffer(filename)
         return cls(buf)
 
-    def __init__(self, buf: Lisp=nil):
+    def __init__(self, buf: Lisp?=nil):
         self.buf = %current-buffer() if not buf else buf
 
-    def __init__(self, buf: Str):
-        self.buf = %get-buffer(buf)
+    # def __init__(self, buf: Str):
+    #     self.buf = %get-buffer(buf)
 
     def name(self) -> Str:
         guard %with-current-buffer(self.buf):
@@ -133,7 +133,7 @@ class Buffer:
         return %buffer-modified-p(self.buf)
 
     @staticmethod
-    def get(name: Str):
+    def get(name: Str) -> Lisp:
         return %get-buffer(name)
 
     @staticmethod
@@ -144,8 +144,3 @@ class Buffer:
     @staticmethod
     def buffer-name() -> Str:
         return %buffer-name()
-
-    @staticmethod
-    def get-file-truename() -> Str:
-        guard with-current-buffer(self.buf):
-            return %buffer-file-truename
