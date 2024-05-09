@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, ClassVar, List, Optional, Tuple, Union
+from typing import Any, ClassVar, List, Optional, Set, Tuple, Union
 
 import pimacs.lang.type as _type
 from pimacs.lang.type import Type, TypeId
@@ -22,7 +22,6 @@ class IrNode(ABC):
     def add_user(self, user: "IrNode"):
         if user not in self.users:
             self.users.append(user)
-
 
 
 @dataclass
@@ -58,19 +57,16 @@ class Location:
     column: int
 
     def __post_init__(self):
-        assert isinstance(self.source, FileName) or isinstance(
-            self.source, PlainCode)
+        assert isinstance(self.source, FileName) or isinstance(self.source, PlainCode)
 
     def __str__(self):
         if isinstance(self.source, PlainCode):
-            file_line = self.source.content.splitlines()[
-                self.line - 1].rstrip()
+            file_line = self.source.content.splitlines()[self.line - 1].rstrip()
             marker = " " * (self.column - 1) + "^"
             return f"<code>:{self.line}:{self.column}\n{file_line}\n{marker}"
 
         if os.path.exists(self.source.filename):
-            file_line = open(self.source.filename).readlines()[
-                self.line - 1].rstrip()
+            file_line = open(self.source.filename).readlines()[self.line - 1].rstrip()
             marker = " " * (self.column - 1) + "^"
             return f"{self.source.filename}:{self.line}:{self.column}\n{file_line}\n{marker}"
         else:
@@ -85,24 +81,25 @@ class VarDecl(Stmt):
     # If not mutable, it is a constant declared by `let`
     mutable: bool = True
 
-    decorators : List["Decorator"] = field(default_factory=list)
+    decorators: List["Decorator"] = field(default_factory=list)
 
     def verify(self):
         if self.type is None and self.init is None:
-            raise Exception(
-                f"{self.loc}:\nType or init value must be provided")
+            raise Exception(f"{self.loc}:\nType or init value must be provided")
         if type is None:
             self.type = self.init.get_type()
         if self.init is not None and self.type != self.init.get_type():
             raise Exception(
-                f"{self.loc}:\n var declaration type mismatch: type is {self.type} but the init is {self.init.get_type()}")
+                f"{self.loc}:\n var declaration type mismatch: type is {self.type} but the init is {self.init.get_type()}"
+            )
 
 
 @dataclass(slots=True)
 class VarRef(Expr):
-    ''' A placeholder for a variable.
+    """A placeholder for a variable.
     It is used by lexer to represent a variable. Then in the parser, it will be replaced by one with VarDecl and other meta data.
-    '''
+    """
+
     decl: Optional[Union[VarDecl, "ArgDecl", "UnresolvedVarRef"]] = None
     value: Optional[Expr] = None
     type: Optional[Type] = None
@@ -118,7 +115,7 @@ class VarRef(Expr):
 
     @property
     def is_lisp(self) -> bool:
-        return self.name.startswith('%')
+        return self.name.startswith("%")
 
     def get_type(self) -> Type:
         if isinstance(self.decl, UnresolvedVarRef):
@@ -148,7 +145,7 @@ class LispVarRef(VarRef):
 @dataclass(slots=True)
 class ArgDecl(Stmt):
     name: str
-    type: Optional[Type] = None
+    type: Type = field(default_factory=lambda: _type.Unk)
     default: Optional[Expr] = None
 
     class Kind(Enum):
@@ -157,18 +154,29 @@ class ArgDecl(Stmt):
         cls_placeholder = 1
         self_placeholder = 2
 
+    @property
+    def is_cls_placeholder(self) -> bool:
+        return self.kind == ArgDecl.Kind.cls_placeholder
+
+    @property
+    def is_self_placeholder(self) -> bool:
+        return self.kind == ArgDecl.Kind.self_placeholder
+
     kind: Kind = Kind.normal
 
     def verify(self):
         if self.default is not None and self.type != self.default.get_type():
             raise Exception(
-                f"{self.loc}:\nArg type mismatch: type is {self.type} but the default is {self.default.get_type()}")
+                f"{self.loc}:\nArg type mismatch: type is {self.type} but the default is {self.default.get_type()}"
+            )
 
 
 @dataclass(slots=True)
 class Block(Stmt):
     stmts: List[Stmt] = field(default_factory=list)
     doc_string: Optional["DocString"] = None
+    # If get a return value, return_type is set
+    return_type: List[Type] = field(default_factory=list)
 
     def verify(self):
         for stmt in self.stmts:
@@ -212,7 +220,8 @@ class FuncDecl(Stmt):
 
         if self.is_staticmethod and self.is_property:
             raise Exception(
-                f"{self.loc}:\nA method can't be both a staticmethod and a property")
+                f"{self.loc}:\nA method can't be both a staticmethod and a property"
+            )
 
     @property
     def is_staticmethod(self) -> bool:
@@ -243,8 +252,7 @@ class FuncDecl(Stmt):
         seen = set()
         for decorator in self.decorators:
             if decorator.action in seen:
-                raise Exception(
-                    f"{self.loc}:\nDuplicate decorator: {decorator.action}")
+                raise Exception(f"{self.loc}:\nDuplicate decorator: {decorator.action}")
             seen.add(decorator.action)
 
 
@@ -327,16 +335,15 @@ class BinaryOp(Expr):
     op: "BinaryOperator"
     right: Expr
 
-    type:Optional[_type.Type] = field(init=False, default=None)
+    type: Optional[_type.Type] = field(init=False, default=None)
 
     # handle type conversion
-    type_conversions : ClassVar[Any] = {
-            (TypeId.INT, TypeId.FLOAT): _type.Float,
-            (TypeId.FLOAT, TypeId.INT): _type.Float,
-            (TypeId.INT, TypeId.BOOL): _type.Int,
-            (TypeId.BOOL, TypeId.INT): _type.Int,
-        }
-
+    type_conversions: ClassVar[Any] = {
+        (TypeId.INT, TypeId.FLOAT): _type.Float,
+        (TypeId.FLOAT, TypeId.INT): _type.Float,
+        (TypeId.INT, TypeId.BOOL): _type.Int,
+        (TypeId.BOOL, TypeId.INT): _type.Int,
+    }
 
     def get_type(self) -> Type:
         if self.type:
@@ -346,10 +353,12 @@ class BinaryOp(Expr):
             return self.left.get_type()
 
         ret = BinaryOp.type_conversions.get(
-            (self.left.get_type().type_id, self.right.get_type().type_id), _type.Unk)
+            (self.left.get_type().type_id, self.right.get_type().type_id), _type.Unk
+        )
         if ret is None:
             raise Exception(
-                f"{self.loc}:\nType mismatch: {self.left.get_type()} and {self.right.get_type()}")
+                f"{self.loc}:\nType mismatch: {self.left.get_type()} and {self.right.get_type()}"
+            )
         return _type.Unk
 
     def verify(self):
@@ -386,6 +395,17 @@ class CallParam(Expr):
         return self.value.get_type()
 
 
+custom_types: Set[_type.Type] = set()
+
+
+def get_custom_type(class_def: "ClassDef"):
+    # TODO: consider module name
+    ret = _type.Type(TypeId.CUSTOMED, class_def.name)
+    if ret not in custom_types:
+        custom_types.add(ret)
+    return ret
+
+
 @dataclass(slots=True)
 class FuncCall(Expr):
     # ArgDecl as func for self/cls placeholder cases
@@ -394,28 +414,34 @@ class FuncCall(Expr):
     type_spec: List[Type] = field(default_factory=list)
 
     def get_type(self) -> Type:
-        assert isinstance(self.func, FuncDecl)
-        assert self.func.return_type is not None
-        return self.func.return_type
+        if isinstance(self.func, FuncDecl):
+            assert self.func.return_type is not None
+            return self.func.return_type
+        elif isinstance(self.func, ClassDef):
+            return get_custom_type(self.func)
+        else:
+            raise Exception(f"Unknown function type: {type(self.func)}: {self.func}")
 
     def verify(self):
         self.func.verify()
         for arg in self.args:
             arg.verify()
 
+
 @dataclass(slots=True)
 class Template:
     types: List[_type.Type]
 
+
 @dataclass(slots=True)
 class LispFuncCall(Expr):
-    ''' Call a lisp function, such as `%format("hello")` or
+    """Call a lisp function, such as `%format("hello")` or
 
     ```
     let format = %format
     format("hello)
     ```
-    '''
+    """
 
     func: LispVarRef
     args: List[CallParam | Expr] = field(default_factory=list)
@@ -428,6 +454,7 @@ class LispFuncCall(Expr):
 
     def verify(self):
         return super().verify()
+
 
 class LispList(Expr):
     def __init__(self, items: List[Expr], loc: Location):
@@ -499,16 +526,19 @@ class SelectExpr(Expr):
         if self.then_expr.get_type() == self.else_expr.get_type():
             return self.then_expr.get_type()
         raise Exception(
-            f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {self.else_expr.get_type()}")
+            f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {self.else_expr.get_type()}"
+        )
 
     def verify(self):
         self.cond.verify()
         if self.cond.get_type() != _type.Bool:
             raise Exception(
-                f"{self.loc}:\nCondition type must be bool, but got {self.cond.get_type()}")
+                f"{self.loc}:\nCondition type must be bool, but got {self.cond.get_type()}"
+            )
         if self.then_expr.get_type() != self.else_expr.get_type():
             raise Exception(
-                f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {self.else_expr.get_type()}")
+                f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {self.else_expr.get_type()}"
+            )
 
         self.then_expr.verify()
         self.else_expr.verify()
@@ -529,7 +559,7 @@ class MemberRef(Expr):
     obj: VarRef
     member: VarRef
 
-    def get_type(self) -> Type :
+    def get_type(self) -> Type:
         if isinstance(self.member, VarRef):
             return self.member.get_type()
         return _type.Unk
@@ -547,6 +577,7 @@ class UnresolvedFuncDecl(Stmt):
     def verify(self):
         pass
 
+
 @dataclass(slots=True)
 class UnresolvedVarRef(Expr):
     name: str
@@ -557,6 +588,7 @@ class UnresolvedVarRef(Expr):
 
     def get_type(self) -> Type:
         return self.target_type
+
 
 @dataclass(slots=True)
 class UnresolvedClassDef(Stmt):
