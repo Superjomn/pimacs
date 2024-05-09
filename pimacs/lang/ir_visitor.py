@@ -24,9 +24,9 @@ class IRVisitor:
 
     def visit_VarDecl(self, node: ir.VarDecl):
         self.visit(node.type)
-        self.visit(node.init)
         for decorator in node.decorators:
             self.visit(decorator)
+        self.visit(node.init)
 
     def visit_Constant(self, node: ir.Constant):
         if node.value is not None:
@@ -50,7 +50,7 @@ class IRVisitor:
         self.visit(node.body)
 
     def visit_Decorator(self, node: ir.Decorator):
-        self.visit(node.action)
+        self.visit(node.action)  # type: ignore
 
     def visit_Block(self, node: ir.Block):
         self.visit(node.doc_string)
@@ -67,11 +67,6 @@ class IRVisitor:
     def visit_VarRef(self, node: ir.VarRef):
         pass
 
-    def visit_FunCall(self, node: ir.FuncCall):
-        self.visit(node.func)
-        for arg in node.args:
-            self.visit(arg)
-
     def visit_LispFuncCall(self, node: ir.LispFuncCall):
         self.visit(node.func)
         for arg in node.args:
@@ -81,7 +76,7 @@ class IRVisitor:
         self.visit(node.cond)
         if node.then_branch is not None:
             self.visit(node.then_branch)
-        for (cond, block) in node.elif_branches:
+        for cond, block in node.elif_branches:
             self.visit(cond)
             self.visit(block)
         if node.else_branch is not None:
@@ -124,6 +119,7 @@ class IRVisitor:
     def visit_ListType(self, node: _type.ListType):
         for inner_type in node.inner_types:
             self.visit(inner_type)
+
     def visit_DictType(self, node: _type.DictType):
         self.visit(node.key_type)
         self.visit(node.value_type)
@@ -164,6 +160,11 @@ class IRMutator:
         node.decorators = [self.visit(_) for _ in node.decorators]
         return node
 
+    def visit_ArgDecl(self, node: ir.ArgDecl):
+        node.type = self.visit(node.type)
+        node.default = self.visit(node.default)
+        return node
+
     def visit_Constant(self, node: ir.Constant):
         if node.value is not None:
             node.value = self.visit(node.value)
@@ -193,13 +194,13 @@ class IRMutator:
     def visit_FuncCall(self, node: ir.FuncCall):
         node.func = self.visit(node.func)
         node.args = [self.visit(_) for _ in node.args]
+        node.type_spec = [self.visit(_) for _ in node.type_spec]
         return node
 
     def visit_LispFuncCall(self, node: ir.LispFuncCall):
         node.func = self.visit(node.func)
         node.args = [self.visit(_) for _ in node.args]
         return node
-
 
     def visit_Decorator(self, node: ir.Decorator):
         return node
@@ -220,6 +221,9 @@ class IRMutator:
         return node
 
     def visit_VarRef(self, node: ir.VarRef):
+        return node
+
+    def visit_UnresolvedVarRef(self, node: ir.UnresolvedVarRef):
         return node
 
     def visit_IfStmt(self, node: ir.IfStmt):
@@ -247,8 +251,7 @@ class IRMutator:
         return node
 
     def visit_ClassDef(self, node: ir.ClassDef):
-        for i, stmt in enumerate(node.body):
-            node.body[i] = self.visit(stmt)
+        node.body = [self.visit(_) for _ in node.body]
         return node
 
     def visit_LispVarRef(self, node: ir.LispVarRef):
@@ -267,7 +270,7 @@ class IRMutator:
         node.member = self.visit(node.member)
 
     def visit_ListType(self, node: _type.ListType):
-        node.inner_types = [self.visit(_) for _ in node.inner_types]
+        node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
         return node
 
     def visit_DictType(self, node: _type.DictType):
@@ -276,9 +279,8 @@ class IRMutator:
         return node
 
     def visit_SetType(self, node: _type.SetType):
-        node.inner_types = [self.visit(_) for _ in node.inner_types]
+        node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
         return node
-
 
 
 class StringStream:
@@ -300,7 +302,7 @@ class IRPrinter(IRVisitor):
         self.visit(node)
 
     def put_indent(self) -> None:
-        self.os.write(' ' * self._indent * self.indent_width)
+        self.os.write(" " * self._indent * self.indent_width)
 
     def put(self, s: str) -> None:
         self.os.write(s)
@@ -312,7 +314,7 @@ class IRPrinter(IRVisitor):
         self._indent -= 1
 
     def visit_VarDecl(self, node: ir.VarDecl):
-        for no,decorator in enumerate(node.decorators):
+        for no, decorator in enumerate(node.decorators):
             if no >= 1:
                 self.put_indent()
             self.visit(decorator)
@@ -338,8 +340,9 @@ class IRPrinter(IRVisitor):
         self.put(str(node))
 
     def visit_FuncDecl(self, node: ir.FuncDecl):
-        for no,decorator in enumerate(node.decorators):
-            if no >= 1: self.put_indent()
+        for no, decorator in enumerate(node.decorators):
+            if no >= 1:
+                self.put_indent()
             self.visit(decorator)
             self.put("\n")
 
@@ -373,12 +376,25 @@ class IRPrinter(IRVisitor):
     def visit_FuncCall(self, node: ir.FuncCall):
         if isinstance(node.func, str):
             self.put(f"{node.func}")
-        elif isinstance(node.func, ir.ArgDecl):
-            self.put(f"{node.func.name}")
         elif isinstance(node.func, ir.VarRef):
+            self.put(f"{node.func.name}")
+        elif isinstance(node.func, ir.FuncDecl):
+            self.put(f"{node.func.name}")
+        elif isinstance(node.func, ir.ClassDef):
+            self.put(f"{node.func.name}")
+        elif isinstance(node.func, ir.ArgDecl):
+            # for cls(...) call
             self.put(f"{node.func.name}")
         else:
             raise Exception(f"{node.loc}\nInvalid function call: {node.func}")
+
+        if node.type_spec:
+            self.put("[")
+            for i, t in enumerate(node.type_spec):
+                if i > 0:
+                    self.put(", ")
+                self.visit(t)
+            self.put("]")
 
         self.put("(")
         for i, arg in enumerate(node.args):
@@ -431,7 +447,7 @@ class IRPrinter(IRVisitor):
         self.visit(node.cond)
         self.put(":\n")
         self.visit(node.then_branch)
-        for (cond, block) in node.elif_branches:
+        for cond, block in node.elif_branches:
             self.put_indent()
             self.put("elif ")
             self.visit(cond)
@@ -467,6 +483,13 @@ class IRPrinter(IRVisitor):
             self.put(")")
         elif isinstance(node.action, str):
             self.put(f"@{node.action}")
+        elif isinstance(node.action, ir.Template):
+            self.put(f"@template[")
+            for i, t in enumerate(node.action.types):
+                if i > 0:
+                    self.put(", ")
+                self.visit(t)
+            self.put("]")
         else:
             raise Exception(f"Invalid decorator action: {node.action}")
 
@@ -476,9 +499,11 @@ class IRPrinter(IRVisitor):
         self.visit(node.value)
 
     def visit_ClassDef(self, node: ir.ClassDef):
-        for no,decorator in enumerate(node.decorators):
-            if no >= 1: self.put_indent()
+        for no, decorator in enumerate(node.decorators):
+            if no >= 1:
+                self.put_indent()
             self.visit(decorator)
+            self.put("\n")
         self.put(f"class {node.name}:\n")
         with self.indent_guard():
             for stmt in node.body:
@@ -490,6 +515,9 @@ class IRPrinter(IRVisitor):
 
     def visit_LispVarRef(self, node: ir.LispVarRef):
         self.put(f"%{node.name}")
+
+    def visit_UnresolvedVarRef(self, node: ir.UnresolvedVarRef):
+        self.put(f"{node.name}")
 
     def visit_DocString(self, node: ir.DocString):
         self.put(f'"{node.content}"')
@@ -533,7 +561,6 @@ class IRPrinter(IRVisitor):
         self.put("{")
         self.visit(node.inner_types[0])
         self.put("}")
-
 
     @contextmanager
     def indent_guard(self):

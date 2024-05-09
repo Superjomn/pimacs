@@ -32,7 +32,7 @@ while_loop: "while" expr ":" block
 for_loop: "for" NAME "in" expr ":" block
 
 ?decorated: decorator+ (class_def | func_def | var_decl | let_decl)
-decorator: "@" (dotted_name | func_call | "template" type_placeholder_list) _NEWLINE
+decorator: "@" (dotted_name | func_call | TEMPLATE type_placeholder_list) _NEWLINE
 ?dotted_name: NAME ("." NAME)*
 ?lisp_name: "%" LISP_NAME
 
@@ -98,7 +98,7 @@ list: "["  [expr_list]  "]"
 expr_list: expr (_NEWLINE | "," [_NEWLINE] expr)* ["," [_NEWLINE]]
 
 
-func_call: dotted_name "(" [call_params] ")"
+func_call: dotted_name type_spec? "(" [call_params] ")"
 call_param: expr                -> value_param
           | call_param_name "=" expr       -> key_value_param
 call_params: call_param ("," call_param)*
@@ -110,7 +110,7 @@ pair: expr ":" expr
 pair_list: pair (_NEWLINE | "," [_NEWLINE] pair)* ["," [_NEWLINE]]
 
 
-type: type_base ["?"]
+type: type_base [QUESTION]
 type_base: PRIMITIVE_TYPE
          | custom_type
          | complex_type
@@ -119,10 +119,11 @@ type_base: PRIMITIVE_TYPE
          | set_type
 variadic_type: type "..."
 basic_type: PRIMITIVE_TYPE | custom_type
-complex_type: NAME "[" type_list "]"
+complex_type: NAME type_spec
 list_type: "[" type "]"
 dict_type: "{" type ":" type "}"
 set_type: "{" type "}"
+type_spec: "[" type_list "]"
 
 custom_type: NAME  // Allows for user-defined types, including generics
 
@@ -142,6 +143,8 @@ IF: "if"
 ELIF: "elif"
 ELSE: "else"
 PASS: "..."
+TEMPLATE: "template"
+QUESTION: "?"
 
 %import common.WS_INLINE
 %import common.LETTER

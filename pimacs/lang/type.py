@@ -1,23 +1,24 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 class TypeId(Enum):
-    INT = 'Int'
-    FLOAT = 'Float'
-    BOOL = 'Bool'
-    STRING = 'Str'
-    Unk = 'Unk'
+    INT = "Int"
+    FLOAT = "Float"
+    BOOL = "Bool"
+    STRING = "Str"
+    Unk = "Unk"
 
     # coumpound types
-    Set = 'Set'
-    Dict = 'Dict'
-    List = 'List'
+    Set = "Set"
+    Dict = "Dict"
+    List = "List"
 
-    NIL = 'nil'
+    NIL = "nil"
 
-    CUSTOMED = 'Customed'
+    CUSTOMED = "Customed"
+
 
 @dataclass(slots=True)
 class TypeBase:
@@ -28,14 +29,16 @@ class TypeBase:
         return self.name or self.type_id.value
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, unsafe_hash=True)
 class Type(TypeBase):
-    inner_types: List["Type"] = field(default_factory=list)
+    inner_types: Tuple["Type", ...] = field(default_factory=tuple)
+    is_optional: bool = False  # Optional type such as Int?
 
     def __str__(self) -> str:
         if not self.inner_types:
             return self.name or self.type_id.value
         return f"{self.name or self.type_id.name.lower()}[{', '.join(map(str, self.inner_types))}]"
+
 
 # Built-in types
 Int = Type(TypeId.INT)
@@ -45,16 +48,19 @@ Str = Type(TypeId.STRING)
 Nil = Type(TypeId.NIL)
 Customed = Type(TypeId.CUSTOMED)
 # Lisp type is a special type that is used to represent the type of a lisp object
-LispType = Type(TypeId.CUSTOMED, '__LispObject__')
+LispType = Type(TypeId.CUSTOMED, "__LispObject__")
 Unk = Type(TypeId.Unk)
+
 
 @dataclass(slots=True)
 class SetType(Type):
     type_id: TypeId = field(default=TypeId.Set, init=False)
 
+
 @dataclass(slots=True)
 class ListType(Type):
     type_id: TypeId = field(default=TypeId.List, init=False)
+
 
 @dataclass(slots=True)
 class DictType(Type):
@@ -68,15 +74,17 @@ class DictType(Type):
         return f"Dict[{self.key_type}, {self.value_type}]"
 
 
+def make_customed(name: str) -> Type:
+    return Type(TypeId.CUSTOMED, name)
 
 
 STR_TO_PRIMITIVE_TYPE = {
-    'Int': Int,
-    'Float': Float,
-    'Bool': Bool,
-    'Str': Str,
-    'Customed': Customed,
-    'Nil': Nil,
+    "Int": Int,
+    "Float": Float,
+    "Bool": Bool,
+    "Str": Str,
+    "Customed": Customed,
+    "Nil": Nil,
 }
 
 

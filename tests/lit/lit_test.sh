@@ -3,7 +3,7 @@ set -ex
 
 function test {
     filename=$1
-    ./parser_entry.py --filename $filename --buildir 1 | filecheck $filename
+    ./parser_entry.py $filename --sema 1 | filecheck $filename
 }
 
 test ./basic_test.pis
