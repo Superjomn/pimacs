@@ -6,7 +6,7 @@ import pimacs.lang.ir as ir
 import pimacs.lang.type as _ty
 from pimacs.lang.ir_visitor import IRMutator, IRVisitor
 
-from .context import ModuleCtx, Scope, Symbol, SymbolItem, SymbolTable
+from .context import ModuleContext, Scope, Symbol, SymbolItem, SymbolTable
 
 
 def report_sema_error(node: ir.IrNode, message: str):

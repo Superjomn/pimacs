@@ -13,7 +13,7 @@ from lark.lexer import Token
 
 import pimacs.lang.ir as ir
 import pimacs.lang.type as _type
-from pimacs.lang.context import ModuleCtx, Scope, Symbol, SymbolTable
+from pimacs.lang.context import ModuleContext, Scope, Symbol, SymbolTable
 from pimacs.lang.ir_visitor import IRMutator, IRVisitor
 from pimacs.lang.sema import Sema, catch_sema_error
 
@@ -108,10 +108,13 @@ class PimacsTransformer(Transformer):
         self._force_non_rule(items)
         if len(items) == 1:
             return items[0]
-        else:
-            assert len(items) == 2
-            items[0].is_optional = True
+        elif len(items) == 2:
+            if items[1]:
+                if items[1].value == "?":
+                    items[0].is_optional = True
             return items[0]
+        else:
+            raise ValueError(f"Unknown type {items}")
 
     def set_type(self, items):
         "The type of Set"
@@ -170,6 +173,15 @@ class PimacsTransformer(Transformer):
 
     def type_list(self, items):
         self._force_non_rule(items)
+        return items
+
+    def variadic_type(self, items):
+        type = items[0]
+        return type, "variaric"
+
+    def complex_type(self, items):
+        type = items[0]
+        spec_types = items[1]
         return items
 
     def func_call(self, items) -> ir.FuncCall | ir.LispFuncCall:
