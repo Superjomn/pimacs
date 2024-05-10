@@ -81,6 +81,9 @@ class Type(TypeBase):
             raise ValueError(f"Unknown type {self.type_id}")
         return ""
 
+    def __repr__(self) -> str:
+        return str(self)
+
 
 # Built-in types
 Int = Type(TypeId.INT)

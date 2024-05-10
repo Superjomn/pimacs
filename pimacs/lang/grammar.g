@@ -121,7 +121,7 @@ type_base: PRIMITIVE_TYPE
 
 variadic_type: type ELLIPSIS
 basic_type: PRIMITIVE_TYPE | custom_type
-complex_type: NAME type_spec
+complex_type: NAME "[" type_list "]"
 list_type: "[" type "]"
 dict_type: "{" type ":" type "}"
 set_type: "{" type "}"

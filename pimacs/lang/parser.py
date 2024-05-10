@@ -62,6 +62,7 @@ def parse(
 class PimacsTransformer(Transformer):
     def __init__(self, source: ir.PlainCode | ir.FileName):
         self.source = source
+        self.ctx = ModuleContext("unk")
 
     def file_input(self, items):
         self._force_non_rule(items)
@@ -91,6 +92,12 @@ class PimacsTransformer(Transformer):
         name_token = safe_get(items, 0, None)
         name = name_token.value if name_token else None
         type_ = safe_get(items, 1, None)
+        is_variadic = False
+        if isinstance(type_, tuple):
+            assert type_[1] == "variaric"
+            is_variadic = True
+            type_ = type_[0]
+
         default = safe_get(items, 2, None)
 
         return ir.ArgDecl(
@@ -98,6 +105,7 @@ class PimacsTransformer(Transformer):
             type=type_,
             default=default,
             loc=ir.Location(self.source, items[0].line, items[0].column),
+            is_variadic=is_variadic,
         )
 
     def type_base(self, items):
@@ -180,13 +188,22 @@ class PimacsTransformer(Transformer):
         return type, "variaric"
 
     def complex_type(self, items):
+        # a known bug, that the TT[T] could be interpreted as "TT" "[T]", here just restore it to a complex type
         type = items[0]
         spec_types = items[1]
-        return items
+
+        if len(spec_types) == 1 and spec_types[0].type_id is _type.TypeId.List:
+            spec_types = spec_types[0].inner_types
+
+        # TODO: Unify the types in ModuleContext
+        return _type.make_customed(name=type.value, subtypes=spec_types)
 
     def func_call(self, items) -> ir.FuncCall | ir.LispFuncCall:
         self._force_non_rule(items)
         if isinstance(items[0], ir.VarRef):
+            name = items[0].name
+            loc = items[0].loc
+        elif isinstance(items[0], ir.UnresolvedVarRef):
             name = items[0].name
             loc = items[0].loc
         else:
