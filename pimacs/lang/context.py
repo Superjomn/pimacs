@@ -37,7 +37,7 @@ class ModuleContext:
         return None
 
     def get_type(
-        self, name: str, subtypes: Optional[List[Type]] = None
+        self, name: str, subtypes: Optional[Tuple[_ty.Type, ...]] = None
     ) -> Optional[_ty.Type]:
         key = f"{name}[{', '.join(map(str, subtypes))}]" if subtypes else name
         if key in self._types:

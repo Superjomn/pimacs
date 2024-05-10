@@ -118,7 +118,7 @@ class DictType(Type):
         return f"Dict[{self.key_type}, {self.value_type}]"
 
 
-def make_customed(name: str, subtypes: Optional[List[Type]] = None) -> Type:
+def make_customed(name: str, subtypes: Optional[Tuple["Type", ...]] = None) -> Type:
     type = Type(TypeId.CUSTOMED, name)
     if subtypes:
         type.inner_types = tuple(subtypes)
