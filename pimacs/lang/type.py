@@ -112,6 +112,9 @@ class DictType(Type):
     key_type: Type | None = None
     value_type: Type | None = None
 
+    def __post_init__(self):
+        self.inner_types = (self.key_type, self.value_type)
+
     def __str__(self) -> str:
         assert self.key_type is not None
         assert self.value_type is not None
