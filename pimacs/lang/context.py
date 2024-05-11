@@ -4,9 +4,10 @@ from enum import Enum
 from typing import *
 
 import pimacs.lang.ir as ir
+import pimacs.lang.type as _ty
 
 
-class ModuleCtx:
+class ModuleContext:
     """Context is a class that represents the context of the Module.
     The states includs
         - function symbols
@@ -22,6 +23,7 @@ class ModuleCtx:
         self._functions: Dict[str, ir.FuncDecl] = {}
         self._variables: Dict[str, ir.VarDecl] = {}
         self._classes: Dict[str, ir.ClassDef] = {}
+        self._types: Dict[str, _ty.Type] = {}
 
     def get_symbol(
         self, name: str
@@ -33,6 +35,16 @@ class ModuleCtx:
         if name in self._classes:
             return self._classes[name]
         return None
+
+    def get_type(
+        self, name: str, subtypes: Optional[Tuple[_ty.Type, ...]] = None
+    ) -> Optional[_ty.Type]:
+        key = f"{name}[{', '.join(map(str, subtypes))}]" if subtypes else name
+        if key in self._types:
+            return self._types[key]
+        new_type = _ty.make_customed(name, subtypes)
+        self._types[key] = new_type
+        return new_type
 
     def symbol_exists(self, name: str) -> bool:
         return (

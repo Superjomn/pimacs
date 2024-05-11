@@ -147,6 +147,7 @@ class ArgDecl(Stmt):
     name: str
     type: Type = field(default_factory=lambda: _type.Unk)
     default: Optional[Expr] = None
+    is_variadic: bool = False
 
     class Kind(Enum):
         normal = 0

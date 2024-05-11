@@ -13,7 +13,6 @@ file_input: (_NEWLINE | statement)*
           | for_loop
           | elisp_call
           | func_call
-          | PASS
           | return_stmt
           | assign_stmt
           | guard_stmt
@@ -111,15 +110,18 @@ pair_list: pair (_NEWLINE | "," [_NEWLINE] pair)* ["," [_NEWLINE]]
 
 
 type: type_base [QUESTION]
+    | variadic_type
+
 type_base: PRIMITIVE_TYPE
          | custom_type
          | complex_type
          | list_type
          | dict_type
          | set_type
-variadic_type: type "..."
+
+variadic_type: type ELLIPSIS
 basic_type: PRIMITIVE_TYPE | custom_type
-complex_type: NAME type_spec
+complex_type: NAME "[" type_list "]"
 list_type: "[" type "]"
 dict_type: "{" type ":" type "}"
 set_type: "{" type "}"
@@ -142,9 +144,9 @@ NOT: "not"
 IF: "if"
 ELIF: "elif"
 ELSE: "else"
-PASS: "..."
 TEMPLATE: "template"
 QUESTION: "?"
+ELLIPSIS: "..."
 
 %import common.WS_INLINE
 %import common.LETTER
