@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
@@ -21,9 +22,16 @@ class TypeId(Enum):
 
 
 @dataclass(slots=True)
-class TypeBase:
+class TypeBase(ABC):
     type_id: TypeId
     name: Optional[str] = None
+
+    @property
+    @abstractmethod
+    def is_concrete(self) -> bool:
+        # the type is concrete
+        # i.e. a TypeTemplate is not concrete, such as List[T]
+        return True
 
     def __str__(self):
         return self.name or self.type_id.value
@@ -33,6 +41,10 @@ class TypeBase:
 class Type(TypeBase):
     inner_types: Tuple["Type", ...] = field(default_factory=tuple)
     is_optional: bool = False  # Optional type such as Int?
+
+    @property
+    def is_concrete(self) -> bool:
+        return all(t.is_concrete for t in self.inner_types)
 
     def __post_init__(self):
         if self.is_optional:
@@ -85,6 +97,41 @@ class Type(TypeBase):
         return str(self)
 
 
+@dataclass(slots=True)
+class TemplateType(Type):
+    """
+    Template type, such as T.
+    Such type should be substituted with a concrete type before type checking.
+
+    TemplateType should be unique accross a whole module for easier to substitute with concrete types.
+    """
+
+    type_id: TypeId = field(default=TypeId.CUSTOMED, init=False)
+
+    @property
+    def is_concrete(self) -> bool:
+        return False
+
+
+@dataclass(slots=True)
+class TypeTemplate(Type):
+    """
+    The type template, such as List in List[T].
+
+    To declare a type template, use TypeTemplate instead of actual Type.
+    e.g.
+
+    # It will declare a class MyClass with two type parameters T0 and T1
+    @template[T0, T1]
+    class MyClass: ...
+
+    The type MyClass[T0, T1] is a TypeTemplate, and it is not concrete.
+    """
+
+    def __post_init__(self):
+        self.is_concrete = all(t.is_concrete for t in self.inner_types)
+
+
 # Built-in types
 Int = Type(TypeId.INT)
 Float = Type(TypeId.FLOAT)
@@ -126,6 +173,28 @@ def make_customed(name: str, subtypes: Optional[Tuple["Type", ...]] = None) -> T
     if subtypes:
         type.inner_types = tuple(subtypes)
     return type
+
+
+class TypeSystemBase:
+    def __init__(self) -> None:
+        self.types: Dict[str, Type] = {}
+
+    def _init_basic_type(self):
+        self.types["Int"] = Int
+        self.types["Float"] = Float
+        self.types["Bool"] = Bool
+        self.types["Str"] = Str
+        self.types["nil"] = Nil
+
+    def define_composite_type(self, name: str, *args: Type) -> Type:
+        ty = make_customed(name, args)
+        key = str(ty)
+        if key not in self.types:
+            self.types[key] = make_customed(name, args)
+        return self.types[key]
+
+    def get_type(self, name: str) -> Optional[Type]:
+        return self.types.get(name, None)
 
 
 STR_TO_PRIMITIVE_TYPE = {
