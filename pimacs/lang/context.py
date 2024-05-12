@@ -89,6 +89,7 @@ class Symbol:
         Var = 3  # normal variable
         Lisp = 4
         Arg = 5
+        TypeAlas = 6
 
         def __str__(self):
             return self.name
@@ -98,6 +99,14 @@ class Symbol:
 
     def __str__(self):
         return f"{self.kind.name}({self.name})"
+
+
+@dataclass
+class ModuleId:
+    ids: Tuple[str, ...] = field(default_factory=tuple)
+
+    def __str__(self) -> str:
+        return "::".join(self.ids)
 
 
 SymbolItem = Any
@@ -177,3 +186,56 @@ class SymbolTable:
             yield
         finally:
             self.pop_scope()
+
+
+class TypeSystem(_ty.TypeSystemBase):
+    """
+    The TypeSystem to handle the types and classes.
+    """
+
+    def __init__(self, symtbl: SymbolTable) -> None:
+        super().__init__()
+        # symtbl holds the typealias, class symbols
+        # TODO: Consider modules
+        self.symtbl = symtbl
+
+    def add_type_alias(self, name: str, ty: _ty.Type) -> None:
+        # Type alias is similar to variable, it should be added to the current scope
+        self.symtbl.add_symbol(Symbol(name, Symbol.Kind.TypeAlas), ty)
+
+    def get_type(self, name: str) -> Optional[_ty.Type]:
+        # Shadow the builtin Types is not allowed, so it is safe to get the type alias first
+        symbol = self.symtbl.get_symbol(name=name, kind=Symbol.Kind.TypeAlas)
+        if symbol:
+            return symbol
+        return super().get_type(name)
+
+    def get_types_by_name(self, name: str) -> Iterable[_ty.Type]:
+        return filter(lambda ty: ty.name == name, [ty for k, ty in self.types.items()])
+
+    def get_ListType(self, inner_type: _ty.Type) -> _ty.Type:
+        return self.define_composite_type("List", inner_type)
+
+    def get_SetType(self, inner_type: _ty.Type) -> _ty.Type:
+        return self.define_composite_type("Set", inner_type)
+
+    def get_DictType(self, key_type: _ty.Type, value_type: _ty.Type) -> _ty.Type:
+        return self.define_composite_type("Dict", key_type, value_type)
+
+    def get_CustomType(self, name: str, *args: _ty.Type) -> _ty.Type:
+        return self.define_composite_type(name, *args)
+
+    type_place_holder_counter = 0
+
+    def get_type_placeholder(self, name: str) -> _ty.TemplateType:
+        """
+        Get a placeholer for type, such T in List[T].
+        """
+        return _ty.TemplateType(name=name)
+
+    def get_unique_type_placeholder(self) -> _ty.TemplateType:
+        """
+        Get a globally unique placeholder for type.
+        """
+        self.type_place_holder_counter += 1
+        return self.get_type_placeholder(f"__T{self.type_place_holder_counter}")
