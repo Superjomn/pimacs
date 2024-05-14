@@ -3,8 +3,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import *
 
-import pimacs.lang.ir as ir
-import pimacs.lang.type as _ty
+import pimacs.ast.ast as ast
+import pimacs.ast.type as _ty
 
 
 class ModuleContext:
@@ -20,14 +20,14 @@ class ModuleContext:
 
     def __init__(self, name: str):
         self._name = name
-        self._functions: Dict[str, ir.FuncDecl] = {}
-        self._variables: Dict[str, ir.VarDecl] = {}
-        self._classes: Dict[str, ir.ClassDef] = {}
+        self._functions: Dict[str, ast.FuncDecl] = {}
+        self._variables: Dict[str, ast.VarDecl] = {}
+        self._classes: Dict[str, ast.ClassDef] = {}
         self._types: Dict[str, _ty.Type] = {}
 
     def get_symbol(
         self, name: str
-    ) -> Optional[Union[ir.FuncDecl, ir.VarDecl, ir.ClassDef]]:
+    ) -> Optional[Union[ast.FuncDecl, ast.VarDecl, ast.ClassDef]]:
         if name in self._functions:
             return self._functions[name]
         if name in self._variables:
@@ -51,22 +51,22 @@ class ModuleContext:
             name in self._functions or name in self._variables or name in self._classes
         )
 
-    def add_function(self, func: ir.FuncDecl):
+    def add_function(self, func: ast.FuncDecl):
         self._functions[func.name] = func
 
-    def add_variable(self, var: ir.VarDecl):
+    def add_variable(self, var: ast.VarDecl):
         self._variables[var.name] = var
 
-    def add_class(self, cls: ir.ClassDef):
+    def add_class(self, cls: ast.ClassDef):
         self._classes[cls.name] = cls
 
-    def get_function(self, name: str) -> Optional[ir.FuncDecl]:
+    def get_function(self, name: str) -> Optional[ast.FuncDecl]:
         return self._functions.get(name)
 
-    def get_variable(self, name: str) -> Optional[ir.VarDecl]:
+    def get_variable(self, name: str) -> Optional[ast.VarDecl]:
         return self._variables.get(name)
 
-    def get_class(self, name: str) -> Optional[ir.ClassDef]:
+    def get_class(self, name: str) -> Optional[ast.ClassDef]:
         return self._classes.get(name)
 
     @property
