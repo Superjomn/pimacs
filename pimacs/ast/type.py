@@ -46,6 +46,13 @@ class Type(TypeBase):
     def is_concrete(self) -> bool:
         return all(t.is_concrete for t in self.inner_types)
 
+    def is_subtype(self, other: "Type") -> bool:
+        if self == other:
+            return True
+        elif self == Nil and other.is_optional:
+            return True
+        return False
+
     def __post_init__(self):
         if self.is_optional:
             assert self.type_id != TypeId.NIL, "nil type cannot be optional"

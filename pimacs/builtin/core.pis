@@ -1,0 +1,60 @@
+# Placeholders for builtin special methods
+def pub(tolisp:Str?=nil):
+    "A decorator to mark a variable, function or class to be exported as public."
+    return
+
+def inline():
+    "A decorator to mark a function to expand inline when called."
+    return
+
+@template[T]
+class List:
+    "List container.
+    Usage:
+        var a: List[Int]
+        a.append(1)  # => [1]
+        a.size()     # => 1
+        a in a       # => t
+    "
+
+    var -li: Lisp
+
+    @pub
+    def __init__(self, items: T...):
+        # items will be interpreted as a list
+        self.-li = items
+
+    @pub
+    @property
+    def size(self) -> Int:
+        return %len(self.-li)
+
+    @pub
+    def append(self, v: T):
+        %push(v, self.-li)
+
+    @pub
+    def insert(self, pos: Int, v: T):
+        %cl-insert(self.-li, pos, v)
+
+    @pub
+    def __getitem__(self, idx: Int) -> T:
+        return %nth(self.-li, idx)
+
+    @pub
+    def __setitem__(self, idx: Int, value: T):
+        # TODO
+        return
+
+    # @pub
+    # def __add__(self, other: List[T]) -> List[T]:
+    #     return %append(self.-li, other.__aslisp__())
+
+    @pub
+    def __contains__(self, value: T) -> Bool:
+        return %member(value, self.-li)
+
+    @pub
+    def __aslisp__(self) -> Lisp:
+        "This method helps to bridge this class to a native data in lisp world."
+        return self.-li

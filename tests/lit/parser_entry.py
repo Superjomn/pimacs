@@ -3,15 +3,18 @@ from io import StringIO
 
 import click
 
-from pimacs.lang.ir_visitor import IRPrinter
-from pimacs.lang.parser import parse
+from pimacs.sema.ast_visitor import IRPrinter
+from pimacs.transpiler.phases import parse_ast, perform_sema
 
 
 @click.command()
 @click.argument("filename", type=str)
 @click.option("--sema", type=bool, default=False)
 def main(filename: str, sema: bool):
-    file = parse(filename=filename, sema=sema)
+    file = parse_ast(filename=filename, sema=sema)
+    if sema:
+        file = perform_sema(file)  # type: ignore
+
     if file:
         printer = IRPrinter(StringIO())
         printer(file)

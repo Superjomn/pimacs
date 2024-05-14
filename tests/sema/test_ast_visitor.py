@@ -3,10 +3,11 @@ from io import StringIO
 import pytest
 from code_snippets import snippets
 
-import pimacs.lang.ir as ir
+import pimacs.ast.ast as ir
 from pimacs import BUILTIN_SOURCE_ROOT, SOURCE_ROOT
-from pimacs.lang.ir_visitor import IRPrinter, IRVisitor
-from pimacs.lang.parser import get_lark_parser, get_parser, parse
+from pimacs.ast.parser import get_lark_parser, get_parser
+from pimacs.sema.ast_visitor import IRPrinter, IRVisitor
+from pimacs.transpiler.phases import parse_ast, perform_sema
 
 
 class MyIRVisitor(IRVisitor):
@@ -24,7 +25,7 @@ def test_basic():
 
 def test_IRPrinter_func():
     printer = IRPrinter(StringIO())
-    file = parse(code=snippets.func_case, sema=False)
+    file = parse_ast(code=snippets.func_case)
     printer(file)
     output = printer.os.getvalue()
 
@@ -111,7 +112,7 @@ def hello (name :Str) -> nil:
 def test_printer(snippet_key, target):
     code = snippets[snippet_key]
     printer = IRPrinter(StringIO())
-    file = parse(code=code, sema=False)
+    file = parse_ast(code=code)
     printer(file)
     output = printer.os.getvalue()
 

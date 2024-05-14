@@ -1,4 +1,4 @@
-from pimacs.lang.type import *
+from pimacs.ast.type import *
 
 
 def test_Type_str():

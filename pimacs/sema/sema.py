@@ -2,18 +2,18 @@ import logging
 from dataclasses import dataclass
 from typing import List
 
-import pimacs.lang.ir as ir
-import pimacs.lang.type as _ty
-from pimacs.lang.ir_visitor import IRMutator, IRVisitor
+import pimacs.ast.ast as ast
+import pimacs.ast.type as _ty
+from pimacs.sema.ast_visitor import IRMutator, IRVisitor
 
 from .context import ModuleContext, Scope, Symbol, SymbolItem, SymbolTable
 
 
-def report_sema_error(node: ir.IrNode, message: str):
+def report_sema_error(node: ast.IrNode, message: str):
     logging.error(f"Error at {node.loc}:\n{message}\n")
 
 
-def catch_sema_error(cond: bool, node: ir.IrNode, message: str) -> bool:
+def catch_sema_error(cond: bool, node: ast.IrNode, message: str) -> bool:
     if cond:
         node.sema_failed = True
         report_sema_error(node, message)
@@ -21,7 +21,7 @@ def catch_sema_error(cond: bool, node: ir.IrNode, message: str) -> bool:
     return False
 
 
-def any_failed(*nodes: ir.IrNode) -> bool:
+def any_failed(*nodes: ast.IrNode) -> bool:
     return any(node.sema_failed for node in nodes)
 
 
@@ -64,12 +64,12 @@ class Sema(IRMutator):
     def succeed(self) -> bool:
         return self._succeeded
 
-    def report_error(self, node: ir.IrNode, message: str):
+    def report_error(self, node: ast.IrNode, message: str):
         report_sema_error(node, message)
         node.sema_failed = True
         self._succeeded = False
 
-    def visit_UnresolvedVarRef(self, node: ir.UnresolvedVarRef):
+    def visit_UnresolvedVarRef(self, node: ast.UnresolvedVarRef):
         node = super().visit_UnresolvedVarRef(node)
         if node.name.startswith("self."):
             # deal with members
@@ -77,22 +77,22 @@ class Sema(IRMutator):
             member = self.sym_tbl.get_symbol(name=var_name, kind=Symbol.Kind.Member)
             if member is None:
                 raise KeyError(f"{node.loc}\nMember {node.name} is not declared")
-            var = ir.VarRef(decl=member, loc=node.loc)  # type: ignore
+            var = ast.VarRef(decl=member, loc=node.loc)  # type: ignore
 
             obj = self.sym_tbl.get_symbol(name="self", kind=Symbol.Kind.Arg)
             if not obj:
-                obj = ir.UnresolvedVarRef(name="self", loc=node.loc, target_type=_ty.Unk)  # type: ignore
+                obj = ast.UnresolvedVarRef(name="self", loc=node.loc, target_type=_ty.Unk)  # type: ignore
                 catch_sema_error(True, node, f"`self` is not declared")
-            return ir.MemberRef(obj=ir.VarRef(decl=obj, loc=node.loc), member=var, loc=node.loc)  # type: ignore
+            return ast.MemberRef(obj=ast.VarRef(decl=obj, loc=node.loc), member=var, loc=node.loc)  # type: ignore
 
         elif sym := self.sym_tbl.get_symbol(
             name=node.name, kind=[Symbol.Kind.Var, Symbol.Kind.Arg]
         ):
-            if isinstance(sym, ir.VarDecl):
-                var = ir.VarRef(decl=sym, loc=node.loc)  # type: ignore
-            elif isinstance(sym, ir.ArgDecl):
-                var = ir.VarRef(decl=sym, loc=node.loc)
-            elif isinstance(sym, ir.VarRef):
+            if isinstance(sym, ast.VarDecl):
+                var = ast.VarRef(decl=sym, loc=node.loc)  # type: ignore
+            elif isinstance(sym, ast.ArgDecl):
+                var = ast.VarRef(decl=sym, loc=node.loc)
+            elif isinstance(sym, ast.VarRef):
                 var = sym
             else:
                 raise ValueError(f"{node.loc}\nUnknown symbol type {sym}")
@@ -102,7 +102,7 @@ class Sema(IRMutator):
             report_sema_error(node, f"Symbol {node.name} not found")
             return node
 
-    def visit_VarDecl(self, node: ir.VarDecl):
+    def visit_VarDecl(self, node: ast.VarDecl):
         node = super().visit_VarDecl(node)
         if self.sym_tbl.current_scope.kind is Scope.Kind.Class:
             # Declare a member
@@ -121,7 +121,7 @@ class Sema(IRMutator):
 
         return self.verify_VarDecl(node)
 
-    def verify_VarDecl(self, node: ir.VarDecl) -> ir.VarDecl:
+    def verify_VarDecl(self, node: ast.VarDecl) -> ast.VarDecl:
         if node.sema_failed:
             return node
         if not node.init:
@@ -142,7 +142,7 @@ class Sema(IRMutator):
                     return node
         return node
 
-    def visit_SelectExpr(self, node: ir.SelectExpr):
+    def visit_SelectExpr(self, node: ast.SelectExpr):
         node = super().visit_SelectExpr(node)
         if any_failed(node.cond, node.then_expr, node.else_expr):
             node.sema_failed = True
@@ -150,7 +150,7 @@ class Sema(IRMutator):
 
         return self.verify_SelectExpr(node)
 
-    def verify_SelectExpr(self, node: ir.SelectExpr) -> ir.SelectExpr:
+    def verify_SelectExpr(self, node: ast.SelectExpr) -> ast.SelectExpr:
         if node.sema_failed:
             return node
         if not is_type_compatible(node.then_expr.get_type(), node.else_expr.get_type()):
@@ -161,7 +161,7 @@ class Sema(IRMutator):
             return node
         return node
 
-    def visit_FuncDecl(self, node: ir.FuncDecl):
+    def visit_FuncDecl(self, node: ast.FuncDecl):
         within_class = self.sym_tbl.current_scope.kind is Scope.Kind.Class
         with self.sym_tbl.scope_guard(kind=Scope.Kind.Func):
             node = super().visit_FuncDecl(node)
@@ -178,14 +178,14 @@ class Sema(IRMutator):
                         self.report_error(
                             node, f"Class method should have the first arg named 'cls'"
                         )
-                    cls_arg.kind = ir.ArgDecl.Kind.cls_placeholder
+                    cls_arg.kind = ast.ArgDecl.Kind.cls_placeholder
                 elif not node.is_staticmethod:
                     self_arg = args[0]  # self placeholder
                     if self_arg.name != "self":
                         self.report_error(
                             node, f"Method should have the first arg named 'self'"
                         )
-                    self_arg.kind = ir.ArgDecl.Kind.self_placeholder
+                    self_arg.kind = ast.ArgDecl.Kind.self_placeholder
 
             if any_failed(*node.args, node.body, *node.decorators):
                 node.sema_failed = True
@@ -193,7 +193,7 @@ class Sema(IRMutator):
         node = self.sym_tbl.add_symbol(symbol, node)
         return self.verify_FuncDecl(node)
 
-    def verify_FuncDecl(self, node: ir.FuncDecl) -> ir.FuncDecl:
+    def verify_FuncDecl(self, node: ast.FuncDecl) -> ast.FuncDecl:
         if node.sema_failed:
             return node
 
@@ -205,9 +205,9 @@ class Sema(IRMutator):
         for no, arg in enumerate(node.args):
             if arg.sema_failed:
                 continue
-            if arg.name == "self" and arg.kind is ir.ArgDecl.Kind.self_placeholder:
+            if arg.name == "self" and arg.kind is ast.ArgDecl.Kind.self_placeholder:
                 pass
-            elif arg.name == "cls" and arg.kind is ir.ArgDecl.Kind.cls_placeholder:
+            elif arg.name == "cls" and arg.kind is ast.ArgDecl.Kind.cls_placeholder:
                 pass
             elif not arg.type or arg.type is _ty.Unk:
                 self.report_error(arg, f"Argument {arg.name} should have a type")
@@ -231,7 +231,7 @@ class Sema(IRMutator):
 
         return node
 
-    def visit_ClassDef(self, node: ir.ClassDef):
+    def visit_ClassDef(self, node: ast.ClassDef):
         if self.sym_tbl.current_scope.kind is not Scope.Kind.Global:
             self.report_error(node, f"Class should be declared in the global scope")
 
@@ -245,12 +245,12 @@ class Sema(IRMutator):
         node = self.sym_tbl.add_symbol(symbol, node)
         return self.verify_ClassDef(node)
 
-    def verify_ClassDef(self, node: ir.ClassDef) -> ir.ClassDef:
+    def verify_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         if node.sema_failed:
             return node
         return node
 
-    def visit_FuncCall(self, node: ir.FuncCall):
+    def visit_FuncCall(self, node: ast.FuncCall):
         node = super().visit_FuncCall(node)
         func_name = node.func
         assert isinstance(func_name, str)
@@ -266,40 +266,40 @@ class Sema(IRMutator):
         if not func:
             self.report_error(node, f"Target function/class {func_name} not found")
             return self.verify_FuncCall(node, func)
-        elif isinstance(func, ir.VarDecl):
+        elif isinstance(func, ast.VarDecl):
             true_func = Sema.get_true_var(func)
-            if isinstance(true_func, ir.LispVarRef):
-                if isinstance(true_func, ir.LispVarRef):
+            if isinstance(true_func, ast.LispVarRef):
+                if isinstance(true_func, ast.LispVarRef):
                     return self.verify_FuncCall(
-                        ir.LispFuncCall(func=true_func, args=node.args, loc=node.loc),
+                        ast.LispFuncCall(func=true_func, args=node.args, loc=node.loc),
                         func,
                     )
             self.report_error(node, f"{node.loc}\nUnknown lisp function call {func}")
             return node
         else:
             assert func is not None
-            node = ir.FuncCall(func=func, args=node.args, loc=node.loc)  # type: ignore
+            node = ast.FuncCall(func=func, args=node.args, loc=node.loc)  # type: ignore
             return self.verify_FuncCall(node, func)
 
     def verify_FuncCall(
         self,
-        node: ir.FuncCall | ir.LispFuncCall,
-        func: ir.VarDecl | ir.LispVarRef | None,
-    ) -> ir.FuncCall | ir.LispFuncCall:
+        node: ast.FuncCall | ast.LispFuncCall,
+        func: ast.VarDecl | ast.LispVarRef | None,
+    ) -> ast.FuncCall | ast.LispFuncCall:
         if node.sema_failed:
             return node
 
         if any_failed(*node.args):
             node.sema_failed = True
-        if isinstance(node, ir.FuncCall):
+        if isinstance(node, ast.FuncCall):
             # TODO[superjomn]: check if the number of arguments and type is correct
             return node
         return node
 
-    def visit_LispFuncCall(self, node: ir.LispFuncCall):
+    def visit_LispFuncCall(self, node: ast.LispFuncCall):
         return super().visit_LispFuncCall(node)
 
-    def visit_Block(self, node: ir.Block):
+    def visit_Block(self, node: ast.Block):
         with self.sym_tbl.scope_guard():
             node = super().visit_Block(node)
 
@@ -307,20 +307,20 @@ class Sema(IRMutator):
                 node.sema_failed = True
         return self.verify_Block(node)
 
-    def verify_Block(self, node: ir.Block) -> ir.Block:
+    def verify_Block(self, node: ast.Block) -> ast.Block:
         if node.sema_failed:
             return node
 
         return_types = set()
         # gather return types
         for return_stmt in node.stmts:
-            if isinstance(return_stmt, ir.ReturnStmt):
+            if isinstance(return_stmt, ast.ReturnStmt):
                 if return_stmt.value:
                     return_types.add(return_stmt.value.get_type())
         node.return_type = list(return_types) if return_types else [_ty.Nil]
         return node
 
-    def visit_ArgDecl(self, node: ir.ArgDecl):
+    def visit_ArgDecl(self, node: ast.ArgDecl):
         node = super().visit_ArgDecl(node)
         assert (
             self.sym_tbl.current_scope.kind is Scope.Kind.Func
@@ -332,7 +332,7 @@ class Sema(IRMutator):
             node = self.sym_tbl.add_symbol(symbol, node)
         return self.verify_ArgDecl(node)
 
-    def verify_ArgDecl(self, node: ir.ArgDecl) -> ir.ArgDecl:
+    def verify_ArgDecl(self, node: ast.ArgDecl) -> ast.ArgDecl:
         if not (node.is_cls_placeholder or node.is_self_placeholder):
             if node.type is _ty.Unk and node.default is None:
                 self.report_error(
@@ -347,22 +347,22 @@ class Sema(IRMutator):
                     )
         return node
 
-    def visit_BinaryOp(self, node: ir.BinaryOp):
+    def visit_BinaryOp(self, node: ast.BinaryOp):
         node = super().visit_BinaryOp(node)
         return self.verify_BinaryOp(node)
 
-    def verify_BinaryOp(self, node: ir.BinaryOp) -> ir.BinaryOp:
+    def verify_BinaryOp(self, node: ast.BinaryOp) -> ast.BinaryOp:
         if any_failed(node.left, node.right):
             node.sema_failed = True
             return node
 
         op_to_op_check = {
-            ir.BinaryOperator.ADD: self.can_type_add,
-            ir.BinaryOperator.SUB: self.can_type_sub,
-            ir.BinaryOperator.MUL: self.can_type_mul,
-            ir.BinaryOperator.DIV: self.can_type_div,
-            ir.BinaryOperator.EQ: self.can_type_eq,
-            ir.BinaryOperator.NE: self.can_type_neq,
+            ast.BinaryOperator.ADD: self.can_type_add,
+            ast.BinaryOperator.SUB: self.can_type_sub,
+            ast.BinaryOperator.MUL: self.can_type_mul,
+            ast.BinaryOperator.DIV: self.can_type_div,
+            ast.BinaryOperator.EQ: self.can_type_eq,
+            ast.BinaryOperator.NE: self.can_type_neq,
         }
 
         for op, check in op_to_op_check.items():
@@ -410,35 +410,35 @@ class Sema(IRMutator):
     def can_type_neq(self, left, right):
         return True
 
-    def visit_UnaryOp(self, node: ir.UnaryOp):
+    def visit_UnaryOp(self, node: ast.UnaryOp):
         node = super().visit_UnaryOp(node)
         return node
 
-    def verify_UnaryOp(self, node: ir.UnaryOp) -> ir.UnaryOp:
+    def verify_UnaryOp(self, node: ast.UnaryOp) -> ast.UnaryOp:
         if node.value.sema_failed:
             node.sema_failed = True
             return node
         return node
 
-    def visit_CallParam(self, node: ir.CallParam):
+    def visit_CallParam(self, node: ast.CallParam):
         node = super().visit_CallParam(node)
         return node
 
-    def verify_CallParam(self, node: ir.CallParam) -> ir.CallParam:
+    def verify_CallParam(self, node: ast.CallParam) -> ast.CallParam:
         if node.sema_failed:
             return node
         return node
 
     @staticmethod
     def get_true_var(
-        node: ir.VarDecl | ir.VarRef,
-    ) -> ir.VarDecl | ir.LispVarRef | ir.ArgDecl | ir.UnresolvedVarRef | ir.Expr:
-        if isinstance(node, ir.VarDecl) and node.init:
+        node: ast.VarDecl | ast.VarRef,
+    ) -> ast.VarDecl | ast.LispVarRef | ast.ArgDecl | ast.UnresolvedVarRef | ast.Expr:
+        if isinstance(node, ast.VarDecl) and node.init:
             return node.init
-        if isinstance(node, ir.VarRef):
+        if isinstance(node, ast.VarRef):
             assert node.decl
             return node.decl
-        if isinstance(node, ir.LispVarRef):
+        if isinstance(node, ast.LispVarRef):
             return node
 
         return node

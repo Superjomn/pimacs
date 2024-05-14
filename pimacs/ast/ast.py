@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar, List, Optional, Set, Tuple, Union
 
-import pimacs.lang.type as _type
-from pimacs.lang.type import Type, TypeId
+import pimacs.ast.type as _type
+from pimacs.ast.type import Type, TypeId
 
 
 @dataclass
