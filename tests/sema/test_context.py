@@ -1,5 +1,5 @@
-from pimacs.lang.context import ModuleContext, SymbolTable, TypeSystem
-from pimacs.lang.type import *
+from pimacs.ast.type import *
+from pimacs.sema.context import ModuleContext, SymbolTable, TypeSystem
 
 
 def test_type_singleton():
