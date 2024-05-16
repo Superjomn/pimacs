@@ -3,6 +3,7 @@ import pytest
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 from pimacs.sema.func import *
+from pimacs.sema.utils import *
 
 
 def test_func_symbol():
