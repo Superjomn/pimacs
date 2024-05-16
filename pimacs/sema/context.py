@@ -6,6 +6,9 @@ from typing import *
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 
+from .func import FuncOverloads, FuncSig, FuncSymbol, FuncTable
+from .utils import ClassId, ModuleId, Scoped, ScopeKind, Symbol
+
 
 class ModuleContext:
     """Context is a class that represents the context of the Module.
@@ -75,40 +78,6 @@ class ModuleContext:
         return self._name
 
 
-@dataclass(unsafe_hash=True)
-class Symbol:
-    """
-    Reprsent any kind of symbol and is comparable.
-    """
-
-    class Kind(Enum):
-        Unk = -1
-        Func = 0
-        Class = 1
-        Member = 2  # class member
-        Var = 3  # normal variable
-        Lisp = 4
-        Arg = 5
-        TypeAlas = 6
-
-        def __str__(self):
-            return self.name
-
-    name: str  # the name without "self." prefix if it is a member
-    kind: Kind
-
-    def __str__(self):
-        return f"{self.kind.name}({self.name})"
-
-
-@dataclass
-class ModuleId:
-    ids: Tuple[str, ...] = field(default_factory=tuple)
-
-    def __str__(self) -> str:
-        return "::".join(self.ids)
-
-
 SymbolItem = Any
 
 
@@ -116,13 +85,7 @@ SymbolItem = Any
 class Scope:
     data: Dict[Symbol, SymbolItem] = field(default_factory=dict)
 
-    class Kind(Enum):
-        Local = 0
-        Global = 1
-        Class = 2
-        Func = 3
-
-    kind: Kind = Kind.Local
+    kind: ScopeKind = ScopeKind.Local
 
     def add(self, symbol: Symbol, item: SymbolItem):
         if symbol in self.data:
@@ -133,18 +96,27 @@ class Scope:
         return self.data.get(symbol, None)
 
 
-class SymbolTable:
+class SymbolTable(Scoped):
     def __init__(self):
-        self.scopes = [Scope(kind=Scope.Kind.Global)]
+        self.scopes = [Scope(kind=ScopeKind.Global)]
+        self.func_table = FuncTable()
 
-    def push_scope(self, kind: Scope.Kind):
+    def push_scope(self, kind: ScopeKind = ScopeKind.Local):
         self.scopes.append(Scope(kind=kind))
+        self.func_table.push_scope(kind=kind)
 
     def pop_scope(self):
         self.scopes.pop()
+        self.func_table.pop_scope()
 
-    def add_symbol(self, symbol: Symbol, item: SymbolItem):
-        self.scopes[-1].add(symbol=symbol, item=item)
+    def _add_function(self, func: ast.FuncDecl):
+        self.func_table.insert(func)
+
+    def insert(self, symbol: Symbol, item: SymbolItem):
+        if symbol.kind == Symbol.Kind.Func:
+            self._add_function(item)
+        else:
+            self.scopes[-1].add(symbol=symbol, item=item)
         return item
 
     def get_symbol(
@@ -169,10 +141,17 @@ class SymbolTable:
                     return ret
         return None
 
+    def get_function(self, symbol: FuncSymbol) -> Optional[FuncOverloads]:
+        return self.func_table.lookup(symbol)
+
     def contains(self, symbol: Symbol) -> bool:
+        if symbol.kind is Symbol.Kind.Func:
+            return self.func_table.contains(symbol)
         return any(symbol in scope for scope in reversed(self.scopes))
 
     def contains_locally(self, symbol: Symbol) -> bool:
+        if symbol.kind is Symbol.Kind.Func:
+            return self.func_table.contains_locally(symbol)
         return self.scopes[-1].get(symbol) is not None
 
     @property
@@ -180,7 +159,7 @@ class SymbolTable:
         return self.scopes[-1]
 
     @contextmanager
-    def scope_guard(self, kind=Scope.Kind.Local):
+    def scope_guard(self, kind=ScopeKind.Local):
         self.push_scope(kind)
         try:
             yield
@@ -201,7 +180,7 @@ class TypeSystem(_ty.TypeSystemBase):
 
     def add_type_alias(self, name: str, ty: _ty.Type) -> None:
         # Type alias is similar to variable, it should be added to the current scope
-        self.symtbl.add_symbol(Symbol(name, Symbol.Kind.TypeAlas), ty)
+        self.symtbl.insert(Symbol(name, Symbol.Kind.TypeAlas), ty)
 
     def get_type(self, name: str) -> Optional[_ty.Type]:
         # Shadow the builtin Types is not allowed, so it is safe to get the type alias first

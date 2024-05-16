@@ -5,23 +5,7 @@ import pimacs.ast.type as _ty
 from pimacs.ast.ast import CallParam, FuncCall, FuncDecl
 from pimacs.ast.type import Type as _type
 
-from .utils import Scoped
-
-
-@dataclass(slots=True, frozen=True)
-class FuncSymbol:
-    """
-    FuncSymbol represents a function symbol in the FuncTable.
-    """
-
-    name: str
-    context: Tuple[Union["ModuleId", "ClassId"], ...] = field(default_factory=tuple)
-
-    def __post_init__(self):
-        if self.context:
-            # check the ClassId is the last element if there is any
-            if any(isinstance(x, ClassId) for x in self.context[:-1]):
-                raise ValueError("ClassId should be the last element")
+from .utils import FuncSymbol, Scoped, ScopeKind, Symbol
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -95,18 +79,6 @@ class FuncOverloads:
         return iter(self.funcs.values())
 
 
-@dataclass(slots=True)
-class ModuleId:
-    """ID for a module."""
-
-    name: str
-
-
-@dataclass(slots=True)
-class ClassId:
-    name: str
-
-
 class FuncTable(Scoped):
     def __init__(self) -> None:
         self.scopes: List[Dict[FuncSymbol, FuncOverloads]] = [{}]  # global
@@ -136,7 +108,13 @@ class FuncTable(Scoped):
             record.add_func(func)
             self.scopes[-1][symbol] = record
 
-    def push_scope(self, kind: str = ""):
+    def contains(self, symbol: FuncSymbol) -> bool:
+        return bool(self.lookup(symbol))
+
+    def contains_locally(self, symbol: FuncSymbol) -> bool:
+        return symbol in self.scopes[-1]
+
+    def push_scope(self, kind: ScopeKind = ScopeKind.Local):
         self.scopes.append({})
 
     def pop_scope(self):

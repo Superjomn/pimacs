@@ -15,10 +15,10 @@
 1. The global function should be registered to ModuleContext
 2. ~retrieveFunc~ to get a FuncDecl with a FuncSignature
 
-**** TODO Function override [/]
-1. [ ] Need a function signature
-2. [ ] Retrieve the candidate functions with a function-name, and then match one by one
-2. [ ] Add the functions in the global scope into ModuleContext
+**** TODO Function override [2/3]
+1. [X] Need a function signature
+2. [X] Retrieve the candidate functions with a function-name, and then match one by one
+3. [ ] Add the functions in the global scope into ModuleContext
 
 **** TODO Mapping Object to Class
 1. Need to register classes to ModouleContext, and once an object.method is triggered, retrieve the function from ModuleContext
@@ -26,6 +26,13 @@
 **** TODO templated function and call support
 1. Special need to function mangling, and insert to Scope, one func-name could map to multiple overrided functions or templated-functions
 2. FuncCall should have a UnresolvedFunc as a target function signature? And this could retrieve FuncDecls by name and then match one by one
+
+*** Lisp
+**** AST
+**** translate
+Trigger the elisp directly, this could mainly for tests
+
+*** Runtime
 
 *** Builtin module
 Contains the builtin core data structures, such as List, Set, Dict and so on.

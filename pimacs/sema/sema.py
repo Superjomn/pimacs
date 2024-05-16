@@ -6,7 +6,7 @@ import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 from pimacs.sema.ast_visitor import IRMutator, IRVisitor
 
-from .context import ModuleContext, Scope, Symbol, SymbolItem, SymbolTable
+from .context import ModuleContext, Scope, ScopeKind, Symbol, SymbolTable
 
 
 def report_sema_error(node: ast.IrNode, message: str):
@@ -104,10 +104,10 @@ class Sema(IRMutator):
 
     def visit_VarDecl(self, node: ast.VarDecl):
         node = super().visit_VarDecl(node)
-        if self.sym_tbl.current_scope.kind is Scope.Kind.Class:
+        if self.sym_tbl.current_scope.kind is ScopeKind.Class:
             # Declare a member
             symbol = Symbol(name=node.name, kind=Symbol.Kind.Member)
-            self.sym_tbl.add_symbol(symbol, node)
+            self.sym_tbl.insert(symbol, node)
         else:
             # Declare a local variable
             if self.sym_tbl.contains_locally(
@@ -115,9 +115,7 @@ class Sema(IRMutator):
             ):
                 self.report_error(node, f"Variable {node.name} already exists")
             else:
-                self.sym_tbl.add_symbol(
-                    Symbol(name=node.name, kind=Symbol.Kind.Var), node
-                )
+                self.sym_tbl.insert(Symbol(name=node.name, kind=Symbol.Kind.Var), node)
 
         return self.verify_VarDecl(node)
 
@@ -162,8 +160,8 @@ class Sema(IRMutator):
         return node
 
     def visit_FuncDecl(self, node: ast.FuncDecl):
-        within_class = self.sym_tbl.current_scope.kind is Scope.Kind.Class
-        with self.sym_tbl.scope_guard(kind=Scope.Kind.Func):
+        within_class = self.sym_tbl.current_scope.kind is ScopeKind.Class
+        with self.sym_tbl.scope_guard(kind=ScopeKind.Func):
             node = super().visit_FuncDecl(node)
             symbol = Symbol(name=node.name, kind=Symbol.Kind.Func)
             # TODO[Superjomn]: support function overloading
@@ -190,7 +188,7 @@ class Sema(IRMutator):
             if any_failed(*node.args, node.body, *node.decorators):
                 node.sema_failed = True
 
-        node = self.sym_tbl.add_symbol(symbol, node)
+        node = self.sym_tbl.insert(symbol, node)
         return self.verify_FuncDecl(node)
 
     def verify_FuncDecl(self, node: ast.FuncDecl) -> ast.FuncDecl:
@@ -232,17 +230,17 @@ class Sema(IRMutator):
         return node
 
     def visit_ClassDef(self, node: ast.ClassDef):
-        if self.sym_tbl.current_scope.kind is not Scope.Kind.Global:
+        if self.sym_tbl.current_scope.kind is not ScopeKind.Global:
             self.report_error(node, f"Class should be declared in the global scope")
 
-        with self.sym_tbl.scope_guard(kind=Scope.Kind.Class):
+        with self.sym_tbl.scope_guard(kind=ScopeKind.Class):
             node = super().visit_ClassDef(node)
 
         symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
         if self.sym_tbl.contains_locally(symbol):
             self.report_error(node, f"Class {node.name} already exists")
 
-        node = self.sym_tbl.add_symbol(symbol, node)
+        node = self.sym_tbl.insert(symbol, node)
         return self.verify_ClassDef(node)
 
     def verify_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
@@ -323,13 +321,13 @@ class Sema(IRMutator):
     def visit_ArgDecl(self, node: ast.ArgDecl):
         node = super().visit_ArgDecl(node)
         assert (
-            self.sym_tbl.current_scope.kind is Scope.Kind.Func
+            self.sym_tbl.current_scope.kind is ScopeKind.Func
         ), f"{node.loc}\nArgDecl should be in a function, but get {self.sym_tbl.current_scope.kind}"
         symbol = Symbol(name=node.name, kind=Symbol.Kind.Arg)
         if self.sym_tbl.contains_locally(symbol):
             self.report_error(node, f"Argument {node.name} already exists")
         else:
-            node = self.sym_tbl.add_symbol(symbol, node)
+            node = self.sym_tbl.insert(symbol, node)
         return self.verify_ArgDecl(node)
 
     def verify_ArgDecl(self, node: ast.ArgDecl) -> ast.ArgDecl:
