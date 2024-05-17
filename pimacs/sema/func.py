@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Union
 
 import pimacs.ast.type as _ty
-from pimacs.ast.ast import CallParam, FuncCall, FuncDecl
+from pimacs.ast.ast import CallParam, Expr, FuncCall, FuncDecl
 from pimacs.ast.type import Type as _type
 
 from .utils import FuncSymbol, Scoped, ScopeKind, Symbol
@@ -13,7 +13,7 @@ class FuncSig:
     """Function signature"""
 
     symbol: FuncSymbol
-    input_types: Tuple[_ty.Type, ...]
+    input_types: Tuple[Tuple[str, _ty.Type], ...]
     output_type: _ty.Type
 
     @classmethod
@@ -23,18 +23,29 @@ class FuncSig:
         # TODO: Support the context
         return FuncSig(
             symbol=symbol,
-            input_types=tuple(arg.type for arg in func.args),
+            input_types=tuple((arg.name, arg.type) for arg in func.args),
             output_type=return_type,
         )
 
-    def match_call(self, args: List[CallParam]) -> bool:
+    # TODO: replace the List[CallParam] with FuncCall to support overloading based on return_type
+    def match_call(self, params: List[CallParam | Expr]) -> bool:
         """Check if the arguments match the signature"""
-        if len(args) != len(self.input_types):
+        if len(params) != len(self.input_types):
             return False
+        # optimize the performance
+        args = {arg: type for arg, type in self.input_types}
+
+        # TODO: Add the basic func-call rule back to FuncCall
+        for no, param in enumerate(params):
+            if isinstance(param, Expr):
+                if not param.get_type().is_subtype(args[self.input_types[no][0]]):
+                    return False
+            else:
+                if param.name not in args:
+                    return False
+                if not param.value.get_type().is_subtype(args[param.name]):
+                    return False
         # TODO: process the variadic arguments
-        for arg, ty in zip(args, self.input_types):
-            if not arg.value.get_type().is_subtype(ty):
-                return False
         return True
 
 
@@ -47,7 +58,7 @@ class FuncOverloads:
     # funcs with the same name
     funcs: Dict[FuncSig, FuncDecl] = field(default_factory=dict)
 
-    def lookup(self, args: List[CallParam]) -> Optional[FuncDecl]:
+    def lookup(self, args: List[CallParam | Expr]) -> Optional[FuncDecl]:
         """Find the function that matches the arguments"""
         for sig in self.funcs:
             if sig.match_call(args):

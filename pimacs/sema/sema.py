@@ -5,6 +5,7 @@ from typing import List
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 from pimacs.sema.ast_visitor import IRMutator, IRVisitor
+from pimacs.sema.func import FuncOverloads
 
 from .context import ModuleContext, Scope, ScopeKind, Symbol, SymbolTable
 
@@ -274,6 +275,13 @@ class Sema(IRMutator):
                     )
             self.report_error(node, f"{node.loc}\nUnknown lisp function call {func}")
             return node
+        elif isinstance(func, FuncOverloads):
+            the_func = func.lookup(node.args)
+            if the_func:
+                node = ast.FuncCall(func=the_func, args=node.args, loc=node.loc)
+            else:
+                self.report_error(node, f"Cannot find a matched function")
+
         else:
             assert func is not None
             node = ast.FuncCall(func=func, args=node.args, loc=node.loc)  # type: ignore

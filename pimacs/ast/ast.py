@@ -601,3 +601,7 @@ class UnresolvedClassDef(Stmt):
 
     def verify(self):
         pass
+
+
+def make_const(value: int | float | str | bool | None, loc: Location) -> Constant:
+    return Constant(value=value, loc=loc)

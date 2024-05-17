@@ -43,7 +43,12 @@ def test_func_sig():
     )
     sig = FuncSig.create(func)
     assert sig.symbol.name == "foo"
-    assert sig.input_types == (_ty.Int,)
+    assert sig.input_types == (
+        (
+            "x",
+            _ty.Int,
+        ),
+    )
     assert sig.output_type == _ty.Nil
 
     # foo(x: Int, y: Int) -> Int
@@ -56,7 +61,12 @@ def test_func_sig():
     )
     sig = FuncSig.create(func)
     assert sig.symbol.name == "foo"
-    assert sig.input_types == (_ty.Int,)
+    assert sig.input_types == (
+        (
+            "x",
+            _ty.Int,
+        ),
+    )
     assert sig.output_type == _ty.Int
 
     # foo(x: Int, y: Int) -> Int
@@ -73,8 +83,8 @@ def test_func_sig():
     sig = FuncSig.create(func)
     assert sig.symbol.name == "foo"
     assert sig.input_types == (
-        _ty.Int,
-        _ty.Int,
+        ("x", _ty.Int),
+        ("y", _ty.Int),
     )
     assert sig.output_type == _ty.Int
 
@@ -130,3 +140,21 @@ def test_func_table_override():
 
     funcs = table.lookup(FuncSymbol("foo"))
     assert len(funcs) == 3
+
+    unresolved_func = ast.UnresolvedFuncDecl(name="foo", loc=None)
+
+    param0 = ast.CallParam(name="x", value=ast.make_const(0, loc=None), loc=None)
+    param1 = ast.CallParam(name="y", value=ast.make_const(0, loc=None), loc=None)
+    param2 = ast.CallParam(name="z", value=ast.make_const(0, loc=None), loc=None)
+
+    call = ast.FuncCall(func=unresolved_func, args=[], loc=None)
+    target_func = funcs.lookup(call.args)
+    assert target_func is foo0
+
+    call = ast.FuncCall(func=unresolved_func, args=[param0], loc=None)
+    target_func = funcs.lookup(call.args)
+    assert target_func is foo1
+
+    call = ast.FuncCall(func=unresolved_func, args=[param0, param1], loc=None)
+    target_func = funcs.lookup(call.args)
+    assert target_func is foo2
