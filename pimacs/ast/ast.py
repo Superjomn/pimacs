@@ -18,10 +18,6 @@ class IrNode(ABC):
     users: List["IrNode"] = field(default_factory=list, repr=False, init=False)
     sema_failed: bool = field(default=False, repr=False, init=False)
 
-    @abstractmethod
-    def verify(self):
-        pass
-
     def add_user(self, user: "IrNode"):
         if user not in self.users:
             self.users.append(user)
@@ -102,18 +98,6 @@ class VarDecl(Stmt, VisiableSymbol):
 
     decorators: List["Decorator"] = field(default_factory=list)
 
-    def verify(self):
-        if self.type is None and self.init is None:
-            raise Exception(
-                f"{self.loc}:\nType or init value must be provided")
-        if type is None:
-            self.type = self.init.get_type()
-        if self.init is not None and self.type != self.init.get_type():
-            raise Exception(
-                f"{self.loc}:\n var declaration type mismatch: type is {
-                    self.type} but the init is {self.init.get_type()}"
-            )
-
     def __repr__(self):
         return f"var {self.name}: {self.type}"
 
@@ -147,9 +131,6 @@ class VarRef(Expr):
         else:
             assert self.decl is not None and self.decl.type is not None
             return self.decl.type
-
-    def verify(self):
-        pass
 
 
 @dataclass
@@ -189,13 +170,6 @@ class ArgDecl(Stmt):
 
     kind: Kind = Kind.normal
 
-    def verify(self):
-        if self.default is not None and self.type != self.default.get_type():
-            raise Exception(
-                f"{self.loc}:\nArg type mismatch: type is {
-                    self.type} but the default is {self.default.get_type()}"
-            )
-
 
 @dataclass(slots=True)
 class Block(Stmt):
@@ -204,20 +178,10 @@ class Block(Stmt):
     # If get a return value, return_type is set
     return_type: List[Type] = field(default_factory=list)
 
-    def verify(self):
-        for stmt in self.stmts:
-            stmt.verify()
-        if self.doc_string:
-            self.doc_string.verify()
-
 
 @dataclass(slots=True)
 class File(Stmt):
     stmts: List[Stmt]
-
-    def verify(self):
-        for stmt in self.stmts:
-            stmt.verify()
 
 
 @dataclass(slots=True)
@@ -237,20 +201,6 @@ class FuncDecl(Stmt, VisiableSymbol):
 
     def __post_init__(self):
         assert self.args is not None
-
-    def verify(self):
-        for arg in self.args:
-            arg.verify()
-        self.body.verify()
-
-        self._verify_decorators_unique()
-        for decorator in self.decorators:
-            decorator.verify()
-
-        if self.is_staticmethod and self.is_property:
-            raise Exception(
-                f"{self.loc}:\nA method can't be both a staticmethod and a property"
-            )
 
     @property
     def is_staticmethod(self) -> bool:
@@ -292,21 +242,11 @@ class IfStmt(Stmt):
     elif_branches: List[Tuple[Expr, Block]] = field(default_factory=list)
     else_branch: Optional[Block] = None
 
-    def verify(self):
-        self.cond.verify()
-        self.then_branch.verify()
-        if self.else_branch is not None:
-            self.else_branch.verify()
-
 
 @dataclass(slots=True)
 class WhileStmt(Stmt):
     condition: Expr
     body: Block
-
-    def verify(self):
-        self.condition.verify()
-        self.body.verify()
 
 
 @dataclass(slots=True)
@@ -315,12 +255,6 @@ class ForStmt(Stmt):
     condition: Expr
     increment: Expr
     body: Block
-
-    def verify(self):
-        self.init.verify()
-        self.condition.verify()
-        self.increment.verify()
-        self.body.verify()
 
 
 @dataclass(slots=True)
@@ -339,9 +273,6 @@ class Constant(Expr):
         if self.value is None:
             return _type.Nil
         raise Exception(f"Unknown constant type: {self.value}")
-
-    def verify(self):
-        pass
 
 
 class BinaryOperator(Enum):
@@ -393,10 +324,6 @@ class BinaryOp(Expr):
             )
         return _type.Unk
 
-    def verify(self):
-        self.left.verify()
-        self.right.verify()
-
 
 class UnaryOperator(Enum):
     NEG = "-"
@@ -411,17 +338,11 @@ class UnaryOp(Expr):
     def get_type(self) -> Type:
         return self.value.get_type()
 
-    def verify(self):
-        self.value.verify()
-
 
 @dataclass(slots=True)
 class CallParam(Expr):
     name: str
     value: Expr
-
-    def verify(self):
-        self.value.verify()
 
     def get_type(self) -> Type:
         return self.value.get_type()
@@ -459,11 +380,6 @@ class FuncCall(Expr):
             raise Exception(f"Unknown function type: {
                             type(self.func)}: {self.func}")
 
-    def verify(self):
-        self.func.verify()
-        for arg in self.args:
-            arg.verify()
-
 
 @dataclass(slots=True)
 class Template:
@@ -489,9 +405,6 @@ class LispFuncCall(Expr):
     def get_type(self) -> Type:
         return _type.LispType
 
-    def verify(self):
-        return super().verify()
-
 
 class LispList(Expr):
     def __init__(self, items: List[Expr], loc: Location):
@@ -501,26 +414,15 @@ class LispList(Expr):
     def get_type(self) -> Type:
         return _type.LispType
 
-    def verify(self):
-        for item in self.items:
-            item.verify()
-
 
 @dataclass(slots=True)
 class ReturnStmt(Stmt):
     value: Optional[Expr] = None
 
-    def verify(self):
-        if self.value is not None:
-            self.value.verify()
-
 
 @dataclass(slots=True)
 class Decorator(Stmt):
     action: FuncCall | str | Template
-
-    def verify(self):
-        self.action.verify()
 
 
 @dataclass(slots=True)
@@ -531,10 +433,6 @@ class Assign(Stmt):
     target: VarRef
     value: Expr
 
-    def verify(self):
-        self.target.verify()
-        self.value.verify()
-
 
 @dataclass(slots=True)
 class UnresolvedAttr(Expr):
@@ -544,17 +442,11 @@ class UnresolvedAttr(Expr):
     def get_type(self) -> Type:
         return _type.Unk
 
-    def verify(self):
-        return super().verify()
-
 
 @dataclass(slots=True)
 class Attribute(Expr):
     value: VarRef
     attr: str
-
-    def verify(self):
-        return super().verify()
 
 
 @dataclass
@@ -563,10 +455,6 @@ class ClassDef(Stmt, VisiableSymbol):
     body: List[Stmt]
     decorators: List["Decorator"] = field(default_factory=list)
 
-    def verify(self):
-        for stmt in self.body:
-            stmt.verify()
-
     def __repr__(self) -> str:
         return f"class {self.name}"
 
@@ -574,9 +462,6 @@ class ClassDef(Stmt, VisiableSymbol):
 @dataclass(slots=True)
 class DocString(Stmt):
     content: str
-
-    def verify(self):
-        pass
 
 
 @dataclass(slots=True)
@@ -590,31 +475,11 @@ class SelectExpr(Expr):
             return self.then_expr.get_type()
         return _type.Unk
 
-    def verify(self):
-        self.cond.verify()
-        if self.cond.get_type() != _type.Bool:
-            raise Exception(
-                f"{self.loc}:\nCondition type must be bool, but got {
-                    self.cond.get_type()}"
-            )
-        if self.then_expr.get_type() != self.else_expr.get_type():
-            raise Exception(
-                f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {
-                    self.else_expr.get_type()}"
-            )
-
-        self.then_expr.verify()
-        self.else_expr.verify()
-
 
 @dataclass(slots=True)
 class GuardStmt(Stmt):
     header: FuncCall
     body: Block
-
-    def verify(self):
-        self.header.verify()
-        self.body.verify()
 
 
 @dataclass
@@ -627,27 +492,17 @@ class MemberRef(Expr):
             return self.member.get_type()
         return _type.Unk
 
-    def verify(self):
-        self.obj.verify()
-        self.member.verify()
-
 
 @dataclass(slots=True)
 class UnresolvedFuncDecl(Stmt):
     name: str
     return_type: Optional[Type] = None
 
-    def verify(self):
-        pass
-
 
 @dataclass(slots=True)
 class UnresolvedVarRef(Expr):
     name: str
     target_type: Type = field(default_factory=lambda: _type.Unk)
-
-    def verify(self):
-        pass
 
     def get_type(self) -> Type:
         return self.target_type
@@ -656,9 +511,6 @@ class UnresolvedVarRef(Expr):
 @dataclass(slots=True)
 class UnresolvedClassDef(Stmt):
     name: str
-
-    def verify(self):
-        pass
 
 
 def make_const(value: int | float | str | bool | None, loc: Location) -> Constant:
