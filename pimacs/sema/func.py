@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Union
 
 import pimacs.ast.type as _ty
-from pimacs.ast.ast import CallParam, Expr, FuncCall, FuncDecl
+from pimacs.ast.ast import Call, CallParam, Expr, Function
 from pimacs.ast.type import Type as _type
 
 from .utils import FuncSymbol, Scope, Scoped, ScopeKind, Symbol
@@ -17,7 +17,7 @@ class FuncSig:
     output_type: _ty.Type
 
     @classmethod
-    def create(cls, func: "FuncDecl"):
+    def create(cls, func: "Function"):
         return_type = func.return_type if func.return_type else _ty.Nil
         symbol = FuncSymbol(func.name)
         # TODO: Support the context
@@ -56,16 +56,16 @@ class FuncOverloads:
 
     symbol: FuncSymbol
     # funcs with the same name
-    funcs: Dict[FuncSig, FuncDecl] = field(default_factory=dict)
+    funcs: Dict[FuncSig, Function] = field(default_factory=dict)
 
-    def lookup(self, args: List[CallParam | Expr]) -> Optional[FuncDecl]:
+    def lookup(self, args: List[CallParam | Expr]) -> Optional[Function]:
         """Find the function that matches the arguments"""
         for sig in self.funcs:
             if sig.match_call(args):
                 return self.funcs[sig]
         return None
 
-    def insert(self, func: FuncDecl):
+    def insert(self, func: Function):
         sig = FuncSig.create(func)
         assert sig not in self.funcs
         self.funcs[sig] = func
@@ -77,7 +77,7 @@ class FuncOverloads:
         new_funcs.update(other.funcs)
         return FuncOverloads(self.symbol, new_funcs)
 
-    def __getitem__(self, sig: FuncSig) -> FuncDecl:
+    def __getitem__(self, sig: FuncSig) -> Function:
         return self.funcs[sig]
 
     def __contains__(self, sig: FuncSig) -> bool:
@@ -112,7 +112,7 @@ class FuncTable(Scoped):
             return tmp
         return None
 
-    def insert(self, func: FuncDecl):
+    def insert(self, func: Function):
         symbol = FuncSymbol(func.name)
         record = self.scopes[-1].get(symbol)
         if record:

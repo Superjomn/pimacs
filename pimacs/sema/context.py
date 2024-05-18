@@ -26,14 +26,14 @@ class ModuleContext:
 
     def __init__(self, name: str):
         self._name = name
-        self._functions: Dict[str, ast.FuncDecl] = {}
+        self._functions: Dict[str, ast.Function] = {}
         self._variables: Dict[str, ast.VarDecl] = {}
-        self._classes: Dict[str, ast.ClassDef] = {}
+        self._classes: Dict[str, ast.Class] = {}
         self._types: Dict[str, _ty.Type] = {}
 
     def get_symbol(
         self, name: str
-    ) -> Optional[Union[ast.FuncDecl, ast.VarDecl, ast.ClassDef]]:
+    ) -> Optional[Union[ast.Function, ast.VarDecl, ast.Class]]:
         if name in self._functions:
             return self._functions[name]
         if name in self._variables:
@@ -57,22 +57,22 @@ class ModuleContext:
             name in self._functions or name in self._variables or name in self._classes
         )
 
-    def add_function(self, func: ast.FuncDecl):
+    def add_function(self, func: ast.Function):
         self._functions[func.name] = func
 
     def add_variable(self, var: ast.VarDecl):
         self._variables[var.name] = var
 
-    def add_class(self, cls: ast.ClassDef):
+    def add_class(self, cls: ast.Class):
         self._classes[cls.name] = cls
 
-    def get_function(self, name: str) -> Optional[ast.FuncDecl]:
+    def get_function(self, name: str) -> Optional[ast.Function]:
         return self._functions.get(name)
 
     def get_variable(self, name: str) -> Optional[ast.VarDecl]:
         return self._variables.get(name)
 
-    def get_class(self, name: str) -> Optional[ast.ClassDef]:
+    def get_class(self, name: str) -> Optional[ast.Class]:
         return self._classes.get(name)
 
     @property
@@ -94,7 +94,7 @@ class SymbolTable(Scoped):
         self.scopes.pop()
         self.func_table.pop_scope()
 
-    def _add_function(self, func: ast.FuncDecl):
+    def _add_function(self, func: ast.Function):
         self.func_table.insert(func)
 
     def insert(self, symbol: Symbol, item: SymbolItem):

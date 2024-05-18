@@ -27,16 +27,16 @@ def test_func_symbol():
 
 
 def test_func_sig():
-    func = FuncDecl(name="foo", args=[], return_type=None, loc=None, body=[])
+    func = Function(name="foo", args=[], return_type=None, loc=None, body=[])
     sig = FuncSig.create(func)
     assert sig.symbol.name == "foo"
     assert not sig.input_types
     assert sig.output_type == _ty.Nil
 
     # foo(x: Int) -> nil
-    func = FuncDecl(
+    func = Function(
         name="foo",
-        args=[ast.ArgDecl(name="x", type=_ty.Int, loc=None)],
+        args=[ast.Arg(name="x", type=_ty.Int, loc=None)],
         return_type=None,
         loc=None,
         body=[],
@@ -52,9 +52,9 @@ def test_func_sig():
     assert sig.output_type == _ty.Nil
 
     # foo(x: Int, y: Int) -> Int
-    func = FuncDecl(
+    func = Function(
         name="foo",
-        args=[ast.ArgDecl(name="x", type=_ty.Int, loc=None)],
+        args=[ast.Arg(name="x", type=_ty.Int, loc=None)],
         return_type=_ty.Int,
         loc=None,
         body=[],
@@ -70,11 +70,11 @@ def test_func_sig():
     assert sig.output_type == _ty.Int
 
     # foo(x: Int, y: Int) -> Int
-    func = FuncDecl(
+    func = Function(
         name="foo",
         args=[
-            ast.ArgDecl(name="x", type=_ty.Int, loc=None),
-            ast.ArgDecl(name="y", type=_ty.Int, loc=None),
+            ast.Arg(name="x", type=_ty.Int, loc=None),
+            ast.Arg(name="y", type=_ty.Int, loc=None),
         ],
         return_type=_ty.Int,
         loc=None,
@@ -94,9 +94,9 @@ def test_func_table():
     assert not table.lookup("foo")
     assert not table.lookup("bar")
 
-    foo = FuncDecl(name="foo", args=[], return_type=None, loc=None, body=[])
-    bar = FuncDecl(name="bar", args=[], return_type=None, loc=None, body=[])
-    goo = FuncDecl(name="goo", args=[], return_type=None, loc=None, body=[])
+    foo = Function(name="foo", args=[], return_type=None, loc=None, body=[])
+    bar = Function(name="bar", args=[], return_type=None, loc=None, body=[])
+    goo = Function(name="goo", args=[], return_type=None, loc=None, body=[])
 
     bar_key = FuncSymbol("bar")
     foo_key = FuncSymbol("foo")
@@ -126,13 +126,15 @@ def test_func_table():
 def test_func_table_override():
     table = FuncTable()
 
-    arg0 = ast.ArgDecl(name="x", type=_ty.Int, loc=None)
-    arg1 = ast.ArgDecl(name="y", type=_ty.Int, loc=None)
-    arg2 = ast.ArgDecl(name="z", type=_ty.Int, loc=None)
+    arg0 = ast.Arg(name="x", type=_ty.Int, loc=None)
+    arg1 = ast.Arg(name="y", type=_ty.Int, loc=None)
+    arg2 = ast.Arg(name="z", type=_ty.Int, loc=None)
 
-    foo0 = FuncDecl(name="foo", args=[], return_type=None, loc=None, body=[])
-    foo1 = FuncDecl(name="foo", args=[arg0], return_type=None, loc=None, body=[])
-    foo2 = FuncDecl(name="foo", args=[arg0, arg1], return_type=None, loc=None, body=[])
+    foo0 = Function(name="foo", args=[], return_type=None, loc=None, body=[])
+    foo1 = Function(name="foo", args=[arg0],
+                    return_type=None, loc=None, body=[])
+    foo2 = Function(name="foo", args=[arg0, arg1],
+                    return_type=None, loc=None, body=[])
 
     table.insert(foo0)
     table.insert(foo1)
@@ -141,20 +143,23 @@ def test_func_table_override():
     funcs = table.lookup(FuncSymbol("foo"))
     assert len(funcs) == 3
 
-    unresolved_func = ast.UnresolvedFuncDecl(name="foo", loc=None)
+    unresolved_func = ast.UFunction(name="foo", loc=None)
 
-    param0 = ast.CallParam(name="x", value=ast.make_const(0, loc=None), loc=None)
-    param1 = ast.CallParam(name="y", value=ast.make_const(0, loc=None), loc=None)
-    param2 = ast.CallParam(name="z", value=ast.make_const(0, loc=None), loc=None)
+    param0 = ast.CallParam(
+        name="x", value=ast.make_const(0, loc=None), loc=None)
+    param1 = ast.CallParam(
+        name="y", value=ast.make_const(0, loc=None), loc=None)
+    param2 = ast.CallParam(
+        name="z", value=ast.make_const(0, loc=None), loc=None)
 
-    call = ast.FuncCall(func=unresolved_func, args=[], loc=None)
+    call = ast.Call(func=unresolved_func, args=[], loc=None)
     target_func = funcs.lookup(call.args)
     assert target_func is foo0
 
-    call = ast.FuncCall(func=unresolved_func, args=[param0], loc=None)
+    call = ast.Call(func=unresolved_func, args=[param0], loc=None)
     target_func = funcs.lookup(call.args)
     assert target_func is foo1
 
-    call = ast.FuncCall(func=unresolved_func, args=[param0, param1], loc=None)
+    call = ast.Call(func=unresolved_func, args=[param0, param1], loc=None)
     target_func = funcs.lookup(call.args)
     assert target_func is foo2

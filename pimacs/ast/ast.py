@@ -12,13 +12,13 @@ from pimacs.ast.type import Type, TypeId
 
 
 @dataclass
-class IrNode(ABC):
+class Node(ABC):
     loc: Optional["Location"] = field(repr=False, compare=False)
     # The nodes using this node
-    users: List["IrNode"] = field(default_factory=list, repr=False, init=False)
+    users: List["Node"] = field(default_factory=list, repr=False, init=False)
     sema_failed: bool = field(default=False, repr=False, init=False)
 
-    def add_user(self, user: "IrNode"):
+    def add_user(self, user: "Node"):
         if user not in self.users:
             self.users.append(user)
 
@@ -34,14 +34,14 @@ class VisiableSymbol:
 # The Expr or Stmt are not strickly separated in the AST now.
 
 @dataclass
-class Expr(IrNode, ABC):
+class Expr(Node, ABC):
     @abstractmethod
     def get_type(self) -> Type:
         pass
 
 
 @dataclass
-class Stmt(IrNode):
+class Stmt(Node):
     pass
 
 
@@ -105,11 +105,9 @@ class VarDecl(Stmt, VisiableSymbol):
 @dataclass(slots=True)
 class VarRef(Expr):
     """A placeholder for a variable.
-    It is used by lexer to represent a variable. Then in the parser, it will be replaced by one with VarDecl and other meta data.
     """
 
-    decl: Optional[Union[VarDecl, "ArgDecl", "UnresolvedVarRef"]] = None
-    value: Optional[Expr] = None
+    target: Optional[Union[VarDecl, "Arg"]] = None
     type: Optional[Type] = None
     name: str = ""
 
@@ -119,18 +117,18 @@ class VarRef(Expr):
 
     @property
     def is_ref(self) -> bool:
-        return self.decl is not None
+        return self.target is not None
 
     @property
     def is_lisp(self) -> bool:
         return self.name.startswith("%")
 
     def get_type(self) -> Type:
-        if isinstance(self.decl, UnresolvedVarRef):
-            return self.decl.target_type
+        if isinstance(self.target, UVarRef):
+            return self.target.target_type
         else:
-            assert self.decl is not None and self.decl.type is not None
-            return self.decl.type
+            assert self.target is not None and self.target.type is not None
+            return self.target.type
 
 
 @dataclass
@@ -148,7 +146,7 @@ class LispVarRef(VarRef):
 
 
 @dataclass(slots=True)
-class ArgDecl(Stmt):
+class Arg(Stmt):
     name: str
     type: Type = field(default_factory=lambda: _type.Unk)
     default: Optional[Expr] = None
@@ -162,11 +160,11 @@ class ArgDecl(Stmt):
 
     @property
     def is_cls_placeholder(self) -> bool:
-        return self.kind == ArgDecl.Kind.cls_placeholder
+        return self.kind == Arg.Kind.cls_placeholder
 
     @property
     def is_self_placeholder(self) -> bool:
-        return self.kind == ArgDecl.Kind.self_placeholder
+        return self.kind == Arg.Kind.self_placeholder
 
     kind: Kind = Kind.normal
 
@@ -185,10 +183,10 @@ class File(Stmt):
 
 
 @dataclass(slots=True)
-class FuncDecl(Stmt, VisiableSymbol):
+class Function(Stmt, VisiableSymbol):
     name: str
     body: Block
-    args: List[ArgDecl] = field(default_factory=list)
+    args: List[Arg] = field(default_factory=list)
     return_type: Optional[Type] = None
     decorators: List["Decorator"] = field(default_factory=list)
 
@@ -351,7 +349,7 @@ class CallParam(Expr):
 custom_types: Set[_type.Type] = set()
 
 
-def get_custom_type(class_def: "ClassDef"):
+def get_custom_type(class_def: "Class"):
     # TODO: consider module name
     ret = _type.Type(TypeId.CUSTOMED, class_def.name)
     if ret not in custom_types:
@@ -360,21 +358,21 @@ def get_custom_type(class_def: "ClassDef"):
 
 
 @dataclass(slots=True)
-class FuncCall(Expr):
+class Call(Expr):
     # ArgDecl as func for self/cls placeholder cases
-    func: Union[FuncDecl, "UnresolvedFuncDecl", str]
+    func: Union[Function, "UFunction", str]
     args: List[CallParam | Expr] = field(default_factory=list)
     type_spec: List[Type] = field(default_factory=list)
 
     def get_type(self) -> Type:
-        if isinstance(self.func, FuncDecl):
+        if isinstance(self.func, Function):
             assert self.func.return_type is not None
             return self.func.return_type
-        elif isinstance(self.func, ClassDef):
+        elif isinstance(self.func, Class):
             return get_custom_type(self.func)
-        elif isinstance(self.func, ArgDecl):
+        elif isinstance(self.func, Arg):
             return _type.Unk
-        elif isinstance(self.func, UnresolvedFuncDecl):
+        elif isinstance(self.func, UFunction):
             return _type.Unk
         else:
             raise Exception(f"Unknown function type: {
@@ -387,7 +385,7 @@ class Template:
 
 
 @dataclass(slots=True)
-class LispFuncCall(Expr):
+class LispCall(Expr):
     """Call a lisp function, such as `%format("hello")` or
 
     ```
@@ -422,7 +420,7 @@ class ReturnStmt(Stmt):
 
 @dataclass(slots=True)
 class Decorator(Stmt):
-    action: FuncCall | str | Template
+    action: Call | str | Template
 
 
 @dataclass(slots=True)
@@ -435,22 +433,13 @@ class Assign(Stmt):
 
 
 @dataclass(slots=True)
-class UnresolvedAttr(Expr):
-    value: VarRef
-    attr: str
-
-    def get_type(self) -> Type:
-        return _type.Unk
-
-
-@dataclass(slots=True)
 class Attribute(Expr):
     value: VarRef
     attr: str
 
 
 @dataclass
-class ClassDef(Stmt, VisiableSymbol):
+class Class(Stmt, VisiableSymbol):
     name: str
     body: List[Stmt]
     decorators: List["Decorator"] = field(default_factory=list)
@@ -465,7 +454,7 @@ class DocString(Stmt):
 
 
 @dataclass(slots=True)
-class SelectExpr(Expr):
+class Select(Expr):
     cond: Expr
     then_expr: Expr
     else_expr: Expr
@@ -477,8 +466,8 @@ class SelectExpr(Expr):
 
 
 @dataclass(slots=True)
-class GuardStmt(Stmt):
-    header: FuncCall
+class Guard(Stmt):
+    header: Call
     body: Block
 
 
@@ -493,25 +482,38 @@ class MemberRef(Expr):
         return _type.Unk
 
 
+def make_const(value: int | float | str | bool | None, loc: Location) -> Constant:
+    return Constant(value=value, loc=loc)
+
+
 @dataclass(slots=True)
-class UnresolvedFuncDecl(Stmt):
+class UAttr(Expr):
+    ''' Unresolved attribute, such as `a.b` in `a.b.c` '''
+    value: VarRef
+    attr: str
+
+    def get_type(self) -> Type:
+        return _type.Unk
+
+
+@dataclass(slots=True)
+class UClass(Stmt):
+    ''' Unresolved class, such as `A` in `A.b`. '''
+    name: str
+
+
+@dataclass(slots=True)
+class UFunction(Stmt):
+    ''' Unresolved function, such as `f` in `f()`. '''
     name: str
     return_type: Optional[Type] = None
 
 
 @dataclass(slots=True)
-class UnresolvedVarRef(Expr):
+class UVarRef(Expr):
+    ''' Unresolved variable reference, such as `a` in `a.b`. '''
     name: str
     target_type: Type = field(default_factory=lambda: _type.Unk)
 
     def get_type(self) -> Type:
         return self.target_type
-
-
-@dataclass(slots=True)
-class UnresolvedClassDef(Stmt):
-    name: str
-
-
-def make_const(value: int | float | str | bool | None, loc: Location) -> Constant:
-    return Constant(value=value, loc=loc)
