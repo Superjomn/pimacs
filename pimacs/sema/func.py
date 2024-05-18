@@ -5,7 +5,7 @@ import pimacs.ast.type as _ty
 from pimacs.ast.ast import CallParam, Expr, FuncCall, FuncDecl
 from pimacs.ast.type import Type as _type
 
-from .utils import FuncSymbol, Scoped, ScopeKind, Symbol
+from .utils import FuncSymbol, Scope, Scoped, ScopeKind, Symbol
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -65,7 +65,7 @@ class FuncOverloads:
                 return self.funcs[sig]
         return None
 
-    def add_func(self, func: FuncDecl):
+    def insert(self, func: FuncDecl):
         sig = FuncSig.create(func)
         assert sig not in self.funcs
         self.funcs[sig] = func
@@ -89,10 +89,13 @@ class FuncOverloads:
     def __iter__(self):
         return iter(self.funcs.values())
 
+    def __repr__(self):
+        return f"FuncOverloads[{self.symbol} x {len(self.funcs)}]"
+
 
 class FuncTable(Scoped):
     def __init__(self) -> None:
-        self.scopes: List[Dict[FuncSymbol, FuncOverloads]] = [{}]  # global
+        self.scopes = [Scope(kind=ScopeKind.Global)]  # global
 
     def lookup(self, symbol: FuncSymbol) -> Optional[FuncOverloads]:
         # get a FuncOverloads holding all the functions with the same symbol
@@ -113,11 +116,11 @@ class FuncTable(Scoped):
         symbol = FuncSymbol(func.name)
         record = self.scopes[-1].get(symbol)
         if record:
-            record.add_func(func)
+            record.insert(func)
         else:
             record = FuncOverloads(symbol)
-            record.add_func(func)
-            self.scopes[-1][symbol] = record
+            record.insert(func)
+            self.scopes[-1].add(symbol, record)
 
     def contains(self, symbol: FuncSymbol) -> bool:
         return bool(self.lookup(symbol))
@@ -126,7 +129,10 @@ class FuncTable(Scoped):
         return symbol in self.scopes[-1]
 
     def push_scope(self, kind: ScopeKind = ScopeKind.Local):
-        self.scopes.append({})
+        self.scopes.append(Scope(kind=kind))
 
     def pop_scope(self):
         self.scopes.pop()
+
+    def __len__(self) -> int:
+        return len(self.scopes)

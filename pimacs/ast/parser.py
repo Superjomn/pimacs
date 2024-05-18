@@ -19,7 +19,8 @@ from pimacs.sema.sema import Sema, catch_sema_error
 
 
 def get_lark_parser():
-    dsl_grammar = open(os.path.join(os.path.dirname(__file__), "grammar.g")).read()
+    dsl_grammar = open(os.path.join(
+        os.path.dirname(__file__), "grammar.g")).read()
     return Lark(dsl_grammar, parser="lalr", postlex=PythonIndenter())
 
 
@@ -27,7 +28,8 @@ def get_parser(code: Optional[str] = None, filename: str = "<pimacs>"):
     source: ast.PlainCode | ast.FileName = (
         ast.PlainCode(code) if code else ast.FileName(filename)
     )
-    dsl_grammar = open(os.path.join(os.path.dirname(__file__), "grammar.g")).read()
+    dsl_grammar = open(os.path.join(
+        os.path.dirname(__file__), "grammar.g")).read()
     return Lark(
         dsl_grammar,
         parser="lalr",
@@ -202,7 +204,8 @@ class PimacsTransformer(Transformer):
             assert not type_spec
             return ast.LispFuncCall(func=func, args=args, loc=loc)
         else:
-            return ast.FuncCall(func=name, args=args, loc=loc, type_spec=type_spec)
+            the_func = ast.UnresolvedFuncDecl(name=name, loc=loc)
+            return ast.FuncCall(func=the_func, args=args, loc=loc, type_spec=type_spec)
 
     def lisp_symbol(self, items):
         self._force_non_rule(items)
@@ -233,7 +236,8 @@ class PimacsTransformer(Transformer):
 
     def string(self, items: List[Token]):
         self._force_non_rule(items)
-        loc = ast.Location(self.source, items[0].line, items[0].column)  # type: ignore
+        loc = ast.Location(
+            self.source, items[0].line, items[0].column)  # type: ignore
         return ast.Constant(value=items[0].value, loc=loc)
 
     def variable(self, items) -> ast.UnresolvedVarRef | ast.LispVarRef:
@@ -266,7 +270,8 @@ class PimacsTransformer(Transformer):
         type = safe_get(items, 2, None)
         init = safe_get(items, 3, None)
 
-        node = ast.VarDecl(name=name, type=type, init=init, loc=loc, mutable=False)
+        node = ast.VarDecl(name=name, type=type, init=init,
+                           loc=loc, mutable=False)
         return node
 
     def _deduce_var_type(self, var: ast.VarDecl) -> ast.VarDecl:
@@ -466,7 +471,7 @@ class PimacsTransformer(Transformer):
         self._force_non_rule(items)
         target = items[0]
         value = items[1]
-        return ast.AssignStmt(target=target, value=value, loc=target.loc)
+        return ast.Assign(target=target, value=value, loc=target.loc)
 
     def class_def(self, items):
         self._force_non_rule(items)

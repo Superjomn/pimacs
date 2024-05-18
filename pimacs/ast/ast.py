@@ -1,3 +1,6 @@
+"""
+The ast module contains the AST nodes for Pimacs syntax.
+"""
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -23,6 +26,16 @@ class IrNode(ABC):
         if user not in self.users:
             self.users.append(user)
 
+
+@dataclass(slots=True)
+class VisiableSymbol:
+    '''
+    @pub or not
+    '''
+    is_public: bool = field(default=False, repr=False, init=False)
+
+
+# The Expr or Stmt are not strickly separated in the AST now.
 
 @dataclass
 class Expr(IrNode, ABC):
@@ -57,16 +70,19 @@ class Location:
     column: int
 
     def __post_init__(self):
-        assert isinstance(self.source, FileName) or isinstance(self.source, PlainCode)
+        assert isinstance(self.source, FileName) or isinstance(
+            self.source, PlainCode)
 
     def __str__(self):
         if isinstance(self.source, PlainCode):
-            file_line = self.source.content.splitlines()[self.line - 1].rstrip()
+            file_line = self.source.content.splitlines()[
+                self.line - 1].rstrip()
             marker = " " * (self.column - 1) + "^"
             return f"<code>:{self.line}:{self.column}\n{file_line}\n{marker}"
 
         if os.path.exists(self.source.filename):
-            file_line = open(self.source.filename).readlines()[self.line - 1].rstrip()
+            file_line = open(self.source.filename).readlines()[
+                self.line - 1].rstrip()
             marker = " " * (self.column - 1) + "^"
             return f"{self.source.filename}:{self.line}:{self.column}\n{file_line}\n{marker}"
         else:
@@ -74,7 +90,10 @@ class Location:
 
 
 @dataclass(slots=True)
-class VarDecl(Stmt):
+class VarDecl(Stmt, VisiableSymbol):
+    '''
+    VarDecl is a variable declaration, such as `var a: int = 1` or `let a = 1`.
+    '''
     name: str = ""
     type: Optional[Type] = None
     init: Optional[Expr] = None
@@ -85,13 +104,18 @@ class VarDecl(Stmt):
 
     def verify(self):
         if self.type is None and self.init is None:
-            raise Exception(f"{self.loc}:\nType or init value must be provided")
+            raise Exception(
+                f"{self.loc}:\nType or init value must be provided")
         if type is None:
             self.type = self.init.get_type()
         if self.init is not None and self.type != self.init.get_type():
             raise Exception(
-                f"{self.loc}:\n var declaration type mismatch: type is {self.type} but the init is {self.init.get_type()}"
+                f"{self.loc}:\n var declaration type mismatch: type is {
+                    self.type} but the init is {self.init.get_type()}"
             )
+
+    def __repr__(self):
+        return f"var {self.name}: {self.type}"
 
 
 @dataclass(slots=True)
@@ -168,7 +192,8 @@ class ArgDecl(Stmt):
     def verify(self):
         if self.default is not None and self.type != self.default.get_type():
             raise Exception(
-                f"{self.loc}:\nArg type mismatch: type is {self.type} but the default is {self.default.get_type()}"
+                f"{self.loc}:\nArg type mismatch: type is {
+                    self.type} but the default is {self.default.get_type()}"
             )
 
 
@@ -196,7 +221,7 @@ class File(Stmt):
 
 
 @dataclass(slots=True)
-class FuncDecl(Stmt):
+class FuncDecl(Stmt, VisiableSymbol):
     name: str
     body: Block
     args: List[ArgDecl] = field(default_factory=list)
@@ -255,7 +280,8 @@ class FuncDecl(Stmt):
         seen = set()
         for decorator in self.decorators:
             if decorator.action in seen:
-                raise Exception(f"{self.loc}:\nDuplicate decorator: {decorator.action}")
+                raise Exception(f"{self.loc}:\nDuplicate decorator: {
+                                decorator.action}")
             seen.add(decorator.action)
 
 
@@ -362,7 +388,8 @@ class BinaryOp(Expr):
         )
         if ret is None:
             raise Exception(
-                f"{self.loc}:\nType mismatch: {self.left.get_type()} and {self.right.get_type()}"
+                f"{self.loc}:\nType mismatch: {self.left.get_type()} and {
+                    self.right.get_type()}"
             )
         return _type.Unk
 
@@ -426,8 +453,11 @@ class FuncCall(Expr):
             return get_custom_type(self.func)
         elif isinstance(self.func, ArgDecl):
             return _type.Unk
+        elif isinstance(self.func, UnresolvedFuncDecl):
+            return _type.Unk
         else:
-            raise Exception(f"Unknown function type: {type(self.func)}: {self.func}")
+            raise Exception(f"Unknown function type: {
+                            type(self.func)}: {self.func}")
 
     def verify(self):
         self.func.verify()
@@ -494,7 +524,10 @@ class Decorator(Stmt):
 
 
 @dataclass(slots=True)
-class AssignStmt(Stmt):
+class Assign(Stmt):
+    '''
+    a = 1
+    '''
     target: VarRef
     value: Expr
 
@@ -503,16 +536,39 @@ class AssignStmt(Stmt):
         self.value.verify()
 
 
+@dataclass(slots=True)
+class UnresolvedAttr(Expr):
+    value: VarRef
+    attr: str
+
+    def get_type(self) -> Type:
+        return _type.Unk
+
+    def verify(self):
+        return super().verify()
+
+
+@dataclass(slots=True)
+class Attribute(Expr):
+    value: VarRef
+    attr: str
+
+    def verify(self):
+        return super().verify()
+
+
 @dataclass
-class ClassDef(Stmt):
+class ClassDef(Stmt, VisiableSymbol):
     name: str
     body: List[Stmt]
-
     decorators: List["Decorator"] = field(default_factory=list)
 
     def verify(self):
         for stmt in self.body:
             stmt.verify()
+
+    def __repr__(self) -> str:
+        return f"class {self.name}"
 
 
 @dataclass(slots=True)
@@ -538,11 +594,13 @@ class SelectExpr(Expr):
         self.cond.verify()
         if self.cond.get_type() != _type.Bool:
             raise Exception(
-                f"{self.loc}:\nCondition type must be bool, but got {self.cond.get_type()}"
+                f"{self.loc}:\nCondition type must be bool, but got {
+                    self.cond.get_type()}"
             )
         if self.then_expr.get_type() != self.else_expr.get_type():
             raise Exception(
-                f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {self.else_expr.get_type()}"
+                f"{self.loc}:\nType mismatch: {self.then_expr.get_type()} and {
+                    self.else_expr.get_type()}"
             )
 
         self.then_expr.verify()

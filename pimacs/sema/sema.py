@@ -1,17 +1,21 @@
 import logging
-from dataclasses import dataclass
-from typing import List
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Dict, List
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 from pimacs.sema.ast_visitor import IRMutator, IRVisitor
 from pimacs.sema.func import FuncOverloads
 
-from .context import ModuleContext, Scope, ScopeKind, Symbol, SymbolTable
+from .ast import AnalyzedClassDef
+from .context import FuncSymbol, ScopeKind, Symbol, SymbolTable
+from .utils import ClassId, ModuleId, bcolors, print_colored
 
 
 def report_sema_error(node: ast.IrNode, message: str):
-    logging.error(f"Error at {node.loc}:\n{message}\n")
+    print_colored(f"{node.loc}\n")
+    print_colored(f"Error: {message}\n\n", bcolors.FAIL)
 
 
 def catch_sema_error(cond: bool, node: ast.IrNode, message: str) -> bool:
@@ -61,6 +65,8 @@ class Sema(IRMutator):
         self.sym_tbl = SymbolTable()
         self._succeeded = True
 
+        self._cur_class: ast.ClassDef | None = None
+
     @property
     def succeed(self) -> bool:
         return self._succeeded
@@ -75,16 +81,16 @@ class Sema(IRMutator):
         if node.name.startswith("self."):
             # deal with members
             var_name = node.name[5:]
-            member = self.sym_tbl.get_symbol(name=var_name, kind=Symbol.Kind.Member)
-            if member is None:
-                raise KeyError(f"{node.loc}\nMember {node.name} is not declared")
             var = ast.VarRef(decl=member, loc=node.loc)  # type: ignore
 
             obj = self.sym_tbl.get_symbol(name="self", kind=Symbol.Kind.Arg)
             if not obj:
-                obj = ast.UnresolvedVarRef(name="self", loc=node.loc, target_type=_ty.Unk)  # type: ignore
+                obj = ast.UnresolvedVarRef(
+                    # TODO: fix the type
+                    name="self", loc=node.loc, target_type=_ty.Unk)  # type: ignore
                 catch_sema_error(True, node, f"`self` is not declared")
-            return ast.MemberRef(obj=ast.VarRef(decl=obj, loc=node.loc), member=var, loc=node.loc)  # type: ignore
+            # The Attr cannot be resolved now, it can only be resolved in bulk when a class is fully analyzed.
+            return ast.UnresolvedAttr(value=obj, attr=var_name, loc=node.loc)
 
         elif sym := self.sym_tbl.get_symbol(
             name=node.name, kind=[Symbol.Kind.Var, Symbol.Kind.Arg]
@@ -116,7 +122,8 @@ class Sema(IRMutator):
             ):
                 self.report_error(node, f"Variable {node.name} already exists")
             else:
-                self.sym_tbl.insert(Symbol(name=node.name, kind=Symbol.Kind.Var), node)
+                self.sym_tbl.insert(
+                    Symbol(name=node.name, kind=Symbol.Kind.Var), node)
 
         return self.verify_VarDecl(node)
 
@@ -126,7 +133,8 @@ class Sema(IRMutator):
         if not node.init:
             if (not node.type) or (node.type is _ty.Unk):
                 self.report_error(
-                    node, f"Variable {node.name} should have a type or an initial value"
+                    node, f"Variable {
+                        node.name} should have a type or an initial value"
                 )
                 return node
         else:
@@ -136,7 +144,8 @@ class Sema(IRMutator):
             else:
                 if not can_assign_type(node.type, node.init.get_type()):
                     self.report_error(
-                        node, f"Cannot assign {node.init.get_type()} to {node.type}"
+                        node, f"Cannot assign {node.init.get_type()} to {
+                            node.type}"
                     )
                     return node
         return node
@@ -155,19 +164,24 @@ class Sema(IRMutator):
         if not is_type_compatible(node.then_expr.get_type(), node.else_expr.get_type()):
             self.report_error(
                 node,
-                f"Cannot convert {node.then_expr.get_type()} and {node.else_expr.get_type()}",
+                f"Cannot convert {node.then_expr.get_type()} and {
+                    node.else_expr.get_type()}",
             )
             return node
         return node
 
     def visit_FuncDecl(self, node: ast.FuncDecl):
         within_class = self.sym_tbl.current_scope.kind is ScopeKind.Class
+        if within_class:
+            assert self._cur_class
+
         with self.sym_tbl.scope_guard(kind=ScopeKind.Func):
             node = super().visit_FuncDecl(node)
-            symbol = Symbol(name=node.name, kind=Symbol.Kind.Func)
+            symbol = FuncSymbol(node.name)
             # TODO[Superjomn]: support function overloading
             if self.sym_tbl.contains_locally(symbol):
                 self.report_error(node, f"Function {node.name} already exists")
+
             args = node.args if node.args else []
             if within_class:
                 # This function is a member function
@@ -199,7 +213,8 @@ class Sema(IRMutator):
         # check if argument names are unique
         arg_names = [arg.name for arg in node.args]
         if len(arg_names) != len(set(arg_names)):
-            self.report_error(node, f"Argument names should be unique, got {arg_names}")
+            self.report_error(
+                node, f"Argument names should be unique, got {arg_names}")
         # check if argument types are valid
         for no, arg in enumerate(node.args):
             if arg.sema_failed:
@@ -209,12 +224,14 @@ class Sema(IRMutator):
             elif arg.name == "cls" and arg.kind is ast.ArgDecl.Kind.cls_placeholder:
                 pass
             elif not arg.type or arg.type is _ty.Unk:
-                self.report_error(arg, f"Argument {arg.name} should have a type")
+                self.report_error(
+                    arg, f"Argument {arg.name} should have a type")
         # check if return type is valid
         if not node.return_type or node.return_type is _ty.Unk:
             node.return_type = _ty.Nil
             return_nil = (not node.body.return_type) or (
-                len(node.body.return_type) == 1 and node.body.return_type[0] is _ty.Nil
+                len(
+                    node.body.return_type) == 1 and node.body.return_type[0] is _ty.Nil
             )
             if not return_nil:
                 self.report_error(
@@ -225,24 +242,31 @@ class Sema(IRMutator):
             if not can_assign_type(node.return_type, node.body.return_type):
                 self.report_error(
                     node,
-                    f"Cannot convert {node.body.return_type} to {node.return_type}",
+                    f"Cannot convert {node.body.return_type} to {
+                        node.return_type}",
                 )
 
         return node
 
     def visit_ClassDef(self, node: ast.ClassDef):
-        if self.sym_tbl.current_scope.kind is not ScopeKind.Global:
-            self.report_error(node, f"Class should be declared in the global scope")
+        node = AnalyzedClassDef.create(node)  # type: ignore
+        with node.auto_update_symbols():
+            self._cur_class = node
+            if self.sym_tbl.current_scope.kind is not ScopeKind.Global:
+                self.report_error(
+                    node, f"Class should be declared in the global scope")
 
-        with self.sym_tbl.scope_guard(kind=ScopeKind.Class):
-            node = super().visit_ClassDef(node)
+            with self.sym_tbl.scope_guard(kind=ScopeKind.Class):
+                node = super().visit_ClassDef(node)
+                print_colored(f"** ClassDef {node.name}\n", bcolors.OKGREEN)
+                self.sym_tbl.print_summary()
 
-        symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
-        if self.sym_tbl.contains_locally(symbol):
-            self.report_error(node, f"Class {node.name} already exists")
+            symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
+            if self.sym_tbl.contains_locally(symbol):
+                self.report_error(node, f"Class {node.name} already exists")
 
-        node = self.sym_tbl.insert(symbol, node)
-        return self.verify_ClassDef(node)
+            node = self.sym_tbl.insert(symbol, node)
+            return self.verify_ClassDef(node)
 
     def verify_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         if node.sema_failed:
@@ -252,39 +276,53 @@ class Sema(IRMutator):
     def visit_FuncCall(self, node: ast.FuncCall):
         node = super().visit_FuncCall(node)
         func_name = node.func
+        if isinstance(func_name, ast.UnresolvedFuncDecl):
+            func_name = func_name.name  # type: ignore
         assert isinstance(func_name, str)
-        func = self.sym_tbl.get_symbol(
+
+        func = self.sym_tbl.get_function(FuncSymbol(func_name)) or self.sym_tbl.get_symbol(
             name=func_name,
             kind=[
-                Symbol.Kind.Func,
                 Symbol.Kind.Arg,
                 Symbol.Kind.Var,
                 Symbol.Kind.Class,
             ],
         )
+
+        # self.sym_tbl.print_summary()
+
         if not func:
-            self.report_error(node, f"Target function/class {func_name} not found")
+            self.report_error(node, f"Target function or class '{
+                              func_name}' not found")
             return self.verify_FuncCall(node, func)
+
         elif isinstance(func, ast.VarDecl):
             true_func = Sema.get_true_var(func)
             if isinstance(true_func, ast.LispVarRef):
                 if isinstance(true_func, ast.LispVarRef):
                     return self.verify_FuncCall(
-                        ast.LispFuncCall(func=true_func, args=node.args, loc=node.loc),
+                        ast.LispFuncCall(
+                            func=true_func, args=node.args, loc=node.loc),
                         func,
                     )
-            self.report_error(node, f"{node.loc}\nUnknown lisp function call {func}")
+            self.report_error(
+                node, f"{node.loc}\nUnknown lisp function call {func}")
             return node
+
         elif isinstance(func, FuncOverloads):
             the_func = func.lookup(node.args)
             if the_func:
-                node = ast.FuncCall(func=the_func, args=node.args, loc=node.loc)
+                node = ast.FuncCall(
+                    func=the_func, args=node.args, loc=node.loc)
             else:
                 self.report_error(node, f"Cannot find a matched function")
 
+            return self.verify_FuncCall(node, the_func)
+
         else:
             assert func is not None
-            node = ast.FuncCall(func=func, args=node.args, loc=node.loc)  # type: ignore
+            node = ast.FuncCall(func=func, args=node.args,
+                                loc=node.loc)  # type: ignore
             return self.verify_FuncCall(node, func)
 
     def verify_FuncCall(
@@ -343,13 +381,15 @@ class Sema(IRMutator):
             if node.type is _ty.Unk and node.default is None:
                 self.report_error(
                     node,
-                    f"{node.loc}\nArg {node.name} should have a type or a default value",
+                    f"{node.loc}\nArg {
+                        node.name} should have a type or a default value",
                 )
             elif node.default is not None and node.type is not _ty.Unk:
                 if not can_assign_type(node.type, node.default.get_type()):
                     self.report_error(
                         node,
-                        f"Cannot assign {node.default.get_type()} to {node.type}",
+                        f"Cannot assign {node.default.get_type()} to {
+                            node.type}",
                     )
         return node
 
@@ -376,7 +416,8 @@ class Sema(IRMutator):
                 if not check(node.left, node.right):
                     self.report_error(
                         node,
-                        f"Cannot {op.name} {node.left.get_type()} and {node.right.get_type()}",
+                        f"Cannot {op.name} {node.left.get_type()} and {
+                            node.right.get_type()}",
                     )
                     node.sema_failed = True
                     return node
@@ -384,10 +425,12 @@ class Sema(IRMutator):
         if not is_type_compatible(node.left.get_type(), node.right.get_type()):
             self.report_error(
                 node,
-                f"Cannot convert {node.left.get_type()} and {node.right.get_type()}",
+                f"Cannot convert {node.left.get_type()} and {
+                    node.right.get_type()}",
             )
 
-        node.type = get_common_type(node.left.get_type(), node.right.get_type())
+        node.type = get_common_type(
+            node.left.get_type(), node.right.get_type())
         return node
 
     def can_type_add(self, left, right):

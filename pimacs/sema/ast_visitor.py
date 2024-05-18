@@ -4,6 +4,8 @@ from contextlib import contextmanager
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _type
 
+from .ast import AnalyzedClassDef
+
 
 class IRVisitor:
     def visit(self, node: ast.IrNode | _type.Type | str | None):
@@ -89,13 +91,16 @@ class IRVisitor:
         for stmt in node.stmts:
             self.visit(stmt)
 
-    def visit_AssignStmt(self, node: ast.AssignStmt):
+    def visit_AssignStmt(self, node: ast.Assign):
         self.visit(node.target)
         self.visit(node.value)
 
     def visit_ClassDef(self, node: ast.ClassDef):
         for stmt in node.body:
             self.visit(stmt)
+
+    def visit_AnalyzedClassDef(self, node: AnalyzedClassDef):
+        self.visit_ClassDef(node)
 
     def visit_LispVarRef(self, node: ast.LispVarRef):
         pass
@@ -197,6 +202,10 @@ class IRMutator:
         node.type_spec = [self.visit(_) for _ in node.type_spec]
         return node
 
+    def visit_UnresolvedFuncDecl(self, node: ast.UnresolvedFuncDecl):
+        node.return_type = self.visit(node.return_type)
+        return node
+
     def visit_LispFuncCall(self, node: ast.LispFuncCall):
         node.func = self.visit(node.func)
         node.args = [self.visit(_) for _ in node.args]
@@ -245,12 +254,13 @@ class IRMutator:
             node.stmts[i] = self.visit(stmt)
         return node
 
-    def visit_AssignStmt(self, node: ast.AssignStmt):
+    def visit_AssignStmt(self, node: ast.Assign):
         node.target = self.visit(node.target)
         node.value = self.visit(node.value)
         return node
 
     def visit_ClassDef(self, node: ast.ClassDef):
+        node.decorators = [self.visit(_) for _ in node.decorators]
         node.body = [self.visit(_) for _ in node.body]
         return node
 
@@ -281,6 +291,9 @@ class IRMutator:
     def visit_SetType(self, node: _type.SetType):
         node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
         return node
+
+    def visit_AnalyzedClassDef(self, node: AnalyzedClassDef):
+        return self.visit_ClassDef(node)
 
 
 class StringStream:
@@ -380,6 +393,8 @@ class IRPrinter(IRVisitor):
             self.put(f"{node.func.name}")
         elif isinstance(node.func, ast.FuncDecl):
             self.put(f"{node.func.name}")
+        elif isinstance(node.func, ast.UnresolvedFuncDecl):
+            self.put(f"{node.func.name}")
         elif isinstance(node.func, ast.ClassDef):
             self.put(f"{node.func.name}")
         elif isinstance(node.func, ast.ArgDecl):
@@ -474,7 +489,7 @@ class IRPrinter(IRVisitor):
 
     def visit_Decorator(self, node: ast.Decorator):
         if isinstance(node.action, ast.FuncCall):
-            self.put(f"@{node.action.func}(")
+            self.put(f"@{node.action.func.name}(")
             if node.action.args:
                 for i, arg in enumerate(node.action.args):
                     if i > 0:
@@ -493,7 +508,7 @@ class IRPrinter(IRVisitor):
         else:
             raise Exception(f"Invalid decorator action: {node.action}")
 
-    def visit_AssignStmt(self, node: ast.AssignStmt):
+    def visit_AssignStmt(self, node: ast.Assign):
         self.visit(node.target)
         self.put(" = ")
         self.visit(node.value)
@@ -512,6 +527,9 @@ class IRPrinter(IRVisitor):
                 self.put_indent()
                 self.visit(stmt)
                 self.put("\n")
+
+    def visit_AnanlyzedClassDef(self, node: AnalyzedClassDef):
+        self.visit_ClassDef(node)
 
     def visit_LispVarRef(self, node: ast.LispVarRef):
         self.put(f"%{node.name}")

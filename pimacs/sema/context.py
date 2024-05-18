@@ -3,11 +3,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import *
 
+from tabulate import tabulate
+
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 
 from .func import FuncOverloads, FuncSig, FuncSymbol, FuncTable
-from .utils import ClassId, ModuleId, Scoped, ScopeKind, Symbol
+from .utils import (ClassId, ModuleId, Scope, Scoped, ScopeKind, Symbol,
+                    SymbolItem, bcolors, print_colored)
 
 
 class ModuleContext:
@@ -76,24 +79,6 @@ class ModuleContext:
     def name(self) -> str:
         """Module name."""
         return self._name
-
-
-SymbolItem = Any
-
-
-@dataclass
-class Scope:
-    data: Dict[Symbol, SymbolItem] = field(default_factory=dict)
-
-    kind: ScopeKind = ScopeKind.Local
-
-    def add(self, symbol: Symbol, item: SymbolItem):
-        if symbol in self.data:
-            raise KeyError(f"{item.loc}\nSymbol {symbol} already exists")
-        self.data[symbol] = item
-
-    def get(self, symbol: Symbol) -> SymbolItem | None:
-        return self.data.get(symbol, None)
 
 
 class SymbolTable(Scoped):
@@ -165,6 +150,19 @@ class SymbolTable(Scoped):
             yield
         finally:
             self.pop_scope()
+
+    def print_summary(self):
+        table = [["Symbol", "Kind", "Summary"]]
+        for no, scope in enumerate(self.scopes):
+            for symbol, item in scope.data.items():
+                table.append([symbol.name, symbol.kind, str(item)])
+            for symbol, item in self.func_table.scopes[no].data.items():
+                table.append([symbol.name, symbol.kind, str(item)])
+
+            print_colored(f"Scope {no}:\n", bcolors.OKBLUE)
+            print_colored(
+                tabulate(table, headers="firstrow", tablefmt="fancy_grid"))
+            print_colored("\n")
 
 
 class TypeSystem(_ty.TypeSystemBase):
