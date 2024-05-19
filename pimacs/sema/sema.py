@@ -76,12 +76,11 @@ class Sema(IRMutator):
         node.sema_failed = True
         self._succeeded = False
 
-    def visit_UnresolvedVarRef(self, node: ast.UVarRef):
-        node = super().visit_UnresolvedVarRef(node)
+    def visit_UVarRef(self, node: ast.UVarRef):
+        node = super().visit_UVarRef(node)
         if node.name.startswith("self."):
             # deal with members
             var_name = node.name[5:]
-            var = ast.VarRef(target=member, loc=node.loc)  # type: ignore
 
             obj = self.sym_tbl.get_symbol(name="self", kind=Symbol.Kind.Arg)
             if not obj:

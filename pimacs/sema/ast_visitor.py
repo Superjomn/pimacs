@@ -243,9 +243,6 @@ class IRMutator:
     def visit_VarRef(self, node: ast.VarRef):
         return node
 
-    def visit_UnresolvedVarRef(self, node: ast.UVarRef):
-        return node
-
     def visit_If(self, node: ast.If):
         node.cond = self.visit(node.cond)
         node.then_branch = self.visit(node.then_branch)
