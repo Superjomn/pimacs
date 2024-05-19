@@ -91,7 +91,7 @@ class VarDecl(Stmt, VisiableSymbol):
     VarDecl is a variable declaration, such as `var a: int = 1` or `let a = 1`.
     '''
     name: str = ""
-    type: Optional[Type] = None
+    type: Type = _type.Unk
     init: Optional[Expr] = None
     # If not mutable, it is a constant declared by `let`
     mutable: bool = True
@@ -99,7 +99,7 @@ class VarDecl(Stmt, VisiableSymbol):
     decorators: List["Decorator"] = field(default_factory=list)
 
     def __repr__(self):
-        return f"var {self.name}: {self.type}"
+        return f"var {self.name}: {self.type}" + f" = {self.init}" if self.init else ""
 
 
 @dataclass(slots=True)
@@ -129,20 +129,6 @@ class VarRef(Expr):
         else:
             assert self.target is not None and self.target.type is not None
             return self.target.type
-
-
-@dataclass
-class LispVarRef(VarRef):
-    def __init__(self, name: str, loc: Location):
-        self.loc = loc
-        self.name = name[1:]
-        self.type = _type.LispType
-
-    def get_type(self) -> Type:
-        return _type.LispType
-
-    def __repr__(self):
-        return f"LispVal({self.name})"
 
 
 @dataclass(slots=True)
@@ -187,7 +173,7 @@ class Function(Stmt, VisiableSymbol):
     name: str
     body: Block
     args: List[Arg] = field(default_factory=list)
-    return_type: Optional[Type] = None
+    return_type: Type = _type.Unk
     decorators: List["Decorator"] = field(default_factory=list)
 
     class Kind(Enum):
@@ -234,7 +220,7 @@ class Function(Stmt, VisiableSymbol):
 
 
 @dataclass(slots=True)
-class IfStmt(Stmt):
+class If(Stmt):
     cond: Expr
     then_branch: Block
     elif_branches: List[Tuple[Expr, Block]] = field(default_factory=list)
@@ -242,13 +228,13 @@ class IfStmt(Stmt):
 
 
 @dataclass(slots=True)
-class WhileStmt(Stmt):
+class While(Stmt):
     condition: Expr
     body: Block
 
 
 @dataclass(slots=True)
-class ForStmt(Stmt):
+class For(Stmt):
     init: VarDecl
     condition: Expr
     increment: Expr
@@ -385,36 +371,7 @@ class Template:
 
 
 @dataclass(slots=True)
-class LispCall(Expr):
-    """Call a lisp function, such as `%format("hello")` or
-
-    ```
-    let format = %format
-    format("hello)
-    ```
-    """
-
-    func: LispVarRef
-    args: List[CallParam | Expr] = field(default_factory=list)
-
-    def __post_init__(self):
-        assert self.args is not None
-
-    def get_type(self) -> Type:
-        return _type.LispType
-
-
-class LispList(Expr):
-    def __init__(self, items: List[Expr], loc: Location):
-        self.items = items
-        self.loc = loc
-
-    def get_type(self) -> Type:
-        return _type.LispType
-
-
-@dataclass(slots=True)
-class ReturnStmt(Stmt):
+class Return(Stmt):
     value: Optional[Expr] = None
 
 
@@ -487,9 +444,19 @@ def make_const(value: int | float | str | bool | None, loc: Location) -> Constan
 
 
 @dataclass(slots=True)
+class UVarRef(Expr):
+    ''' Unresolved variable reference, such as `a` in `a.b`. '''
+    name: str
+    target_type: Type = field(default_factory=lambda: _type.Unk)
+
+    def get_type(self) -> Type:
+        return self.target_type
+
+
+@dataclass(slots=True)
 class UAttr(Expr):
     ''' Unresolved attribute, such as `a.b` in `a.b.c` '''
-    value: VarRef
+    value: VarRef | UVarRef
     attr: str
 
     def get_type(self) -> Type:
@@ -506,14 +473,13 @@ class UClass(Stmt):
 class UFunction(Stmt):
     ''' Unresolved function, such as `f` in `f()`. '''
     name: str
-    return_type: Optional[Type] = None
+    return_type: Type = _type.Unk
 
 
-@dataclass(slots=True)
-class UVarRef(Expr):
-    ''' Unresolved variable reference, such as `a` in `a.b`. '''
-    name: str
-    target_type: Type = field(default_factory=lambda: _type.Unk)
+class LispList(Expr):
+    def __init__(self, items: List[Expr], loc: Location):
+        self.items = items
+        self.loc = loc
 
     def get_type(self) -> Type:
-        return self.target_type
+        return _type.LispType

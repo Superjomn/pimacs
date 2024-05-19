@@ -29,7 +29,7 @@ def test_IRPrinter_func():
     printer(file)
     output = printer.os.getvalue()
 
-    print(output)
+    print('output:\n', output)
 
     assert (
         output.strip()

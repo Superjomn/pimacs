@@ -156,13 +156,13 @@ class PimacsTransformer(Transformer):
 
         return ast.Block(stmts=stmts, doc_string=doc_string, loc=stmts[0].loc)
 
-    def return_stmt(self, items) -> ast.ReturnStmt:
+    def return_stmt(self, items) -> ast.Return:
         self._force_non_rule(items)
         assert len(items) == 2
         loc = self._get_loc(items[0])
         if items[1]:
-            return ast.ReturnStmt(value=items[1], loc=loc)
-        return ast.ReturnStmt(value=None, loc=loc)
+            return ast.Return(value=items[1], loc=loc)
+        return ast.Return(value=None, loc=loc)
 
     def type_spec(self, items):
         self._force_non_rule(items)
@@ -187,7 +187,7 @@ class PimacsTransformer(Transformer):
         # TODO: Unify the types in ModuleContext
         return _type.make_customed(name=type.value, subtypes=spec_types)
 
-    def func_call(self, items) -> ast.Call | ast.LispCall:
+    def func_call(self, items) -> ast.Call:
         self._force_non_rule(items)
         if isinstance(items[0], ast.VarRef):
             name = items[0].name
@@ -214,7 +214,8 @@ class PimacsTransformer(Transformer):
     def lisp_symbol(self, items):
         self._force_non_rule(items)
         return ast.UVarRef(
-            name=items[0].value,
+            # TODO: Represent the lisp symbols in a better way
+            name='%'+items[0].value,
             loc=self._get_loc(items[0]),
         )
 
@@ -243,9 +244,9 @@ class PimacsTransformer(Transformer):
         loc = self._get_loc(items[0])
         return ast.Constant(value=items[0].value, loc=loc)
 
-    def variable(self, items) -> ast.UVarRef | ast.LispVarRef:
+    def variable(self, items):
         self._force_non_rule(items)
-        if isinstance(items[0], (ast.UVarRef,)):
+        if isinstance(items[0], (ast.UVarRef, ast.UAttr)):
             return items[0]
 
         loc = self._get_loc(items[0])
@@ -256,7 +257,7 @@ class PimacsTransformer(Transformer):
         # self._force_non_rule(items)
         loc = self._get_loc(items[0])
         name = items[1].value
-        type = safe_get(items, 2, None)
+        type = safe_get(items, 2, _type.Unk)
         init = safe_get(items, 3, None)
         node = ast.VarDecl(name=name, type=type, init=init, loc=loc)
         return node
@@ -265,37 +266,12 @@ class PimacsTransformer(Transformer):
         self._force_non_rule(items)
         loc = self._get_loc(items[0])
         name = items[1].value
-        type = safe_get(items, 2, None)
+        type = safe_get(items, 2, _type.Unk)
         init = safe_get(items, 3, None)
 
         node = ast.VarDecl(name=name, type=type, init=init,
                            loc=loc, mutable=False)
         return node
-
-    def _deduce_var_type(self, var: ast.VarDecl) -> ast.VarDecl:
-        if var.type is not None:
-            return var
-
-        if var.init:
-            if isinstance(var.init, ast.LispVarRef):
-                var.type = _type.LispType
-            elif isinstance(var.init, ast.Constant):
-                if isinstance(var.init.value, int):
-                    var.type = _type.Int
-                elif isinstance(var.init.value, float):
-                    var.type = _type.Float
-                elif isinstance(var.init.value, str):
-                    var.type = _type.Str
-                elif var.init.value is None:
-                    var.type = _type.Nil
-                else:
-                    raise ValueError(
-                        f"{var.loc}\nUnknown constant type {var.init.value}"
-                    )
-            else:
-                var.type = var.init.type  # type: ignore
-
-        return var
 
     def value_param(self, items):
         self._force_non_rule(items)
@@ -357,7 +333,7 @@ class PimacsTransformer(Transformer):
             else:
                 raise ValueError(f"{loc}\nUnknown if block {item}")
 
-        return ast.IfStmt(
+        return ast.If(
             cond=cond,
             then_branch=then_block,
             elif_branches=elif_blocks,
@@ -455,12 +431,19 @@ class PimacsTransformer(Transformer):
         func_def.decorators = decorators
         return func_def
 
-    def dotted_name(self, items) -> ast.UVarRef:
+    def dotted_name(self, items):
+        """ Get attribute. """
         self._force_non_rule(items)
-        return ast.UVarRef(
-            name=".".join([x.value for x in items]),
-            loc=self._get_loc(items[0]),
-        )
+        assert len(items) > 1
+
+        attr = None
+        for i, token in enumerate(items[:-1]):
+            name = token.value
+            value = attr or ast.UVarRef(name=name, loc=self._get_loc(token))
+            attr = ast.UAttr(
+                value=value, attr=items[i+1].value, loc=self._get_loc(token))
+
+        return attr
 
     def assign_stmt(self, items):
         self._force_non_rule(items)

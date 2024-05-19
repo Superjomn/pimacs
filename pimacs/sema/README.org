@@ -1,0 +1,7 @@
+#+title: Sema
+
+This module helps to perform semantic analysis on Pimacs code.
+
+The input to the Sema is a `File` with AST nodes, there are many unresolved nodes, and the Sema will try to check the semantics, deduce the types and catch conflicts, and try to link the symbols locally in class or file.
+
+The output of the Sema is a `File` with AST nodes, with most of the node's types being determined, but some nodes are still unresolved and need to be further determined in the Link phase.

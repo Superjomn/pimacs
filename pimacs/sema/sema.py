@@ -150,8 +150,8 @@ class Sema(IRMutator):
                     return node
         return node
 
-    def visit_SelectExpr(self, node: ast.Select):
-        node = super().visit_SelectExpr(node)
+    def visit_Select(self, node: ast.Select):
+        node = super().visit_Select(node)
         if any_failed(node.cond, node.then_expr, node.else_expr):
             node.sema_failed = True
             return node
@@ -170,13 +170,13 @@ class Sema(IRMutator):
             return node
         return node
 
-    def visit_FuncDecl(self, node: ast.Function):
+    def visit_Function(self, node: ast.Function):
         within_class = self.sym_tbl.current_scope.kind is ScopeKind.Class
         if within_class:
             assert self._cur_class
 
         with self.sym_tbl.scope_guard(kind=ScopeKind.Func):
-            node = super().visit_FuncDecl(node)
+            node = super().visit_Function(node)
             symbol = FuncSymbol(node.name)
             # TODO[Superjomn]: support function overloading
             if self.sym_tbl.contains_locally(symbol):
@@ -248,7 +248,7 @@ class Sema(IRMutator):
 
         return node
 
-    def visit_ClassDef(self, node: ast.Class):
+    def visit_Class(self, node: ast.Class):
         node = AnalyzedClassDef.create(node)  # type: ignore
         with node.auto_update_symbols():
             self._cur_class = node
@@ -257,9 +257,8 @@ class Sema(IRMutator):
                     node, f"Class should be declared in the global scope")
 
             with self.sym_tbl.scope_guard(kind=ScopeKind.Class):
-                node = super().visit_ClassDef(node)
-                print_colored(f"** ClassDef {node.name}\n", bcolors.OKGREEN)
-                self.sym_tbl.print_summary()
+                node = super().visit_Class(node)
+                # self.sym_tbl.print_summary()
 
             symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
             if self.sym_tbl.contains_locally(symbol):
@@ -273,8 +272,8 @@ class Sema(IRMutator):
             return node
         return node
 
-    def visit_FuncCall(self, node: ast.Call):
-        node = super().visit_FuncCall(node)
+    def visit_Call(self, node: ast.Call):
+        node = super().visit_Call(node)
         func_name = node.func
         if isinstance(func_name, ast.UFunction):
             func_name = func_name.name  # type: ignore
@@ -289,25 +288,10 @@ class Sema(IRMutator):
             ],
         )
 
-        # self.sym_tbl.print_summary()
-
         if not func:
-            self.report_error(node, f"Target function or class '{
-                              func_name}' not found")
-            return self.verify_FuncCall(node, func)
-
-        elif isinstance(func, ast.VarDecl):
-            true_func = Sema.get_true_var(func)
-            if isinstance(true_func, ast.LispVarRef):
-                if isinstance(true_func, ast.LispVarRef):
-                    return self.verify_FuncCall(
-                        ast.LispCall(
-                            func=true_func, args=node.args, loc=node.loc),
-                        func,
-                    )
-            self.report_error(
-                node, f"{node.loc}\nUnknown lisp function call {func}")
-            return node
+            # self.report_error(node, f"Target function or class '{
+            # func_name}' not found")
+            return self.verify_Call(node, func)
 
         elif isinstance(func, FuncOverloads):
             the_func = func.lookup(node.args)
@@ -317,19 +301,19 @@ class Sema(IRMutator):
             else:
                 self.report_error(node, f"Cannot find a matched function")
 
-            return self.verify_FuncCall(node, the_func)
+            return self.verify_Call(node, the_func)
 
         else:
             assert func is not None
             node = ast.Call(func=func, args=node.args,
                             loc=node.loc)  # type: ignore
-            return self.verify_FuncCall(node, func)
+            return self.verify_Call(node, func)
 
-    def verify_FuncCall(
+    def verify_Call(
         self,
-        node: ast.Call | ast.LispCall,
-        func: ast.VarDecl | ast.LispVarRef | None,
-    ) -> ast.Call | ast.LispCall:
+        node: ast.Call,
+        func: ast.VarDecl | ast.Function | None,
+    ) -> ast.Call:
         if node.sema_failed:
             return node
 
@@ -339,9 +323,6 @@ class Sema(IRMutator):
             # TODO[superjomn]: check if the number of arguments and type is correct
             return node
         return node
-
-    def visit_LispFuncCall(self, node: ast.LispCall):
-        return super().visit_LispFuncCall(node)
 
     def visit_Block(self, node: ast.Block):
         with self.sym_tbl.scope_guard():
@@ -358,14 +339,14 @@ class Sema(IRMutator):
         return_types = set()
         # gather return types
         for return_stmt in node.stmts:
-            if isinstance(return_stmt, ast.ReturnStmt):
+            if isinstance(return_stmt, ast.Return):
                 if return_stmt.value:
                     return_types.add(return_stmt.value.get_type())
         node.return_type = list(return_types) if return_types else [_ty.Nil]
         return node
 
-    def visit_ArgDecl(self, node: ast.Arg):
-        node = super().visit_ArgDecl(node)
+    def visit_Arg(self, node: ast.Arg):
+        node = super().visit_Arg(node)
         assert (
             self.sym_tbl.current_scope.kind is ScopeKind.Func
         ), f"{node.loc}\nArgDecl should be in a function, but get {self.sym_tbl.current_scope.kind}"
@@ -374,9 +355,9 @@ class Sema(IRMutator):
             self.report_error(node, f"Argument {node.name} already exists")
         else:
             node = self.sym_tbl.insert(symbol, node)
-        return self.verify_ArgDecl(node)
+        return self.verify_Arg(node)
 
-    def verify_ArgDecl(self, node: ast.Arg) -> ast.Arg:
+    def verify_Arg(self, node: ast.Arg) -> ast.Arg:
         if not (node.is_cls_placeholder or node.is_self_placeholder):
             if node.type is _ty.Unk and node.default is None:
                 self.report_error(
@@ -481,13 +462,11 @@ class Sema(IRMutator):
     @staticmethod
     def get_true_var(
         node: ast.VarDecl | ast.VarRef,
-    ) -> ast.VarDecl | ast.LispVarRef | ast.Arg | ast.UVarRef | ast.Expr:
+    ) -> ast.VarDecl | ast.Arg | ast.UVarRef | ast.Expr:
         if isinstance(node, ast.VarDecl) and node.init:
             return node.init
         if isinstance(node, ast.VarRef):
             assert node.target
             return node.target
-        if isinstance(node, ast.LispVarRef):
-            return node
 
         return node

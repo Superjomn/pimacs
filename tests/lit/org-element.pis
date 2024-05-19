@@ -25,8 +25,8 @@ class OrgElement:
     @property
     def content(self) -> Str:
         "Get the content of the element."
-        # CHECK: let begin :Int = %org-element-property(%contents-begin, self.elem)
+        # CHECK: let begin :Int = %org-element-property(%:contents-begin, self.elem)
         let begin: Int = %org-element-property(%:contents-begin, self.elem)
-        # CHECK: let end :Int = %org-element-property(%contents-end, self.elem)
+        # CHECK: let end :Int = %org-element-property(%:contents-end, self.elem)
         let end: Int = %org-element-property(%:contents-end, self.elem)
         return %buffer-substring(begin, end)
