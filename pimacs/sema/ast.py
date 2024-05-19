@@ -11,15 +11,15 @@ from .func import FuncOverloads, FuncSymbol
 from .utils import Symbol
 
 
-@dataclass(slots=True)
-class AnalyzedClassDef(ast.Class):
+@dataclass(slots=True, unsafe_hash=True)
+class AnalyzedClass(ast.Class):
     # symbols hold all the members and methods of the class
     # It should be updated once the class is modified
     symbols: Dict[Symbol, ast.VarDecl | FuncOverloads] = field(
-        default_factory=dict, init=False)
+        default_factory=dict, init=False, hash=False)
 
     @classmethod
-    def create(cls, node: ast.Class) -> "AnalyzedClassDef":
+    def create(cls, node: ast.Class) -> "AnalyzedClass":
         return cls(
             name=node.name,
             body=node.body,

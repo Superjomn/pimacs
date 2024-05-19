@@ -2,7 +2,7 @@ from typing import Optional
 
 import pimacs.ast.ast as ast
 from pimacs.ast.parser import get_parser
-from pimacs.sema.sema import Sema
+from pimacs.sema.file_sema import FileSema
 
 
 def parse_ast(
@@ -29,7 +29,7 @@ def perform_sema(the_ast: ast.File) -> ast.File | None:
 
     It returns the IR if the semantic analysis succeeds.
     """
-    sema = Sema()
+    sema = FileSema()
     the_ir = sema.visit(the_ast)
     if sema.succeed:
         return the_ir

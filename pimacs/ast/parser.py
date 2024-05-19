@@ -15,7 +15,7 @@ import pimacs.ast.ast as ast
 import pimacs.ast.type as _type
 from pimacs.sema.ast_visitor import IRMutator, IRVisitor
 from pimacs.sema.context import ModuleContext, Scope, Symbol, SymbolTable
-from pimacs.sema.sema import Sema, catch_sema_error
+from pimacs.sema.file_sema import FileSema, catch_sema_error
 
 
 def get_lark_parser():
@@ -154,7 +154,7 @@ class PimacsTransformer(Transformer):
             doc_string = stmts[0]
             stmts = stmts[1:]
 
-        return ast.Block(stmts=stmts, doc_string=doc_string, loc=stmts[0].loc)
+        return ast.Block(stmts=tuple(stmts), doc_string=doc_string, loc=stmts[0].loc)
 
     def return_stmt(self, items) -> ast.Return:
         self._force_non_rule(items)
@@ -195,6 +195,8 @@ class PimacsTransformer(Transformer):
         elif isinstance(items[0], ast.UVarRef):
             name = items[0].name
             loc = items[0].loc
+        elif isinstance(items[0], ast.UAttr):
+            return ast.Call(func=items[0], args=tuple(items[1]), loc=items[0].loc)
         else:
             name = items[0].value
             loc = self._get_loc(items[0])
@@ -209,7 +211,7 @@ class PimacsTransformer(Transformer):
         args = args if args else []
 
         the_func = ast.UFunction(name=name, loc=loc)
-        return ast.Call(func=the_func, args=args, loc=loc, type_spec=type_spec)
+        return ast.Call(func=the_func, args=tuple(args), loc=loc, type_spec=tuple(type_spec))
 
     def lisp_symbol(self, items):
         self._force_non_rule(items)
@@ -259,6 +261,10 @@ class PimacsTransformer(Transformer):
         name = items[1].value
         type = safe_get(items, 2, _type.Unk)
         init = safe_get(items, 3, None)
+        if isinstance(init, lark.Tree):
+            init = init.children[0]
+        if init:
+            assert isinstance(init, ast.Node), f"get {init}"
         node = ast.VarDecl(name=name, type=type, init=init, loc=loc)
         return node
 
@@ -336,7 +342,7 @@ class PimacsTransformer(Transformer):
         return ast.If(
             cond=cond,
             then_branch=then_block,
-            elif_branches=elif_blocks,
+            elif_branches=tuple(elif_blocks),
             else_branch=else_block,
             loc=loc,
         )

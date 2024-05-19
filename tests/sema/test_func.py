@@ -152,14 +152,14 @@ def test_func_table_override():
     param2 = ast.CallParam(
         name="z", value=ast.make_const(0, loc=None), loc=None)
 
-    call = ast.Call(func=unresolved_func, args=[], loc=None)
+    call = ast.Call(func=unresolved_func, args=tuple(), loc=None)
     target_func = funcs.lookup(call.args)
     assert target_func is foo0
 
-    call = ast.Call(func=unresolved_func, args=[param0], loc=None)
+    call = ast.Call(func=unresolved_func, args=(param0,), loc=None)
     target_func = funcs.lookup(call.args)
     assert target_func is foo1
 
-    call = ast.Call(func=unresolved_func, args=[param0, param1], loc=None)
+    call = ast.Call(func=unresolved_func, args=(param0, param1), loc=None)
     target_func = funcs.lookup(call.args)
     assert target_func is foo2

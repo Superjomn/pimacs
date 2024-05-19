@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _type
 
-from .ast import AnalyzedClassDef
+from .ast import AnalyzedClass
 
 
 class IRVisitor:
@@ -20,6 +20,9 @@ class IRVisitor:
 
     def generic_visit(self, node: ast.Node | _type.Type | str):
         raise Exception(f"No visit_{node.__class__.__name__} method")
+
+    def visit_AnalyzedClass(self, node):
+        pass
 
     def visit_FileName(self, node: ast.FileName):
         return node
@@ -55,7 +58,6 @@ class IRVisitor:
         self.visit(node.action)  # type: ignore
 
     def visit_Block(self, node: ast.Block):
-        self.visit(node.doc_string)
         for stmt in node.stmts:
             self.visit(stmt)
 
@@ -106,9 +108,6 @@ class IRVisitor:
         for stmt in node.body:
             self.visit(stmt)
 
-    def visit_AnalyzedClassDef(self, node: AnalyzedClassDef):
-        self.visit_Class(node)
-
     def visit_DocString(self, node: ast.DocString):
         pass
 
@@ -120,10 +119,6 @@ class IRVisitor:
     def visit_Guard(self, node: ast.Guard):
         self.visit(node.header)
         self.visit(node.body)
-
-    def visit_MemberRef(self, node: ast.MemberRef):
-        self.visit(node.obj)
-        self.visit(node.member)
 
     def visit_ListType(self, node: _type.ListType):
         for inner_type in node.inner_types:
@@ -178,7 +173,7 @@ class IRMutator:
     def visit_VarDecl(self, node: ast.VarDecl):
         node.type = self.visit(node.type)
         node.init = self.visit(node.init)
-        node.decorators = [self.visit(_) for _ in node.decorators]
+        node.decorators = tuple([self.visit(_) for _ in node.decorators])
         return node
 
     def visit_Arg(self, node: ast.Arg):
@@ -204,18 +199,23 @@ class IRMutator:
         return node
 
     def visit_Function(self, node: ast.Function):
+        decorators = []
         for i, decorator in enumerate(node.decorators):
-            node.decorators[i] = self.visit(decorator)
+            decorators.append(self.visit(decorator))
+        node.decorators = tuple(decorators)
 
+        args = []
         for i, arg in enumerate(node.args):
-            node.args[i] = self.visit(arg)
+            args.append(self.visit(arg))
+        node.args = tuple(args)
+
         node.body = self.visit(node.body)
         return node
 
     def visit_Call(self, node: ast.Call):
         node.func = self.visit(node.func)
-        node.args = [self.visit(_) for _ in node.args]
-        node.type_spec = [self.visit(_) for _ in node.type_spec]
+        node.args = tuple([self.visit(_) for _ in node.args])
+        node.type_spec = tuple([self.visit(_) for _ in node.type_spec])
         return node
 
     def visit_UFunction(self, node: ast.UFunction):
@@ -227,8 +227,7 @@ class IRMutator:
 
     def visit_Block(self, node: ast.Block):
         node.doc_string = self.visit(node.doc_string)
-        for i, stmt in enumerate(node.stmts):
-            node.stmts[i] = self.visit(stmt)
+        node.stmts = tuple([self.visit(stmt) for stmt in node.stmts])
         return node
 
     def visit_BinaryOp(self, node: ast.BinaryOp):
@@ -258,8 +257,11 @@ class IRMutator:
         return node
 
     def visit_File(self, node: ast.File):
+        stmts = []
         for i, stmt in enumerate(node.stmts):
-            node.stmts[i] = self.visit(stmt)
+            stmts.append(self.visit(stmt))
+        node.stmts = tuple(stmts)
+
         return node
 
     def visit_Assign(self, node: ast.Assign):
@@ -268,8 +270,8 @@ class IRMutator:
         return node
 
     def visit_Class(self, node: ast.Class):
-        node.decorators = [self.visit(_) for _ in node.decorators]
-        node.body = [self.visit(_) for _ in node.body]
+        node.decorators = tuple([self.visit(_) for _ in node.decorators])
+        node.body = tuple([self.visit(_) for _ in node.body])
         return node
 
     def visit_DocString(self, node: ast.DocString):
@@ -279,10 +281,6 @@ class IRMutator:
         node.header = self.visit(node.header)
         node.body = self.visit(node.body)
         return node
-
-    def visit_MemberRef(self, node: ast.MemberRef):
-        node.obj = self.visit(node.obj)
-        node.member = self.visit(node.member)
 
     def visit_ListType(self, node: _type.ListType):
         node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
@@ -297,7 +295,7 @@ class IRMutator:
         node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
         return node
 
-    def visit_AnalyzedClassDef(self, node: AnalyzedClassDef):
+    def visit_AnalyzedClass(self, node: AnalyzedClass):
         return self.visit_Class(node)
 
 
@@ -528,7 +526,7 @@ class IRPrinter(IRVisitor):
                 self.visit(stmt)
                 self.put("\n")
 
-    def visit_AnanlyzedClassDef(self, node: AnalyzedClassDef):
+    def visit_AnanlyzedClass(self, node: AnalyzedClass):
         self.visit_Class(node)
 
     def visit_UVarRef(self, node: ast.UVarRef):
@@ -558,11 +556,6 @@ class IRPrinter(IRVisitor):
         if node.name:
             self.put(f"{node.name} = ")
         self.visit(node.value)
-
-    def visit_MemberRef(self, node: ast.MemberRef):
-        self.visit(node.obj)
-        self.put(".")
-        self.visit(node.member)
 
     def visit_DictType(self, node: _type.DictType):
         self.put("{")
