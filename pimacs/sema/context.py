@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import *
 
-from tabulate import tabulate
+from tabulate import tabulate  # type: ignore
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty

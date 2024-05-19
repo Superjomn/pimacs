@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from tabulate import tabulate
+from tabulate import tabulate  # type: ignore
 
 
 class ScopeKind(Enum):
