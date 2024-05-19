@@ -74,6 +74,21 @@ def pub-foo-renamed():
 @pub
 let pub-var = 0
 
+# Function Overloadding
+def foo0 ():
+    return
+
+def foo0 (x :Int) -> Int:
+    return 0
+
+def foo0 (x: Int, y: Int) -> Int:
+    return 0
+
+let call-foo0 = foo0()
+let call-foo0-1 = foo0(1)
+let call-foo0-2 = foo0(1, 2)
+
+
 # public variable could be export to lisp with specific name
 # CHECK: @pub(tolisp = "basic-module-pub-var")
 # CHECK-NEXT: let pub-var-1 :Int = 0

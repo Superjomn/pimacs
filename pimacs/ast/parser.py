@@ -19,7 +19,8 @@ from pimacs.sema.sema import Sema, catch_sema_error
 
 
 def get_lark_parser():
-    dsl_grammar = open(os.path.join(os.path.dirname(__file__), "grammar.g")).read()
+    dsl_grammar = open(os.path.join(
+        os.path.dirname(__file__), "grammar.g")).read()
     return Lark(dsl_grammar, parser="lalr", postlex=PythonIndenter())
 
 
@@ -27,7 +28,8 @@ def get_parser(code: Optional[str] = None, filename: str = "<pimacs>"):
     source: ast.PlainCode | ast.FileName = (
         ast.PlainCode(code) if code else ast.FileName(filename)
     )
-    dsl_grammar = open(os.path.join(os.path.dirname(__file__), "grammar.g")).read()
+    dsl_grammar = open(os.path.join(
+        os.path.dirname(__file__), "grammar.g")).read()
     return Lark(
         dsl_grammar,
         parser="lalr",
@@ -37,6 +39,11 @@ def get_parser(code: Optional[str] = None, filename: str = "<pimacs>"):
 
 
 class PimacsTransformer(Transformer):
+    ''' This class is used to transform the AST from Lark to Pimacs AST.
+    It only perform the transformation, and does not perform any semantic analysis, so lots of
+    unsolved nodes are left in the AST.
+    '''
+
     def __init__(self, source: ast.PlainCode | ast.FileName):
         self.source = source
         self.ctx = ModuleContext("unk")
@@ -45,18 +52,23 @@ class PimacsTransformer(Transformer):
         self._force_non_rule(items)
         return items
 
+    def _get_loc(self, token: Token) -> ast.Location:
+        assert token.line is not None
+        assert token.column is not None
+        return ast.Location(self.source, token.line, token.column)
+
     def func_def(self, items):
         self._force_non_rule(items)
         name: str = items[0].value
-        args: List[ast.ArgDecl] = safe_get(items, 1, [])
+        args: List[ast.Arg] = safe_get(items, 1, [])
         type = safe_get(items, 2, None)
         block: ast.Block = safe_get(items, 3, None)
-        loc = ast.Location(self.source, items[0].line, items[0].column)
+        loc = self._get_loc(items[0])
 
         if block is None:
             raise Exception(f"{loc}:\nFunction {name} must have a block")
 
-        return ast.FuncDecl(
+        return ast.Function(
             name=name, args=args or [], body=block, return_type=type, loc=loc
         )
 
@@ -64,7 +76,7 @@ class PimacsTransformer(Transformer):
         self._force_non_rule(items)
         return items
 
-    def func_arg(self, items) -> ast.ArgDecl:
+    def func_arg(self, items) -> ast.Arg:
         self._force_non_rule(items)
         name_token = safe_get(items, 0, None)
         name = name_token.value if name_token else None
@@ -77,11 +89,11 @@ class PimacsTransformer(Transformer):
 
         default = safe_get(items, 2, None)
 
-        return ast.ArgDecl(
+        return ast.Arg(
             name=name,
             type=type_,
             default=default,
-            loc=ast.Location(self.source, items[0].line, items[0].column),
+            loc=self._get_loc(items[0]),
             is_variadic=is_variadic,
         )
 
@@ -144,13 +156,13 @@ class PimacsTransformer(Transformer):
 
         return ast.Block(stmts=stmts, doc_string=doc_string, loc=stmts[0].loc)
 
-    def return_stmt(self, items) -> ast.ReturnStmt:
+    def return_stmt(self, items) -> ast.Return:
         self._force_non_rule(items)
         assert len(items) == 2
-        loc = ast.Location(self.source, items[0].line, items[0].column)
+        loc = self._get_loc(items[0])
         if items[1]:
-            return ast.ReturnStmt(value=items[1], loc=loc)
-        return ast.ReturnStmt(value=None, loc=loc)
+            return ast.Return(value=items[1], loc=loc)
+        return ast.Return(value=None, loc=loc)
 
     def type_spec(self, items):
         self._force_non_rule(items)
@@ -175,17 +187,17 @@ class PimacsTransformer(Transformer):
         # TODO: Unify the types in ModuleContext
         return _type.make_customed(name=type.value, subtypes=spec_types)
 
-    def func_call(self, items) -> ast.FuncCall | ast.LispFuncCall:
+    def func_call(self, items) -> ast.Call:
         self._force_non_rule(items)
         if isinstance(items[0], ast.VarRef):
             name = items[0].name
             loc = items[0].loc
-        elif isinstance(items[0], ast.UnresolvedVarRef):
+        elif isinstance(items[0], ast.UVarRef):
             name = items[0].name
             loc = items[0].loc
         else:
             name = items[0].value
-            loc = ast.Location(self.source, items[0].line, items[0].column)
+            loc = self._get_loc(items[0])
 
         if len(items) == 2:
             args = items[1]
@@ -196,19 +208,15 @@ class PimacsTransformer(Transformer):
 
         args = args if args else []
 
-        if name.startswith("%"):
-            assert loc
-            func = ast.LispVarRef(name=name, loc=loc)
-            assert not type_spec
-            return ast.LispFuncCall(func=func, args=args, loc=loc)
-        else:
-            return ast.FuncCall(func=name, args=args, loc=loc, type_spec=type_spec)
+        the_func = ast.UFunction(name=name, loc=loc)
+        return ast.Call(func=the_func, args=args, loc=loc, type_spec=type_spec)
 
     def lisp_symbol(self, items):
         self._force_non_rule(items)
-        return ast.LispVarRef(
-            name=items[0].value,
-            loc=ast.Location(self.source, items[0].line, items[0].column),
+        return ast.UVarRef(
+            # TODO: Represent the lisp symbols in a better way
+            name='%'+items[0].value,
+            loc=self._get_loc(items[0]),
         )
 
     def func_call_name(self, items) -> str:
@@ -233,66 +241,37 @@ class PimacsTransformer(Transformer):
 
     def string(self, items: List[Token]):
         self._force_non_rule(items)
-        loc = ast.Location(self.source, items[0].line, items[0].column)  # type: ignore
+        loc = self._get_loc(items[0])
         return ast.Constant(value=items[0].value, loc=loc)
 
-    def variable(self, items) -> ast.UnresolvedVarRef | ast.LispVarRef:
+    def variable(self, items):
         self._force_non_rule(items)
-        if isinstance(items[0], (ast.LispVarRef, ast.UnresolvedVarRef)):
+        if isinstance(items[0], (ast.UVarRef, ast.UAttr)):
             return items[0]
-        loc = ast.Location(self.source, items[0].line, items[0].column)
-        assert len(items) == 1
-        if isinstance(items[0], ast.UnresolvedVarRef):
-            return items[0]
+
+        loc = self._get_loc(items[0])
         name = items[0].value
-        if name.startswith("%"):
-            return ast.LispVarRef(name=name, loc=loc)
-        return ast.UnresolvedVarRef(name=items[0].value, loc=loc)
+        return ast.UVarRef(name=name, loc=loc)
 
     def var_decl(self, items) -> ast.VarDecl:
         # self._force_non_rule(items)
-        loc = ast.Location(self.source, items[0].line, items[0].column)
+        loc = self._get_loc(items[0])
         name = items[1].value
-        type = safe_get(items, 2, None)
+        type = safe_get(items, 2, _type.Unk)
         init = safe_get(items, 3, None)
         node = ast.VarDecl(name=name, type=type, init=init, loc=loc)
-        # self._deduce_var_type(node)
         return node
 
     def let_decl(self, items) -> ast.VarDecl:
         self._force_non_rule(items)
-        loc = ast.Location(self.source, items[0].line, items[0].column)
+        loc = self._get_loc(items[0])
         name = items[1].value
-        type = safe_get(items, 2, None)
+        type = safe_get(items, 2, _type.Unk)
         init = safe_get(items, 3, None)
 
-        node = ast.VarDecl(name=name, type=type, init=init, loc=loc, mutable=False)
+        node = ast.VarDecl(name=name, type=type, init=init,
+                           loc=loc, mutable=False)
         return node
-
-    def _deduce_var_type(self, var: ast.VarDecl) -> ast.VarDecl:
-        if var.type is not None:
-            return var
-
-        if var.init:
-            if isinstance(var.init, ast.LispVarRef):
-                var.type = _type.LispType
-            elif isinstance(var.init, ast.Constant):
-                if isinstance(var.init.value, int):
-                    var.type = _type.Int
-                elif isinstance(var.init.value, float):
-                    var.type = _type.Float
-                elif isinstance(var.init.value, str):
-                    var.type = _type.Str
-                elif var.init.value is None:
-                    var.type = _type.Nil
-                else:
-                    raise ValueError(
-                        f"{var.loc}\nUnknown constant type {var.init.value}"
-                    )
-            else:
-                var.type = var.init.type  # type: ignore
-
-        return var
 
     def value_param(self, items):
         self._force_non_rule(items)
@@ -304,7 +283,7 @@ class PimacsTransformer(Transformer):
         assert isinstance(items[0], Token)
         name = items[0].value
         value = items[1]
-        loc = ast.Location(self.source, items[0].line, items[0].column)
+        loc = self._get_loc(items[0])
         return ast.CallParam(name=name, value=value, loc=loc)
 
     def expr(self, items) -> lark.Tree:
@@ -319,9 +298,7 @@ class PimacsTransformer(Transformer):
     def NUMBER(self, x):
         self._force_non_rule(x)
         value = float(x) if "." in x else int(x)
-        return ast.Constant(
-            value=value, loc=ast.Location(self.source, x.line, x.column)
-        )
+        return ast.Constant(value=value, loc=self._get_loc(x))
 
     def atom(self, items):
         self._force_non_rule(items)
@@ -341,7 +318,7 @@ class PimacsTransformer(Transformer):
 
     def if_stmt(self, items):
         self._force_non_rule(items)
-        loc = ast.Location(self.source, items[0].line, items[0].column)
+        loc = self._get_loc(items[0])
         cond = items[1]
         then_block = items[2]
 
@@ -356,7 +333,7 @@ class PimacsTransformer(Transformer):
             else:
                 raise ValueError(f"{loc}\nUnknown if block {item}")
 
-        return ast.IfStmt(
+        return ast.If(
             cond=cond,
             then_branch=then_block,
             elif_branches=elif_blocks,
@@ -434,46 +411,52 @@ class PimacsTransformer(Transformer):
         self._force_non_rule(items)
         action = None
         args = []
-        if isinstance(items[0], ast.FuncCall):
-            action: ast.FuncCall = items[0]
+        if isinstance(items[0], ast.Call):
+            action: ast.Call = items[0]
             loc = action.loc
         elif isinstance(items[0], Token):
+            loc = self._get_loc(items[0])
             if items[0].value == "template":
-                loc = ast.Location(self.source, items[0].line, items[0].column)
                 action = ast.Template(items[1])
             else:
                 assert isinstance(items[0].value, str)
                 action: str = items[0].value
-                loc = ast.Location(self.source, items[0].line, items[0].column)
 
         return ast.Decorator(action=action, loc=loc)
 
     def decorated(self, items):
         self._force_non_rule(items)
         decorators: List[ast.Decorator] = items[:-1]
-        func_def: ast.FuncDecl = items[-1]
+        func_def: ast.Function = items[-1]
         func_def.decorators = decorators
         return func_def
 
-    def dotted_name(self, items) -> ast.UnresolvedVarRef:
+    def dotted_name(self, items):
+        """ Get attribute. """
         self._force_non_rule(items)
-        return ast.UnresolvedVarRef(
-            name=".".join([x.value for x in items]),
-            loc=ast.Location(self.source, items[0].line, items[0].column),
-        )
+        assert len(items) > 1
+
+        attr = None
+        for i, token in enumerate(items[:-1]):
+            name = token.value
+            value = attr or ast.UVarRef(name=name, loc=self._get_loc(token))
+            attr = ast.UAttr(
+                value=value, attr=items[i+1].value, loc=self._get_loc(token))
+
+        return attr
 
     def assign_stmt(self, items):
         self._force_non_rule(items)
         target = items[0]
         value = items[1]
-        return ast.AssignStmt(target=target, value=value, loc=target.loc)
+        return ast.Assign(target=target, value=value, loc=target.loc)
 
     def class_def(self, items):
         self._force_non_rule(items)
         name = items[0].value
         body = items[1]
-        loc = ast.Location(self.source, items[0].line, items[0].column)
-        return ast.ClassDef(name=name, body=body, loc=loc)
+        loc = self._get_loc(items[0])
+        return ast.Class(name=name, body=body, loc=loc)
 
     def class_body(self, items):
         self._force_non_rule(items)
@@ -491,7 +474,7 @@ class PimacsTransformer(Transformer):
         content = token.value[1:-1]
         return ast.DocString(
             content=content.strip(),
-            loc=ast.Location(self.source, token.line, token.column),
+            loc=self._get_loc(token),
         )
 
     def select_expr(self, items):
@@ -503,7 +486,7 @@ class PimacsTransformer(Transformer):
         assert isinstance(cond, ast.Expr)
         assert isinstance(true_expr, ast.Expr), f"{true_expr}"
         assert isinstance(false_expr, ast.Expr), f"{false_expr}"
-        return ast.SelectExpr(
+        return ast.Select(
             cond=cond, then_expr=true_expr, else_expr=false_expr, loc=cond.loc
         )
 
@@ -512,11 +495,11 @@ class PimacsTransformer(Transformer):
         func_call = items[0]
         body = items[1]
 
-        return ast.GuardStmt(header=func_call, body=body, loc=func_call.loc)
+        return ast.Guard(header=func_call, body=body, loc=func_call.loc)
 
     def not_cond(self, items):
         self._force_non_rule(items)
-        loc = ast.Location(self.source, items[0].line, items[0].column)
+        loc = self._get_loc(items[0])
         assert isinstance(items[1], ast.Expr)
         return ast.UnaryOp(op=ast.UnaryOperator.NOT, value=items[1], loc=loc)
 

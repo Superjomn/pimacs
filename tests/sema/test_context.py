@@ -78,15 +78,17 @@ def test_SymbolTable_var():
 def test_SymbolTable_func():
     table = SymbolTable()
 
-    func = ast.FuncDecl(name="func", args=[], return_type=Int, loc=None, body=[])
+    func = ast.Function(name="func", args=[],
+                        return_type=Int, loc=None, body=[])
     func_sym = FuncSymbol("func")
     table.insert(func_sym, func)
     assert table.get_function(func_sym)
 
-    arg0 = ast.ArgDecl("x", Int)
-    arg1 = ast.ArgDecl("y", Int)
-    func1 = ast.FuncDecl(name="func", args=[arg0], return_type=Int, loc=None, body=[])
-    func2 = ast.FuncDecl(
+    arg0 = ast.Arg("x", Int)
+    arg1 = ast.Arg("y", Int)
+    func1 = ast.Function(name="func", args=[
+                         arg0], return_type=Int, loc=None, body=[])
+    func2 = ast.Function(
         name="func", args=[arg0, arg1], return_type=Int, loc=None, body=[]
     )
 

@@ -3,11 +3,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import *
 
+from tabulate import tabulate  # type: ignore
+
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 
 from .func import FuncOverloads, FuncSig, FuncSymbol, FuncTable
-from .utils import ClassId, ModuleId, Scoped, ScopeKind, Symbol
+from .utils import (ClassId, ModuleId, Scope, Scoped, ScopeKind, Symbol,
+                    SymbolItem, bcolors, print_colored)
 
 
 class ModuleContext:
@@ -23,14 +26,14 @@ class ModuleContext:
 
     def __init__(self, name: str):
         self._name = name
-        self._functions: Dict[str, ast.FuncDecl] = {}
+        self._functions: Dict[str, ast.Function] = {}
         self._variables: Dict[str, ast.VarDecl] = {}
-        self._classes: Dict[str, ast.ClassDef] = {}
+        self._classes: Dict[str, ast.Class] = {}
         self._types: Dict[str, _ty.Type] = {}
 
     def get_symbol(
         self, name: str
-    ) -> Optional[Union[ast.FuncDecl, ast.VarDecl, ast.ClassDef]]:
+    ) -> Optional[Union[ast.Function, ast.VarDecl, ast.Class]]:
         if name in self._functions:
             return self._functions[name]
         if name in self._variables:
@@ -54,46 +57,28 @@ class ModuleContext:
             name in self._functions or name in self._variables or name in self._classes
         )
 
-    def add_function(self, func: ast.FuncDecl):
+    def add_function(self, func: ast.Function):
         self._functions[func.name] = func
 
     def add_variable(self, var: ast.VarDecl):
         self._variables[var.name] = var
 
-    def add_class(self, cls: ast.ClassDef):
+    def add_class(self, cls: ast.Class):
         self._classes[cls.name] = cls
 
-    def get_function(self, name: str) -> Optional[ast.FuncDecl]:
+    def get_function(self, name: str) -> Optional[ast.Function]:
         return self._functions.get(name)
 
     def get_variable(self, name: str) -> Optional[ast.VarDecl]:
         return self._variables.get(name)
 
-    def get_class(self, name: str) -> Optional[ast.ClassDef]:
+    def get_class(self, name: str) -> Optional[ast.Class]:
         return self._classes.get(name)
 
     @property
     def name(self) -> str:
         """Module name."""
         return self._name
-
-
-SymbolItem = Any
-
-
-@dataclass
-class Scope:
-    data: Dict[Symbol, SymbolItem] = field(default_factory=dict)
-
-    kind: ScopeKind = ScopeKind.Local
-
-    def add(self, symbol: Symbol, item: SymbolItem):
-        if symbol in self.data:
-            raise KeyError(f"{item.loc}\nSymbol {symbol} already exists")
-        self.data[symbol] = item
-
-    def get(self, symbol: Symbol) -> SymbolItem | None:
-        return self.data.get(symbol, None)
 
 
 class SymbolTable(Scoped):
@@ -109,7 +94,7 @@ class SymbolTable(Scoped):
         self.scopes.pop()
         self.func_table.pop_scope()
 
-    def _add_function(self, func: ast.FuncDecl):
+    def _add_function(self, func: ast.Function):
         self.func_table.insert(func)
 
     def insert(self, symbol: Symbol, item: SymbolItem):
@@ -165,6 +150,19 @@ class SymbolTable(Scoped):
             yield
         finally:
             self.pop_scope()
+
+    def print_summary(self):
+        table = [["Symbol", "Kind", "Summary"]]
+        for no, scope in enumerate(self.scopes):
+            for symbol, item in scope.data.items():
+                table.append([symbol.name, symbol.kind, str(item)])
+            for symbol, item in self.func_table.scopes[no].data.items():
+                table.append([symbol.name, symbol.kind, str(item)])
+
+            print_colored(f"Scope {no}:\n", bcolors.OKBLUE)
+            print_colored(
+                tabulate(table, headers="firstrow", tablefmt="fancy_grid"))
+            print_colored("\n")
 
 
 class TypeSystem(_ty.TypeSystemBase):
