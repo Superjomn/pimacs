@@ -507,7 +507,7 @@ class PimacsTransformer(Transformer):
         self._force_non_rule(items)
         loc = self._get_loc(items[0])
         assert isinstance(items[1], ast.Expr)
-        return ast.UnaryOp(op=ast.UnaryOperator.NOT, value=items[1], loc=loc)
+        return ast.UnaryOp(op=ast.UnaryOperator.NOT, operand=items[1], loc=loc)
 
     def type_placeholders(self, items):
         self._force_non_rule(items)

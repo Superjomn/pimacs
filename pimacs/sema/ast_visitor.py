@@ -66,7 +66,7 @@ class IRVisitor:
         self.visit(node.right)
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
-        self.visit(node.value)
+        self.visit(node.operand)
 
     def visit_VarRef(self, node: ast.VarRef):
         pass
@@ -236,7 +236,7 @@ class IRMutator:
         return node
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
-        node.value = self.visit(node.value)
+        node.operand = self.visit(node.operand)
         return node
 
     def visit_VarRef(self, node: ast.VarRef):
@@ -446,7 +446,7 @@ class IRPrinter(IRVisitor):
     def visit_UnaryOp(self, node: ast.UnaryOp):
         self.put("(")
         self.put(f"{node.op.value}")
-        self.visit(node.value)
+        self.visit(node.operand)
         self.put(")")
 
     def visit_VarRef(self, node: ast.VarRef):

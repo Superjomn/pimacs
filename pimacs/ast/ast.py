@@ -4,6 +4,7 @@ The ast module contains the AST nodes for Pimacs syntax.
 import os
 import weakref
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar, List, Optional, Set, Tuple, Union
@@ -11,22 +12,46 @@ from typing import Any, ClassVar, List, Optional, Set, Tuple, Union
 import pimacs.ast.type as _type
 from pimacs.ast.type import Type, TypeId
 
+from .utils import WeakSet
+
 
 @dataclass
 class Node(ABC):
     loc: Optional["Location"] = field(repr=False, compare=False)
     # The nodes using this node
-    users: weakref.WeakSet["Node"] = field(
-        default_factory=weakref.WeakSet, repr=False, init=False, hash=False)
+    users: WeakSet = field(default_factory=WeakSet,
+                           repr=False, init=False, hash=False)
     sema_failed: bool = field(
         default=False, repr=False, init=False, hash=False)
 
+    # Whether the symbol is resolved
+    resolved: bool = field(default=True, repr=False, init=False, hash=False)
+
     def add_user(self, user: "Node"):
-        self.users.add(user)
+        print(f"add_user: {user} to {self.users}, type: {type(self.users)}")
+        if user not in self.users:
+            self.users.add(user)
+
+    def replace_all_uses_with(self, new: "Node"):
+        for user in self.users:
+            user.replace_child(self, new)
+        self.users.clear()
+        for user in self.users:
+            new.add_user(user)
+
+    @contextmanager
+    def write_guard(self):
+        yield
+        self._refresh_users()
 
     @abstractmethod
     def _refresh_users(self):
         pass
+
+    @abstractmethod
+    def replace_child(self, old: "Node", new: "Node"):
+        ''' Replace a child with a new node. '''
+        raise NotImplementedError()
 
 
 @dataclass(slots=True)
@@ -104,6 +129,11 @@ class VarDecl(Stmt, VisiableSymbol):
 
     decorators: Tuple["Decorator", ...] = field(default_factory=tuple)
 
+    def replace_child(self, old: "Node", new: "Node"):
+        if self.init == old:
+            with self.write_guard():
+                self.init = new
+
     def __repr__(self):
         return f"var {self.name}: {self.type}" + f" = {self.init}" if self.init else ""
 
@@ -145,6 +175,11 @@ class VarRef(Expr):
             assert self.target is not None and self.target.type is not None
             return self.target.type
 
+    def replace_child(self, old: "Node", new: "Node"):
+        if self.target == old:
+            with self.write_guard():
+                self.target = new
+
     def __post_init__(self):
         self._refresh_users()
 
@@ -176,6 +211,11 @@ class Arg(Stmt):
     def is_self_placeholder(self) -> bool:
         return self.kind == Arg.Kind.self_placeholder
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.default == old:
+                self.default = new
+
     def __post_init__(self):
         self._refresh_users()
 
@@ -195,6 +235,14 @@ class Block(Stmt):
     def _refresh_users(self):
         pass  # container node, no need to refresh users
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            stmts = list(self.stmts)
+            for i, stmt in enumerate(stmts):
+                if stmt == old:
+                    stmts[i] = new
+            self.stmts = tuple(stmts)
+
 
 @dataclass(slots=True)
 class File(Stmt):
@@ -202,6 +250,14 @@ class File(Stmt):
 
     def _refresh_users(self):
         pass
+
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            stmts = list(self.stmts)
+            for i, stmt in enumerate(stmts):
+                if stmt == old:
+                    stmts[i] = new
+            self.stmts = tuple(stmts)
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -246,6 +302,23 @@ class Function(Stmt, VisiableSymbol):
                 return True
         return False
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.body == old:
+                self.body = new
+            else:
+                args = list(self.args)
+                for i, arg in enumerate(args):
+                    if arg == old:
+                        args[i] = new
+                self.args = tuple(args)
+
+            decorators = list(self.decorators)
+            for i, decorator in enumerate(self.decorators):
+                if decorator == old:
+                    decorators[i] = new
+            self.decorators = tuple(decorators)
+
     def _verify_decorators_unique(self):
         seen = set()
         for decorator in self.decorators:
@@ -269,6 +342,24 @@ class If(Stmt):
     def __post_init__(self):
         self._refresh_users()
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.cond == old:
+                self.cond = new
+            if self.then_branch == old:
+                self.then_branch = new
+
+            elif_branches = list(self.elif_branches)
+            for i, (cond, block) in enumerate(self.elif_branches):
+                if cond == old:
+                    elif_branches[i] = (new, block)
+                elif block == old:
+                    elif_branches[i] = (cond, new)
+            self.elif_branches = tuple(elif_branches)
+
+            if self.else_branch == old:
+                self.else_branch = new
+
     def _refresh_users(self):
         self.cond.add_user(self)
         self.then_branch.add_user(self)
@@ -290,6 +381,13 @@ class While(Stmt):
     def __post_init__(self):
         self._refresh_users()
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.condition == old:
+                self.condition = new
+            if self.body == old:
+                self.body = new
+
 
 @dataclass(slots=True)
 class For(Stmt):
@@ -305,6 +403,17 @@ class For(Stmt):
         self.init.add_user(self)
         self.condition.add_user(self)
         self.increment.add_user(self)
+
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.init == old:
+                self.init = new
+            if self.condition == old:
+                self.condition = new
+            if self.increment == old:
+                self.increment = new
+            if self.body == old:
+                self.body = new
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -329,6 +438,9 @@ class Constant(Expr):
 
     def _refresh_users(self):
         pass
+
+    def replace_child(self, old: Node, new: Node):
+        return super().replace_child(old, new)
 
 
 class BinaryOperator(Enum):
@@ -380,6 +492,13 @@ class BinaryOp(Expr):
             )
         return _type.Unk
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.left == old:
+                self.left = new
+            if self.right == old:
+                self.right = new
+
     def __post_init__(self):
         self._refresh_users()
 
@@ -396,16 +515,21 @@ class UnaryOperator(Enum):
 @dataclass(slots=True, unsafe_hash=True)
 class UnaryOp(Expr):
     op: UnaryOperator
-    value: Expr
+    operand: Expr
 
     def get_type(self) -> Type:
-        return self.value.get_type()
+        return self.operand.get_type()
 
     def __post_init__(self):
         self._refresh_users()
 
     def _refresh_users(self):
-        self.value.add_user(self)
+        self.operand.add_user(self)
+
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.operand == old:
+                self.operand = new
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -421,6 +545,11 @@ class CallParam(Expr):
 
     def _refresh_users(self):
         self.value.add_user(self)
+
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.value == old:
+                self.value = new
 
 
 custom_types: Set[_type.Type] = set()
@@ -470,6 +599,18 @@ class Call(Expr):
         for arg in self.args:
             arg.add_user(self)
 
+    def replace_child(self, old: Node, new: Node):
+        if isinstance(self.func, Node) and self.func == old:
+            with self.write_guard():
+                self.func = new
+
+        with self.write_guard():
+            args = list(self.args)
+            for i, arg in enumerate(args):
+                if arg == old:
+                    args[i] = new
+            self.args = tuple(args)
+
 
 @dataclass(slots=True)
 class Template:
@@ -487,6 +628,11 @@ class Return(Stmt):
     def __post_init__(self):
         self._refresh_users()
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.value == old:
+                self.value = new
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class Decorator(Stmt):
@@ -498,6 +644,11 @@ class Decorator(Stmt):
 
     def __post_init__(self):
         self._refresh_users()
+
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.action == old:
+                self.action = new
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -515,6 +666,13 @@ class Assign(Stmt):
         self.target.add_user(self)
         self.value.add_user(self)
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.target == old:
+                self.target = new
+            if self.value == old:
+                self.value = new
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class Attribute(Expr):
@@ -526,6 +684,11 @@ class Attribute(Expr):
 
     def _refresh_users(self):
         self.value.add_user(self)
+
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.value == old:
+                self.value = new
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -544,12 +707,29 @@ class Class(Stmt, VisiableSymbol):
         for decorator in self.decorators:
             decorator.add_user(self)
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            body = list(self.body)
+            for i, stmt in enumerate(body):
+                if stmt == old:
+                    body[i] = new
+            self.body = tuple(body)
+
+            decorators = list(self.decorators)
+            for i, decorator in enumerate(self.decorators):
+                if decorator == old:
+                    decorators[i] = new
+            self.decorators = tuple(decorators)
+
 
 @dataclass(slots=True)
 class DocString(Node):
     content: str
 
     def _refresh_users(self):
+        pass
+
+    def replace_child(self, old: Node, new: Node):
         pass
 
 
@@ -572,6 +752,15 @@ class Select(Expr):
         self.then_expr.add_user(self)
         self.else_expr.add_user(self)
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.cond == old:
+                self.cond = new
+            if self.then_expr == old:
+                self.then_expr = new
+            if self.else_expr == old:
+                self.else_expr = new
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class Guard(Stmt):
@@ -585,6 +774,13 @@ class Guard(Stmt):
     def __post_init__(self):
         self._refresh_users()
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.header == old:
+                self.header = new
+            if self.body == old:
+                self.body = new
+
 
 def make_const(value: int | float | str | bool | None, loc: Location) -> Constant:
     return Constant(value=value, loc=loc)
@@ -596,10 +792,15 @@ class UVarRef(Expr):
     name: str
     target_type: Type = field(default_factory=lambda: _type.Unk)
 
+    resolved: bool = field(default=False, init=False, hash=False)
+
     def get_type(self) -> Type:
         return self.target_type
 
     def _refresh_users(self):
+        pass
+
+    def replace_child(self, old: Node, new: Node):
         pass
 
 
@@ -608,6 +809,8 @@ class UAttr(Expr):
     ''' Unresolved attribute, such as `a.b` in `a.b.c` '''
     value: VarRef | UVarRef
     attr: str
+
+    resolved: bool = field(default=False, init=False, hash=False)
 
     def get_type(self) -> Type:
         return _type.Unk
@@ -618,13 +821,23 @@ class UAttr(Expr):
     def __post_init__(self):
         self._refresh_users()
 
+    def replace_child(self, old: Node, new: Node):
+        with self.write_guard():
+            if self.value == old:
+                self.value = new
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class UClass(Stmt):
     ''' Unresolved class, such as `A` in `A.b`. '''
     name: str
 
+    resolved: bool = field(default=False, init=False, hash=False)
+
     def _refresh_users(self):
+        pass
+
+    def replace_child(self, old: Node, new: Node):
         pass
 
 
@@ -634,10 +847,16 @@ class UFunction(Stmt):
     name: str
     return_type: Type = _type.Unk
 
+    resolved: bool = field(default=False, init=False, hash=False)
+
     def _refresh_users(self):
         pass
 
+    def replace_child(self, old: Node, new: Node):
+        pass
 
+
+# TODO: To be deprecated
 class LispList(Expr):
     def __init__(self, items: List[Expr], loc: Location):
         self.items = items
@@ -647,4 +866,7 @@ class LispList(Expr):
         return _type.LispType
 
     def _refresh_users(self):
+        pass
+
+    def replace_child(self, old: Node, new: Node):
         pass

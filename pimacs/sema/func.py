@@ -5,7 +5,8 @@ import pimacs.ast.type as _ty
 from pimacs.ast.ast import Call, CallParam, Expr, Function
 from pimacs.ast.type import Type as _type
 
-from .utils import FuncSymbol, Scope, Scoped, ScopeKind, Symbol
+from .utils import (FuncSymbol, Scoped, ScopeKind, Symbol, SymbolItem,
+                    print_colored)
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -91,48 +92,3 @@ class FuncOverloads:
 
     def __repr__(self):
         return f"FuncOverloads[{self.symbol} x {len(self.funcs)}]"
-
-
-class FuncTable(Scoped):
-    def __init__(self) -> None:
-        self.scopes = [Scope(kind=ScopeKind.Global)]  # global
-
-    def lookup(self, symbol: FuncSymbol) -> Optional[FuncOverloads]:
-        # get a FuncOverloads holding all the functions with the same symbol
-        overloads: List[FuncOverloads] = []
-        for scope in reversed(self.scopes):
-            record = scope.get(symbol)
-            if record:
-                overloads.append(record)
-        # TODO: optimize the performance
-        if overloads:
-            tmp = overloads.pop()
-            for overload in overloads:
-                tmp += overload
-            return tmp
-        return None
-
-    def insert(self, func: Function):
-        symbol = FuncSymbol(func.name)
-        record = self.scopes[-1].get(symbol)
-        if record:
-            record.insert(func)
-        else:
-            record = FuncOverloads(symbol)
-            record.insert(func)
-            self.scopes[-1].add(symbol, record)
-
-    def contains(self, symbol: FuncSymbol) -> bool:
-        return bool(self.lookup(symbol))
-
-    def contains_locally(self, symbol: FuncSymbol) -> bool:
-        return symbol in self.scopes[-1]
-
-    def push_scope(self, kind: ScopeKind = ScopeKind.Local):
-        self.scopes.append(Scope(kind=kind))
-
-    def pop_scope(self):
-        self.scopes.pop()
-
-    def __len__(self) -> int:
-        return len(self.scopes)

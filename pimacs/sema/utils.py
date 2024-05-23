@@ -45,6 +45,26 @@ class Scoped:
             self.pop_scope()
 
 
+class bcolors(Enum):
+    NONE = ""
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+
+
+def print_colored(msg: str, color: bcolors = bcolors.NONE):
+    if color == bcolors.NONE:
+        sys.stderr.write(msg)
+    else:
+        sys.stderr.write(f"{color.value}{msg}{bcolors.ENDC.value}")
+
+
 @dataclass(unsafe_hash=True, slots=True)
 class Symbol:
     """
@@ -106,48 +126,3 @@ class MemberSymbol(Symbol):
 
 
 SymbolItem = Any
-
-
-@dataclass
-class Scope:
-    data: Dict[Symbol, SymbolItem] = field(default_factory=dict)
-
-    kind: ScopeKind = ScopeKind.Local
-
-    def add(self, symbol: Symbol, item: SymbolItem):
-        if symbol in self.data:
-            raise KeyError(f"{item.loc}\nSymbol {symbol} already exists")
-        self.data[symbol] = item
-
-    def get(self, symbol: Symbol) -> SymbolItem | None:
-        return self.data.get(symbol, None)
-
-    def __contains__(self, symbol: Symbol):
-        return symbol in self.data
-
-    def print_summary(self):
-        table = [["Symbol", "Kind", "Summary"]]
-        for symbol, item in self.data.items():
-            table.append([symbol.name, symbol.kind, str(item)[:50]])
-
-        print(tabulate(table, headers="firstrow", tablefmt="fancy_grid"))
-
-
-class bcolors(Enum):
-    NONE = ""
-    HEADER = "\033[95m"
-    OKBLUE = "\033[94m"
-    OKCYAN = "\033[96m"
-    OKGREEN = "\033[92m"
-    WARNING = "\033[93m"
-    FAIL = "\033[91m"
-    ENDC = "\033[0m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
-
-
-def print_colored(msg: str, color: bcolors = bcolors.NONE):
-    if color == bcolors.NONE:
-        sys.stderr.write(msg)
-    else:
-        sys.stderr.write(f"{color.value}{msg}{bcolors.ENDC.value}")
