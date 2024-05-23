@@ -9,6 +9,10 @@ from .utils import (FuncSymbol, Scoped, ScopeKind, Symbol, SymbolItem,
                     print_colored)
 
 
+class FuncDuplicationError(Exception):
+    pass
+
+
 @dataclass(slots=True, unsafe_hash=True)
 class FuncSig:
     """Function signature"""
@@ -68,7 +72,8 @@ class FuncOverloads:
 
     def insert(self, func: Function):
         sig = FuncSig.create(func)
-        assert sig not in self.funcs
+        if sig in self.funcs:
+            raise FuncDuplicationError(f"Function {func.name} already exists")
         self.funcs[sig] = func
 
     def __add__(self, other: "FuncOverloads") -> "FuncOverloads":
