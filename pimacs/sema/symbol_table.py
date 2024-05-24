@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+# from multidispatch import dispatch
+from multimethod import multimethod
 from tabulate import tabulate  # type: ignore
 
 from pimacs.ast import ast
@@ -56,6 +58,7 @@ class Scope:
             record = scope.get_local(symbol)
             if record:
                 overloads.append(record)
+            scope = scope.parent
 
         # TODO: optimize the performance
         if overloads:
@@ -74,7 +77,7 @@ class Scope:
         else:
             record = FuncOverloads(symbol)
             record.insert(func)
-            self.add(symbol, record)
+            self.data[symbol] = record
 
     def __contains__(self, symbol: Symbol) -> bool:
         return self.get(symbol) is not None
@@ -101,31 +104,28 @@ class SymbolTable(Scoped):
     def pop_scope(self):
         self.scopes.pop()
 
+    @multimethod
     def insert(self, symbol: Symbol, item: SymbolItem):
         self.scopes[-1].add(symbol, item)
 
-    def get_symbol(
-        self,
-        symbol: Optional[Symbol] = None,
-        name: Optional[str] = None,
-        kind: Optional[Symbol.Kind | List[Symbol.Kind]] = None,
-    ) -> Optional[SymbolItem]:
-        symbols = {symbol}
-        if not symbol:
-            assert name and kind
-            symbols = (
-                {Symbol(name=name, kind=kind)}
-                if isinstance(kind, Symbol.Kind)
-                else {Symbol(name=name, kind=k) for k in kind}
-            )
+    @multimethod
+    def insert(self, func: ast.Function):
+        symbol = FuncSymbol(func.name)
+        self.scopes[-1].add(symbol, func)
 
+    @multimethod
+    def lookup(self, symbol: Symbol) -> Optional[SymbolItem]:
+        return self.scopes[-1].get(symbol)
+
+    @multimethod
+    def lookup(self, symbols: List[Symbol]) -> Optional[SymbolItem]:
         for symbol in symbols:
             if ret := self.scopes[-1].get(symbol):
                 return ret
-        return None
 
-    def get_function(self, symbol: FuncSymbol) -> Optional[FuncOverloads]:
-        return self.scopes[-1].get(symbol)
+    @multimethod
+    def lookup(self, name: str, kind: Symbol.Kind) -> Optional[SymbolItem]:
+        return self.lookup(Symbol(name=name, kind=kind))
 
     def contains(self, symbol: Symbol) -> bool:
         return self.get_symbol(symbol) is not None

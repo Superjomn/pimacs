@@ -1,6 +1,8 @@
 import pytest
 
+import pimacs.ast.type as _ty
 from pimacs.ast import ast
+from pimacs.sema.func import FuncDuplicationError
 from pimacs.sema.symbol_table import *
 
 
@@ -32,8 +34,8 @@ def test_func_table():
     foo_key = FuncSymbol("foo")
     goo_key = FuncSymbol("goo")
 
-    assert not table.get_function(foo_key)
-    assert not table.get_function(bar_key)
+    assert not table.lookup(foo_key)
+    assert not table.lookup(bar_key)
 
     foo = ast.Function(name="foo", args=[],
                        return_type=None, loc=None, body=[])
@@ -42,14 +44,14 @@ def test_func_table():
     goo = ast.Function(name="goo", args=[],
                        return_type=None, loc=None, body=[])
 
-    table.insert(foo)
-    assert table.get_symbol(foo_key)
+    table.insert(foo_key, foo)
+    assert table.lookup(foo_key)
 
-    table.insert(bar)
-    assert table.get_symbol(bar_key)
+    table.insert(bar_key, bar)
+    assert table.lookup(bar_key)
 
-    with pytest.raises(AssertionError):
-        table.insert(foo)
+    with pytest.raises(FuncDuplicationError):
+        table.insert(foo_key, foo)
 
     # test with scope
     with table.scope_guard():
@@ -64,17 +66,18 @@ def test_func_table():
 
 
 def test_func_table_override():
-    table = FuncTable()
+    table = SymbolTable()
 
     arg0 = ast.Arg(name="x", type=_ty.Int, loc=None)
     arg1 = ast.Arg(name="y", type=_ty.Int, loc=None)
     arg2 = ast.Arg(name="z", type=_ty.Int, loc=None)
 
-    foo0 = Function(name="foo", args=[], return_type=None, loc=None, body=[])
-    foo1 = Function(name="foo", args=[arg0],
-                    return_type=None, loc=None, body=[])
-    foo2 = Function(name="foo", args=[arg0, arg1],
-                    return_type=None, loc=None, body=[])
+    foo0 = ast.Function(name="foo", args=[],
+                        return_type=None, loc=None, body=[])
+    foo1 = ast.Function(name="foo", args=[arg0],
+                        return_type=None, loc=None, body=[])
+    foo2 = ast.Function(name="foo", args=[arg0, arg1],
+                        return_type=None, loc=None, body=[])
 
     table.insert(foo0)
     table.insert(foo1)

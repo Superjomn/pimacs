@@ -63,6 +63,10 @@ class FuncOverloads:
     # funcs with the same name
     funcs: Dict[FuncSig, Function] = field(default_factory=dict)
 
+    @property
+    def name(self) -> str:
+        return Symbol.name
+
     def lookup(self, args: List[CallParam | Expr]) -> Optional[Function]:
         """Find the function that matches the arguments"""
         for sig in self.funcs:
