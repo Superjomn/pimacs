@@ -2,7 +2,8 @@ from typing import Optional
 
 import pimacs.ast.ast as ast
 from pimacs.ast.parser import get_parser
-from pimacs.sema.sema import Sema
+from pimacs.sema.context import ModuleContext
+from pimacs.sema.file_sema import FileSema
 
 
 def parse_ast(
@@ -23,14 +24,14 @@ def parse_ast(
     return ast.File(stmts=stmts, loc=ast.Location(source, 0, 0))
 
 
-def perform_sema(the_ast: ast.File) -> ast.File | None:
+def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:
     """
     Perform semantic analysis on the AST.
 
     It returns the IR if the semantic analysis succeeds.
     """
-    sema = Sema()
-    the_ir = sema.visit(the_ast)
+    sema = FileSema(ctx)
+    the_ir = sema(the_ast)
     if sema.succeed:
         return the_ir
 

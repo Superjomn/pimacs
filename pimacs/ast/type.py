@@ -155,7 +155,7 @@ class SetType(Type):
     type_id: TypeId = field(default=TypeId.Set, init=False)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, unsafe_hash=True)
 class ListType(Type):
     type_id: TypeId = field(default=TypeId.List, init=False)
 

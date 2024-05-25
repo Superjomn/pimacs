@@ -52,6 +52,15 @@ def test_call():
     assert func.name == "%elisp_fn"
 
 
+def test_class_method_call():
+    code = "var a = obj.some_fn(1, 2)"
+    var_node = parser.parser.parse(code)[0]
+    print(var_node)
+    call = var_node.init
+    attr = call.func
+    assert isinstance(attr, ast.UAttr)
+
+
 def test_lisp_var_decl():
     code = "let begin :Int = %org-elemnt-property(%:contents-begin, self.elem)"
     var_node = parser.parser.parse(code)[0]
@@ -59,4 +68,4 @@ def test_lisp_var_decl():
 
 
 if __name__ == "__main__":
-    test_attribute()
+    test_class_method_call()

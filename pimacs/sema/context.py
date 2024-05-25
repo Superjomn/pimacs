@@ -8,9 +8,9 @@ from tabulate import tabulate  # type: ignore
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 
-from .func import FuncOverloads, FuncSig, FuncSymbol, FuncTable
-from .utils import (ClassId, ModuleId, Scope, Scoped, ScopeKind, Symbol,
-                    SymbolItem, bcolors, print_colored)
+from .symbol_table import SymbolTable
+from .utils import (ClassId, ModuleId, Scoped, ScopeKind, Symbol, SymbolItem,
+                    bcolors, print_colored)
 
 
 class ModuleContext:
@@ -24,145 +24,30 @@ class ModuleContext:
     The module context could be nested.
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str = "main"):
         self._name = name
-        self._functions: Dict[str, ast.Function] = {}
-        self._variables: Dict[str, ast.VarDecl] = {}
-        self._classes: Dict[str, ast.Class] = {}
-        self._types: Dict[str, _ty.Type] = {}
+        self.symbols = SymbolTable()
 
     def get_symbol(
-        self, name: str
-    ) -> Optional[Union[ast.Function, ast.VarDecl, ast.Class]]:
-        if name in self._functions:
-            return self._functions[name]
-        if name in self._variables:
-            return self._variables[name]
-        if name in self._classes:
-            return self._classes[name]
-        return None
+        self, symbol: Symbol
+    ) -> Optional[SymbolItem]:
+        return self.symbols.lookup(symbol)
 
+    # TODO: Refine the type system
     def get_type(
         self, name: str, subtypes: Optional[Tuple[_ty.Type, ...]] = None
     ) -> Optional[_ty.Type]:
         key = f"{name}[{', '.join(map(str, subtypes))}]" if subtypes else name
-        if key in self._types:
-            return self._types[key]
-        new_type = _ty.make_customed(name, subtypes)
-        self._types[key] = new_type
-        return new_type
+        raise NotImplementedError()
+        return None
 
-    def symbol_exists(self, name: str) -> bool:
-        return (
-            name in self._functions or name in self._variables or name in self._classes
-        )
-
-    def add_function(self, func: ast.Function):
-        self._functions[func.name] = func
-
-    def add_variable(self, var: ast.VarDecl):
-        self._variables[var.name] = var
-
-    def add_class(self, cls: ast.Class):
-        self._classes[cls.name] = cls
-
-    def get_function(self, name: str) -> Optional[ast.Function]:
-        return self._functions.get(name)
-
-    def get_variable(self, name: str) -> Optional[ast.VarDecl]:
-        return self._variables.get(name)
-
-    def get_class(self, name: str) -> Optional[ast.Class]:
-        return self._classes.get(name)
+    def symbol_exists(self, symbol: Symbol) -> bool:
+        return self.symbols.lookup(symbol) is not None
 
     @property
     def name(self) -> str:
         """Module name."""
         return self._name
-
-
-class SymbolTable(Scoped):
-    def __init__(self):
-        self.scopes = [Scope(kind=ScopeKind.Global)]
-        self.func_table = FuncTable()
-
-    def push_scope(self, kind: ScopeKind = ScopeKind.Local):
-        self.scopes.append(Scope(kind=kind))
-        self.func_table.push_scope(kind=kind)
-
-    def pop_scope(self):
-        self.scopes.pop()
-        self.func_table.pop_scope()
-
-    def _add_function(self, func: ast.Function):
-        self.func_table.insert(func)
-
-    def insert(self, symbol: Symbol, item: SymbolItem):
-        if symbol.kind == Symbol.Kind.Func:
-            self._add_function(item)
-        else:
-            self.scopes[-1].add(symbol=symbol, item=item)
-        return item
-
-    def get_symbol(
-        self,
-        symbol: Optional[Symbol] = None,
-        name: Optional[str] = None,
-        kind: Optional[Symbol.Kind | List[Symbol.Kind]] = None,
-    ) -> Optional[SymbolItem]:
-        symbols = {symbol}
-        if not symbol:
-            assert name and kind
-            symbols = (
-                {Symbol(name=name, kind=kind)}
-                if isinstance(kind, Symbol.Kind)
-                else {Symbol(name=name, kind=k) for k in kind}
-            )
-
-        for symbol in symbols:
-            for scope in reversed(self.scopes):
-                ret = scope.get(symbol)
-                if ret:
-                    return ret
-        return None
-
-    def get_function(self, symbol: FuncSymbol) -> Optional[FuncOverloads]:
-        return self.func_table.lookup(symbol)
-
-    def contains(self, symbol: Symbol) -> bool:
-        if symbol.kind is Symbol.Kind.Func:
-            return self.func_table.contains(symbol)
-        return any(symbol in scope for scope in reversed(self.scopes))
-
-    def contains_locally(self, symbol: Symbol) -> bool:
-        if symbol.kind is Symbol.Kind.Func:
-            return self.func_table.contains_locally(symbol)
-        return self.scopes[-1].get(symbol) is not None
-
-    @property
-    def current_scope(self):
-        return self.scopes[-1]
-
-    @contextmanager
-    def scope_guard(self, kind=ScopeKind.Local):
-        self.push_scope(kind)
-        try:
-            yield
-        finally:
-            self.pop_scope()
-
-    def print_summary(self):
-        table = [["Symbol", "Kind", "Summary"]]
-        for no, scope in enumerate(self.scopes):
-            for symbol, item in scope.data.items():
-                table.append([symbol.name, symbol.kind, str(item)])
-            for symbol, item in self.func_table.scopes[no].data.items():
-                table.append([symbol.name, symbol.kind, str(item)])
-
-            print_colored(f"Scope {no}:\n", bcolors.OKBLUE)
-            print_colored(
-                tabulate(table, headers="firstrow", tablefmt="fancy_grid"))
-            print_colored("\n")
 
 
 class TypeSystem(_ty.TypeSystemBase):
@@ -182,8 +67,7 @@ class TypeSystem(_ty.TypeSystemBase):
 
     def get_type(self, name: str) -> Optional[_ty.Type]:
         # Shadow the builtin Types is not allowed, so it is safe to get the type alias first
-        symbol = self.symtbl.get_symbol(name=name, kind=Symbol.Kind.TypeAlas)
-        if symbol:
+        if symbol := self.symtbl.lookup(name=name, kind=Symbol.Kind.TypeAlas):
             return symbol
         return super().get_type(name)
 

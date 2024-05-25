@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _type
 
-from .ast import AnalyzedClassDef
+from .ast import AnalyzedClass
 
 
 class IRVisitor:
@@ -13,13 +13,16 @@ class IRVisitor:
             return
         if node is str:
             return node
-        logging.debug(f"Visiting {node.__class__.__name__}: {node}")
         method_name = f"visit_{node.__class__.__name__}"
+        logging.debug(f"Visiting {method_name}: {node}")
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
     def generic_visit(self, node: ast.Node | _type.Type | str):
         raise Exception(f"No visit_{node.__class__.__name__} method")
+
+    def visit_AnalyzedClass(self, node):
+        pass
 
     def visit_FileName(self, node: ast.FileName):
         return node
@@ -55,7 +58,6 @@ class IRVisitor:
         self.visit(node.action)  # type: ignore
 
     def visit_Block(self, node: ast.Block):
-        self.visit(node.doc_string)
         for stmt in node.stmts:
             self.visit(stmt)
 
@@ -64,7 +66,7 @@ class IRVisitor:
         self.visit(node.right)
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
-        self.visit(node.value)
+        self.visit(node.operand)
 
     def visit_VarRef(self, node: ast.VarRef):
         pass
@@ -106,9 +108,6 @@ class IRVisitor:
         for stmt in node.body:
             self.visit(stmt)
 
-    def visit_AnalyzedClassDef(self, node: AnalyzedClassDef):
-        self.visit_Class(node)
-
     def visit_DocString(self, node: ast.DocString):
         pass
 
@@ -120,10 +119,6 @@ class IRVisitor:
     def visit_Guard(self, node: ast.Guard):
         self.visit(node.header)
         self.visit(node.body)
-
-    def visit_MemberRef(self, node: ast.MemberRef):
-        self.visit(node.obj)
-        self.visit(node.member)
 
     def visit_ListType(self, node: _type.ListType):
         for inner_type in node.inner_types:
@@ -178,7 +173,7 @@ class IRMutator:
     def visit_VarDecl(self, node: ast.VarDecl):
         node.type = self.visit(node.type)
         node.init = self.visit(node.init)
-        node.decorators = [self.visit(_) for _ in node.decorators]
+        node.decorators = tuple([self.visit(_) for _ in node.decorators])
         return node
 
     def visit_Arg(self, node: ast.Arg):
@@ -204,18 +199,23 @@ class IRMutator:
         return node
 
     def visit_Function(self, node: ast.Function):
+        decorators = []
         for i, decorator in enumerate(node.decorators):
-            node.decorators[i] = self.visit(decorator)
+            decorators.append(self.visit(decorator))
+        node.decorators = tuple(decorators)
 
+        args = []
         for i, arg in enumerate(node.args):
-            node.args[i] = self.visit(arg)
+            args.append(self.visit(arg))
+        node.args = tuple(args)
+
         node.body = self.visit(node.body)
         return node
 
     def visit_Call(self, node: ast.Call):
         node.func = self.visit(node.func)
-        node.args = [self.visit(_) for _ in node.args]
-        node.type_spec = [self.visit(_) for _ in node.type_spec]
+        node.args = tuple([self.visit(_) for _ in node.args])
+        node.type_spec = tuple([self.visit(_) for _ in node.type_spec])
         return node
 
     def visit_UFunction(self, node: ast.UFunction):
@@ -227,8 +227,7 @@ class IRMutator:
 
     def visit_Block(self, node: ast.Block):
         node.doc_string = self.visit(node.doc_string)
-        for i, stmt in enumerate(node.stmts):
-            node.stmts[i] = self.visit(stmt)
+        node.stmts = tuple([self.visit(stmt) for stmt in node.stmts])
         return node
 
     def visit_BinaryOp(self, node: ast.BinaryOp):
@@ -237,7 +236,7 @@ class IRMutator:
         return node
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
-        node.value = self.visit(node.value)
+        node.operand = self.visit(node.operand)
         return node
 
     def visit_VarRef(self, node: ast.VarRef):
@@ -258,8 +257,11 @@ class IRMutator:
         return node
 
     def visit_File(self, node: ast.File):
+        stmts = []
         for i, stmt in enumerate(node.stmts):
-            node.stmts[i] = self.visit(stmt)
+            stmts.append(self.visit(stmt))
+        node.stmts = tuple(stmts)
+
         return node
 
     def visit_Assign(self, node: ast.Assign):
@@ -268,8 +270,8 @@ class IRMutator:
         return node
 
     def visit_Class(self, node: ast.Class):
-        node.decorators = [self.visit(_) for _ in node.decorators]
-        node.body = [self.visit(_) for _ in node.body]
+        node.decorators = tuple([self.visit(_) for _ in node.decorators])
+        node.body = tuple([self.visit(_) for _ in node.body])
         return node
 
     def visit_DocString(self, node: ast.DocString):
@@ -279,10 +281,6 @@ class IRMutator:
         node.header = self.visit(node.header)
         node.body = self.visit(node.body)
         return node
-
-    def visit_MemberRef(self, node: ast.MemberRef):
-        node.obj = self.visit(node.obj)
-        node.member = self.visit(node.member)
 
     def visit_ListType(self, node: _type.ListType):
         node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
@@ -297,7 +295,7 @@ class IRMutator:
         node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
         return node
 
-    def visit_AnalyzedClassDef(self, node: AnalyzedClassDef):
+    def visit_AnalyzedClass(self, node: AnalyzedClass):
         return self.visit_Class(node)
 
 
@@ -308,13 +306,17 @@ class StringStream:
     def write(self, s: str) -> None:
         self.s += s
 
+    def getvalue(self) -> str:
+        return self.s
+
 
 class IRPrinter(IRVisitor):
     indent_width = 4
 
-    def __init__(self, os) -> None:
+    def __init__(self, os, mark_unresolved=False) -> None:
         self.os = os
         self._indent: int = 0
+        self._mark_unresolved = mark_unresolved
 
     def __call__(self, node: ast.Node) -> None:
         self.visit(node)
@@ -392,27 +394,34 @@ class IRPrinter(IRVisitor):
             self.visit(node.default)
 
     def visit_Call(self, node: ast.Call):
-        if isinstance(node.func, str):
-            self.put(f"{node.func}")
-        elif isinstance(node.func, ast.VarRef):
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.Function):
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.UFunction):
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.Class):
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.Arg):
-            # for cls(...) call
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.UVarRef):
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.VarDecl):
-            assert node.func.init is not None
-            self.visit(node.func.init)
-        else:
-            raise Exception(f"{node.loc}\nInvalid function call: {
-                            node.func}, type: {type(node.func)}")
+        match type(node.func):
+            case ast.VarRef:
+                self.put(f"{node.func.name}")  # type: ignore
+            case ast.Function:
+                self.put(f"{node.func.name}")  # type: ignore
+            case ast.Class:
+                self.put(f"{node.func.name}")
+            case ast.Arg:
+                self.put(f"{node.func.name}")
+            case ast.VarDecl:
+                assert node.func.init is not None
+                self.visit(node.func.init)
+            case ast.UVarRef:
+                if self._mark_unresolved:
+                    self.put(f"UV<{node.func.name}>")  # type: ignore
+                else:
+                    self.put(f"{node.func.name}")  # type: ignore
+            case ast.UFunction:
+                if self._mark_unresolved:
+                    self.put(f"UF<{node.func.name}>")  # type: ignore
+                else:
+                    self.put(f"{node.func.name}")  # type: ignore
+            case _:
+                if isinstance(node.func, str):
+                    self.put(f"{node.func}")
+                else:
+                    raise Exception(f"{node.loc}\nInvalid function call: {
+                                    node.func}, type: {type(node.func)}")
 
         if node.type_spec:
             self.put("[")
@@ -448,7 +457,7 @@ class IRPrinter(IRVisitor):
     def visit_UnaryOp(self, node: ast.UnaryOp):
         self.put("(")
         self.put(f"{node.op.value}")
-        self.visit(node.value)
+        self.visit(node.operand)
         self.put(")")
 
     def visit_VarRef(self, node: ast.VarRef):
@@ -528,7 +537,7 @@ class IRPrinter(IRVisitor):
                 self.visit(stmt)
                 self.put("\n")
 
-    def visit_AnanlyzedClassDef(self, node: AnalyzedClassDef):
+    def visit_AnalyzedClass(self, node: AnalyzedClass):
         self.visit_Class(node)
 
     def visit_UVarRef(self, node: ast.UVarRef):
@@ -559,11 +568,6 @@ class IRPrinter(IRVisitor):
             self.put(f"{node.name} = ")
         self.visit(node.value)
 
-    def visit_MemberRef(self, node: ast.MemberRef):
-        self.visit(node.obj)
-        self.put(".")
-        self.visit(node.member)
-
     def visit_DictType(self, node: _type.DictType):
         self.put("{")
         self.visit(node.key_type)
@@ -580,6 +584,15 @@ class IRPrinter(IRVisitor):
         self.put("{")
         self.visit(node.inner_types[0])
         self.put("}")
+
+    def visit_UFunction(self, node: ast.UFunction):
+        if self._mark_unresolved:
+            self.put(f"UFunction<{node.name}>")
+        else:
+            self.put(f"{node.name}")
+
+    def visit_UClass(self, node: ast.UClass):
+        self.put(f"{node.name}")
 
     @contextmanager
     def indent_guard(self):
