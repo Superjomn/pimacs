@@ -543,9 +543,10 @@ class FileSema(IRMutator):
                 return False
 
             case ast.UVarRef:
-                # type: ignore
-                # type: ignore
-                if sym := node.scope.lookup(Symbol(name=node.name, kind=Symbol.Kind.Var)):
+                assert not isinstance(node, ast.UAttr)
+                symbol = Symbol(name=node.name, kind=Symbol.Kind.Var)
+
+                if sym := node.scope.lookup(symbol):
                     node.replace_all_uses_with(sym)
                     return True
                 return False
