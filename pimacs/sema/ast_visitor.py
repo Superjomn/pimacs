@@ -313,9 +313,10 @@ class StringStream:
 class IRPrinter(IRVisitor):
     indent_width = 4
 
-    def __init__(self, os) -> None:
+    def __init__(self, os, mark_unresolved=False) -> None:
         self.os = os
         self._indent: int = 0
+        self._mark_unresolved = mark_unresolved
 
     def __call__(self, node: ast.Node) -> None:
         self.visit(node)
@@ -393,27 +394,34 @@ class IRPrinter(IRVisitor):
             self.visit(node.default)
 
     def visit_Call(self, node: ast.Call):
-        if isinstance(node.func, str):
-            self.put(f"{node.func}")
-        elif isinstance(node.func, ast.VarRef):
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.Function):
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.UFunction):
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.Class):
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.Arg):
-            # for cls(...) call
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.UVarRef):
-            self.put(f"{node.func.name}")
-        elif isinstance(node.func, ast.VarDecl):
-            assert node.func.init is not None
-            self.visit(node.func.init)
-        else:
-            raise Exception(f"{node.loc}\nInvalid function call: {
-                            node.func}, type: {type(node.func)}")
+        match type(node.func):
+            case ast.VarRef:
+                self.put(f"{node.func.name}")  # type: ignore
+            case ast.Function:
+                self.put(f"{node.func.name}")  # type: ignore
+            case ast.Class:
+                self.put(f"{node.func.name}")
+            case ast.Arg:
+                self.put(f"{node.func.name}")
+            case ast.VarDecl:
+                assert node.func.init is not None
+                self.visit(node.func.init)
+            case ast.UVarRef:
+                if self._mark_unresolved:
+                    self.put(f"UV<{node.func.name}>")  # type: ignore
+                else:
+                    self.put(f"{node.func.name}")  # type: ignore
+            case ast.UFunction:
+                if self._mark_unresolved:
+                    self.put(f"UF<{node.func.name}>")  # type: ignore
+                else:
+                    self.put(f"{node.func.name}")  # type: ignore
+            case _:
+                if isinstance(node.func, str):
+                    self.put(f"{node.func}")
+                else:
+                    raise Exception(f"{node.loc}\nInvalid function call: {
+                                    node.func}, type: {type(node.func)}")
 
         if node.type_spec:
             self.put("[")
@@ -578,7 +586,10 @@ class IRPrinter(IRVisitor):
         self.put("}")
 
     def visit_UFunction(self, node: ast.UFunction):
-        self.put(f"{node.name}")
+        if self._mark_unresolved:
+            self.put(f"UFunction<{node.name}>")
+        else:
+            self.put(f"{node.name}")
 
     def visit_UClass(self, node: ast.UClass):
         self.put(f"{node.name}")

@@ -105,6 +105,7 @@ class FileSema(IRMutator):
         self._succeeded = False
 
     def collect_unresolved(self, node: ast.Node):
+        logging.warning(f"Collect unresolved symbol {node}")
         assert node.resolved is False, f"{node} is already resolved"
         # bind scope for second-turn name binding
         node.scope = self.sym_tbl.current_scope  # type: ignore
@@ -510,9 +511,13 @@ class FileSema(IRMutator):
         return node
 
     def bind_unresolved_symbols(self):
+        logging.debug(f"unresolved symbols: {self._unresolved_symbols}")
+        resolved = []
         for node in self._unresolved_symbols:
             if self.bind_unresolved(node):
-                self._unresolved_symbols.remove(node)
+                resolved.append(node)
+        for node in resolved:
+            self._unresolved_symbols.remove(node)
 
     utypes = ast.UVarRef | ast.UAttr | ast.UFunction | ast.UClass
 
@@ -524,10 +529,9 @@ class FileSema(IRMutator):
         '''
         match type(node):
             case ast.UFunction:
-                if isinstance(node, ast.UAttr):
-                    raise NotImplementedError()
-                    return
-                func_overloads = node.scope.lookup(FuncSymbol(node.name))
+                logging.warning(f"Bind unresolved function {node}")
+                func_overloads = node.scope.get(
+                    FuncSymbol(node.name))  # type: ignore
                 if func_overloads is None:
                     return False  # remain unresolved
                 assert len(node.users) == 1  # only one caller
@@ -539,6 +543,7 @@ class FileSema(IRMutator):
                 return False
 
             case ast.UVarRef:
+                # type: ignore
                 # type: ignore
                 if sym := node.scope.lookup(Symbol(name=node.name, kind=Symbol.Kind.Var)):
                     node.replace_all_uses_with(sym)

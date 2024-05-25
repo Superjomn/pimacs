@@ -31,7 +31,7 @@ def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:
     It returns the IR if the semantic analysis succeeds.
     """
     sema = FileSema(ctx)
-    the_ir = sema.visit(the_ast)
+    the_ir = sema(the_ast)
     if sema.succeed:
         return the_ir
 

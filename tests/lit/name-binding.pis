@@ -1,0 +1,6 @@
+# forward reference
+# CHECK: var a :Unk = foo()
+var a = foo()
+
+def foo():
+    return
