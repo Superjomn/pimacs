@@ -4,6 +4,7 @@ import pimacs.ast.type as _ty
 from pimacs.ast import ast
 from pimacs.sema.func import FuncDuplicationError
 from pimacs.sema.symbol_table import *
+from pimacs.sema.utils import FuncSymbol, Symbol
 
 
 def test_Scope_var():
@@ -27,7 +28,7 @@ def test_Scope_var():
     assert scope.get(b) is None
 
 
-def test_func_table():
+def test_SymbolTable_func():
     table = SymbolTable()
 
     bar_key = FuncSymbol("bar")
@@ -65,7 +66,7 @@ def test_func_table():
     assert not table.lookup(goo_key)
 
 
-def test_func_table_override():
+def test_SymbolTable_func_override():
     table = SymbolTable()
 
     arg0 = ast.Arg(name="x", type=_ty.Int, loc=None)
@@ -106,3 +107,33 @@ def test_func_table_override():
     call = ast.Call(func=unresolved_func, args=(param0, param1), loc=None)
     target_func = funcs.lookup(call.args)
     assert target_func is foo2
+
+
+def test_SymbolTable_basic():
+    a = Symbol("a", Symbol.Kind.Var)
+    var = ast.VarDecl(name="a", loc=None)
+
+    b = Symbol("b", Symbol.Kind.Var)
+    var1 = ast.VarDecl(name="b", loc=None)
+
+    st = SymbolTable()
+    st.insert(a, var)
+
+    assert st.lookup(a) is var
+
+    with st.scope_guard():
+        st.insert(b, var1)
+        assert st.lookup(b) is var1
+        assert st.lookup(a) is var
+
+    assert st.lookup(b) is None
+
+
+def test_SymbolTable_scope_hierarchy():
+    st = SymbolTable()
+    with st.scope_guard():
+        with st.scope_guard():
+            with st.scope_guard():
+                assert len(st._scopes) == 4
+                assert st._scopes[-1].parent == st._scopes[-2]
+                assert st._scopes[-2].parent == st._scopes[-3]

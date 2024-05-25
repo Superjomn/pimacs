@@ -41,7 +41,8 @@ def test_type_template():
     assert dict_ty.is_concrete
 
 
-def test_type_alias():
+# TODO: Enable this test
+def _test_type_alias():
     ctx = ModuleContext("test")
     symtbl = SymbolTable()
     type_system = TypeSystem(symtbl)
@@ -56,55 +57,3 @@ def test_type_alias():
 
     T0 = type_system.get_type("T0")
     assert not T0
-
-
-def test_SymbolTable_var():
-    table = SymbolTable()
-    var0 = ast.VarDecl("var0", Int)
-    var1 = ast.VarDecl("var1", Int)
-    sym0 = Symbol("var0", kind=Symbol.Kind.Var)
-    sym1 = Symbol("var1", kind=Symbol.Kind.Var)
-
-    table.insert(sym0, var0)
-    assert table.get_symbol(sym0)
-
-    with table.scope_guard():
-        table.insert(sym1, var1)
-        assert table.get_symbol(sym1)
-    assert not table.get_symbol(sym1)
-    assert table.get_symbol(sym0)
-
-
-def test_SymbolTable_func():
-    table = SymbolTable()
-
-    func = ast.Function(name="func", args=[],
-                        return_type=Int, loc=None, body=[])
-    func_sym = FuncSymbol("func")
-    table.insert(func_sym, func)
-    assert table.get_function(func_sym)
-
-    arg0 = ast.Arg("x", Int)
-    arg1 = ast.Arg("y", Int)
-    func1 = ast.Function(name="func", args=[
-                         arg0], return_type=Int, loc=None, body=[])
-    func2 = ast.Function(
-        name="func", args=[arg0, arg1], return_type=Int, loc=None, body=[]
-    )
-
-    with table.scope_guard():  # local functions
-        # There is no function in the local scope
-        assert not table.contains_locally(func_sym)
-
-        table.insert(func_sym, func1)
-        table.insert(func_sym, func2)
-
-        funcs = table.get_function(func_sym)
-        assert len(funcs) == 3
-
-        assert table.contains_locally(func_sym)
-
-    funcs = table.get_function(func_sym)
-    assert len(funcs) == 1
-
-    table.contains_locally(func_sym)

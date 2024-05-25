@@ -13,8 +13,8 @@ class IRVisitor:
             return
         if node is str:
             return node
-        logging.debug(f"Visiting {node.__class__.__name__}: {node}")
         method_name = f"visit_{node.__class__.__name__}"
+        logging.debug(f"Visiting {method_name}: {node}")
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
@@ -306,6 +306,9 @@ class StringStream:
     def write(self, s: str) -> None:
         self.s += s
 
+    def getvalue(self) -> str:
+        return self.s
+
 
 class IRPrinter(IRVisitor):
     indent_width = 4
@@ -526,7 +529,7 @@ class IRPrinter(IRVisitor):
                 self.visit(stmt)
                 self.put("\n")
 
-    def visit_AnanlyzedClass(self, node: AnalyzedClass):
+    def visit_AnalyzedClass(self, node: AnalyzedClass):
         self.visit_Class(node)
 
     def visit_UVarRef(self, node: ast.UVarRef):
@@ -573,6 +576,12 @@ class IRPrinter(IRVisitor):
         self.put("{")
         self.visit(node.inner_types[0])
         self.put("}")
+
+    def visit_UFunction(self, node: ast.UFunction):
+        self.put(f"{node.name}")
+
+    def visit_UClass(self, node: ast.UClass):
+        self.put(f"{node.name}")
 
     @contextmanager
     def indent_guard(self):

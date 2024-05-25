@@ -14,8 +14,6 @@ from lark.lexer import Token
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _type
 from pimacs.sema.ast_visitor import IRMutator, IRVisitor
-from pimacs.sema.context import ModuleContext, Scope, Symbol, SymbolTable
-from pimacs.sema.file_sema import FileSema, catch_sema_error
 
 
 def get_lark_parser():
@@ -46,7 +44,6 @@ class PimacsTransformer(Transformer):
 
     def __init__(self, source: ast.PlainCode | ast.FileName):
         self.source = source
-        self.ctx = ModuleContext("unk")
 
     def file_input(self, items):
         self._force_non_rule(items)
@@ -455,6 +452,10 @@ class PimacsTransformer(Transformer):
         self._force_non_rule(items)
         target = items[0]
         value = items[1]
+
+        if isinstance(target, Token):
+            target = ast.UVarRef(name=target.value, loc=self._get_loc(target))
+
         return ast.Assign(target=target, value=value, loc=target.loc)
 
     def class_def(self, items):

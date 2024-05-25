@@ -4,6 +4,7 @@ from io import StringIO
 import click
 
 from pimacs.sema.ast_visitor import IRPrinter
+from pimacs.sema.context import ModuleContext
 from pimacs.transpiler.phases import parse_ast, perform_sema
 
 
@@ -13,7 +14,8 @@ from pimacs.transpiler.phases import parse_ast, perform_sema
 def main(filename: str, sema: bool):
     file = parse_ast(filename=filename, sema=sema)
     if sema:
-        file = perform_sema(file)  # type: ignore
+        ctx = ModuleContext()
+        file = perform_sema(ctx, file)  # type: ignore
 
     if file:
         printer = IRPrinter(StringIO())

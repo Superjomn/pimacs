@@ -8,9 +8,9 @@ from tabulate import tabulate  # type: ignore
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 
-from .func import FuncOverloads, FuncSig, FuncSymbol, FuncTable
-from .utils import (ClassId, ModuleId, Scope, Scoped, ScopeKind, Symbol,
-                    SymbolItem, bcolors, print_colored)
+from .symbol_table import SymbolTable
+from .utils import (ClassId, ModuleId, Scoped, ScopeKind, Symbol, SymbolItem,
+                    bcolors, print_colored)
 
 
 class ModuleContext:
@@ -24,56 +24,25 @@ class ModuleContext:
     The module context could be nested.
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str = "main"):
         self._name = name
-        self._functions: Dict[str, ast.Function] = {}
-        self._variables: Dict[str, ast.VarDecl] = {}
-        self._classes: Dict[str, ast.Class] = {}
-        self._types: Dict[str, _ty.Type] = {}
+        self.symbols = SymbolTable()
 
     def get_symbol(
-        self, name: str
-    ) -> Optional[Union[ast.Function, ast.VarDecl, ast.Class]]:
-        if name in self._functions:
-            return self._functions[name]
-        if name in self._variables:
-            return self._variables[name]
-        if name in self._classes:
-            return self._classes[name]
-        return None
+        self, symbol: Symbol
+    ) -> Optional[SymbolItem]:
+        return self.symbols.lookup(symbol)
 
+    # TODO: Refine the type system
     def get_type(
         self, name: str, subtypes: Optional[Tuple[_ty.Type, ...]] = None
     ) -> Optional[_ty.Type]:
         key = f"{name}[{', '.join(map(str, subtypes))}]" if subtypes else name
-        if key in self._types:
-            return self._types[key]
-        new_type = _ty.make_customed(name, subtypes)
-        self._types[key] = new_type
-        return new_type
+        raise NotImplementedError()
+        return None
 
-    def symbol_exists(self, name: str) -> bool:
-        return (
-            name in self._functions or name in self._variables or name in self._classes
-        )
-
-    def add_function(self, func: ast.Function):
-        self._functions[func.name] = func
-
-    def add_variable(self, var: ast.VarDecl):
-        self._variables[var.name] = var
-
-    def add_class(self, cls: ast.Class):
-        self._classes[cls.name] = cls
-
-    def get_function(self, name: str) -> Optional[ast.Function]:
-        return self._functions.get(name)
-
-    def get_variable(self, name: str) -> Optional[ast.VarDecl]:
-        return self._variables.get(name)
-
-    def get_class(self, name: str) -> Optional[ast.Class]:
-        return self._classes.get(name)
+    def symbol_exists(self, symbol: Symbol) -> bool:
+        return self.symbols.lookup(symbol) is not None
 
     @property
     def name(self) -> str:
@@ -98,8 +67,7 @@ class TypeSystem(_ty.TypeSystemBase):
 
     def get_type(self, name: str) -> Optional[_ty.Type]:
         # Shadow the builtin Types is not allowed, so it is safe to get the type alias first
-        symbol = self.symtbl.get_symbol(name=name, kind=Symbol.Kind.TypeAlas)
-        if symbol:
+        if symbol := self.symtbl.lookup(name=name, kind=Symbol.Kind.TypeAlas):
             return symbol
         return super().get_type(name)
 

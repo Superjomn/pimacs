@@ -28,7 +28,6 @@ class Node(ABC):
     resolved: bool = field(default=True, repr=False, init=False, hash=False)
 
     def add_user(self, user: "Node"):
-        print(f"add_user: {user} to {self.users}, type: {type(self.users)}")
         if user not in self.users:
             self.users.add(user)
 
@@ -49,7 +48,7 @@ class Node(ABC):
         pass
 
     @abstractmethod
-    def replace_child(self, old: "Node", new: "Node"):
+    def replace_child(self, old, new):
         ''' Replace a child with a new node. '''
         raise NotImplementedError()
 
@@ -129,7 +128,7 @@ class VarDecl(Stmt, VisiableSymbol):
 
     decorators: Tuple["Decorator", ...] = field(default_factory=tuple)
 
-    def replace_child(self, old: "Node", new: "Node"):
+    def replace_child(self, old, new):
         if self.init == old:
             with self.write_guard():
                 self.init = new
@@ -175,7 +174,7 @@ class VarRef(Expr):
             assert self.target is not None and self.target.type is not None
             return self.target.type
 
-    def replace_child(self, old: "Node", new: "Node"):
+    def replace_child(self, old, new):
         if self.target == old:
             with self.write_guard():
                 self.target = new
@@ -211,7 +210,7 @@ class Arg(Stmt):
     def is_self_placeholder(self) -> bool:
         return self.kind == Arg.Kind.self_placeholder
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.default == old:
                 self.default = new
@@ -235,7 +234,7 @@ class Block(Stmt):
     def _refresh_users(self):
         pass  # container node, no need to refresh users
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             stmts = list(self.stmts)
             for i, stmt in enumerate(stmts):
@@ -251,7 +250,7 @@ class File(Stmt):
     def _refresh_users(self):
         pass
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             stmts = list(self.stmts)
             for i, stmt in enumerate(stmts):
@@ -302,7 +301,7 @@ class Function(Stmt, VisiableSymbol):
                 return True
         return False
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.body == old:
                 self.body = new
@@ -342,7 +341,7 @@ class If(Stmt):
     def __post_init__(self):
         self._refresh_users()
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.cond == old:
                 self.cond = new
@@ -381,7 +380,7 @@ class While(Stmt):
     def __post_init__(self):
         self._refresh_users()
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.condition == old:
                 self.condition = new
@@ -404,7 +403,7 @@ class For(Stmt):
         self.condition.add_user(self)
         self.increment.add_user(self)
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.init == old:
                 self.init = new
@@ -439,7 +438,7 @@ class Constant(Expr):
     def _refresh_users(self):
         pass
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         return super().replace_child(old, new)
 
 
@@ -492,7 +491,7 @@ class BinaryOp(Expr):
             )
         return _type.Unk
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.left == old:
                 self.left = new
@@ -526,7 +525,7 @@ class UnaryOp(Expr):
     def _refresh_users(self):
         self.operand.add_user(self)
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.operand == old:
                 self.operand = new
@@ -546,7 +545,7 @@ class CallParam(Expr):
     def _refresh_users(self):
         self.value.add_user(self)
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.value == old:
                 self.value = new
@@ -586,11 +585,6 @@ class Call(Expr):
 
     def __post_init__(self):
         assert isinstance(self.args, tuple)
-
-        print(f"func: {self.func}")
-        print(f"args: {self.args}")
-        print(f"type_spec: {self.type_spec}")
-
         self._refresh_users()
 
     def _refresh_users(self):
@@ -599,7 +593,7 @@ class Call(Expr):
         for arg in self.args:
             arg.add_user(self)
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         if isinstance(self.func, Node) and self.func == old:
             with self.write_guard():
                 self.func = new
@@ -628,7 +622,7 @@ class Return(Stmt):
     def __post_init__(self):
         self._refresh_users()
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.value == old:
                 self.value = new
@@ -645,7 +639,7 @@ class Decorator(Stmt):
     def __post_init__(self):
         self._refresh_users()
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.action == old:
                 self.action = new
@@ -666,7 +660,7 @@ class Assign(Stmt):
         self.target.add_user(self)
         self.value.add_user(self)
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.target == old:
                 self.target = new
@@ -685,7 +679,7 @@ class Attribute(Expr):
     def _refresh_users(self):
         self.value.add_user(self)
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.value == old:
                 self.value = new
@@ -707,7 +701,7 @@ class Class(Stmt, VisiableSymbol):
         for decorator in self.decorators:
             decorator.add_user(self)
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             body = list(self.body)
             for i, stmt in enumerate(body):
@@ -729,7 +723,7 @@ class DocString(Node):
     def _refresh_users(self):
         pass
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         pass
 
 
@@ -752,7 +746,7 @@ class Select(Expr):
         self.then_expr.add_user(self)
         self.else_expr.add_user(self)
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.cond == old:
                 self.cond = new
@@ -774,7 +768,7 @@ class Guard(Stmt):
     def __post_init__(self):
         self._refresh_users()
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.header == old:
                 self.header = new
@@ -792,7 +786,10 @@ class UVarRef(Expr):
     name: str
     target_type: Type = field(default_factory=lambda: _type.Unk)
 
-    resolved: bool = field(default=False, init=False, hash=False)
+    resolved: bool = field(default=False, init=False, hash=False, repr=False)
+
+    def __post_init__(self):
+        self.scope = None
 
     def get_type(self) -> Type:
         return self.target_type
@@ -800,7 +797,7 @@ class UVarRef(Expr):
     def _refresh_users(self):
         pass
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         pass
 
 
@@ -821,7 +818,9 @@ class UAttr(Expr):
     def __post_init__(self):
         self._refresh_users()
 
-    def replace_child(self, old: Node, new: Node):
+        self.scope = None
+
+    def replace_child(self, old, new):
         with self.write_guard():
             if self.value == old:
                 self.value = new
@@ -837,8 +836,11 @@ class UClass(Stmt):
     def _refresh_users(self):
         pass
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         pass
+
+    def __post_init__(self):
+        self.scope = None
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -852,8 +854,11 @@ class UFunction(Stmt):
     def _refresh_users(self):
         pass
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         pass
+
+    def __post_init__(self):
+        self.scope = None
 
 
 # TODO: To be deprecated
@@ -868,5 +873,5 @@ class LispList(Expr):
     def _refresh_users(self):
         pass
 
-    def replace_child(self, old: Node, new: Node):
+    def replace_child(self, old, new):
         pass

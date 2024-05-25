@@ -2,24 +2,36 @@
 The FileSema module will scan the whole file and resolve the symbols in the file.
 """
 import logging
+import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Dict, List
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
+from pimacs.ast.utils import WeakSet
 from pimacs.sema.ast_visitor import IRMutator, IRVisitor
 from pimacs.sema.func import FuncOverloads
 
 from .ast import AnalyzedClass
-from .context import FuncSymbol, ScopeKind, Symbol, SymbolTable
-from .utils import ClassId, ModuleId, bcolors, print_colored
+from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
+from .utils import ClassId, FuncSymbol, ModuleId, bcolors, print_colored
+
+PIMACS_SEMA_RAISE_EXCEPTION: bool = os.environ.get(
+    "PIMACS_SEMA_RAISE_EXCEPTION", "0") == "1"
+
+
+class SemaError(Exception):
+    pass
 
 
 def report_sema_error(node: ast.Node, message: str):
-    node.sema_failed = True
-    print_colored(f"{node.loc}\n")
-    print_colored(f"Error: {message}\n\n", bcolors.FAIL)
+    if PIMACS_SEMA_RAISE_EXCEPTION:
+        raise SemaError(f"{node.loc}\nError: {message}")
+    else:
+        node.sema_failed = True
+        print_colored(f"{node.loc}\n")
+        print_colored(f"Error: {message}\n\n", bcolors.FAIL)
 
 
 def catch_sema_error(cond: bool, node: ast.Node, message: str) -> bool:
@@ -65,11 +77,23 @@ class FileSema(IRMutator):
 
     # NOTE, the ir nodes should be created when visited.
 
-    def __init__(self):
-        self.sym_tbl = SymbolTable()
+    def __init__(self, ctx: ModuleContext):
+        self.ctx = ctx
         self._succeeded = True
 
         self._cur_class: ast.Class | None = None
+        # holds all the unresolved symbol instances
+        self._unresolved_symbols: WeakSet = WeakSet()
+
+    def __call__(self, node: ast.Node):
+        tree = self.visit(node)
+        self.bind_unresolved_symbols()
+        # TODO: the root might be re-bound
+        return tree
+
+    @property
+    def sym_tbl(self) -> SymbolTable:
+        return self.ctx.symbols
 
     @property
     def succeed(self) -> bool:
@@ -80,6 +104,12 @@ class FileSema(IRMutator):
         node.sema_failed = True
         self._succeeded = False
 
+    def collect_unresolved(self, node: ast.Node):
+        assert node.resolved is False, f"{node} is already resolved"
+        # bind scope for second-turn name binding
+        node.scope = self.sym_tbl.current_scope  # type: ignore
+        self._unresolved_symbols.add(node)
+
     def visit_UVarRef(self, node: ast.UVarRef):
         node = super().visit_UVarRef(node)
         # case 0: self.attr within a class
@@ -87,22 +117,31 @@ class FileSema(IRMutator):
             # deal with members
             var_name = node.name[5:]
 
-            obj = self.sym_tbl.get_symbol(name="self", kind=Symbol.Kind.Arg)
+            obj = self.sym_tbl.lookup(name="self", kind=Symbol.Kind.Arg)
             if not obj:
                 obj = ast.UVarRef(
                     # TODO: fix the type
                     name="self", loc=node.loc, target_type=_ty.Unk)  # type: ignore
+                obj.sema_failed = True
                 self.report_error(node, f"`self` is not declared")
+            else:
+                assert self._cur_class
+                # TODO: deal with the templated class
+                obj.type = _ty.make_customed(self._cur_class.name, None)
+
             # The Attr cannot be resolved now, it can only be resolved in bulk when a class is fully analyzed.
-            return ast.UAttr(value=obj, attr=var_name, loc=node.loc)
+            attr = ast.UAttr(value=obj, attr=var_name, loc=node.loc)
+            self.collect_unresolved(attr)
+            return attr
 
         # case 1: Lisp symbol
         elif node.name.startswith('%'):
             return ast.VarRef(name=node.name, loc=node.loc, type=_ty.LispType)
 
         # case 2: a local variable or argument
-        elif sym := self.sym_tbl.get_symbol(
-            name=node.name, kind=[Symbol.Kind.Var, Symbol.Kind.Arg]
+        elif sym := self.sym_tbl.lookup(
+            [Symbol(name=node.name, kind=Symbol.Kind.Var),
+             Symbol(name=node.name, kind=Symbol.Kind.Arg)]
         ):
             if isinstance(sym, ast.VarDecl):
                 var = ast.VarRef(target=sym, loc=node.loc)  # type: ignore
@@ -113,8 +152,10 @@ class FileSema(IRMutator):
             else:
                 raise ValueError(f"{node.loc}\nUnknown symbol type {sym}")
             return var
+
         else:
-            report_sema_error(node, f"Symbol {node.name} not found")
+            symbol = Symbol(name=node.name, kind=Symbol.Kind.Var)
+            report_sema_error(node, f"Symbol {symbol} not found")
             return node
 
     def visit_VarDecl(self, node: ast.VarDecl):
@@ -294,35 +335,17 @@ class FileSema(IRMutator):
             func_name = func_name.name  # type: ignore
         assert isinstance(func_name, str)
 
-        func = self.sym_tbl.get_function(FuncSymbol(func_name)) or self.sym_tbl.get_symbol(
-            name=func_name,
-            kind=[
-                Symbol.Kind.Arg,
-                Symbol.Kind.Var,
-                Symbol.Kind.Class,
-            ],
-        )
-
-        if not func:
-            # self.report_error(node, f"Target function or class '{
-            # func_name}' not found")
-            return self.verify_Call(node, func)
-
-        elif isinstance(func, FuncOverloads):
-            the_func = func.lookup(list(node.args))
-            if the_func:
-                node = ast.Call(
-                    func=the_func, args=node.args, loc=node.loc)
+        if isinstance(node.func, ast.UFunction):
+            func_overloads = self.sym_tbl.lookup(FuncSymbol(func_name))
+            if func_overloads and (func := func_overloads.lookup(node.args)):
+                node.func = func  # bind the function
             else:
-                self.report_error(node, f"Cannot find a matched function")
+                self.collect_unresolved(node.func)
 
-            return self.verify_Call(node, the_func)
+        # TODO: check if the function is a member function
+        # TODO: check if the function is a class
 
-        else:
-            assert func is not None
-            node = ast.Call(func=func, args=node.args,
-                            loc=node.loc)  # type: ignore
-            return self.verify_Call(node, func)
+        return self.verify_Call(node, node.func)  # type: ignore
 
     def verify_Call(
         self,
@@ -485,3 +508,49 @@ class FileSema(IRMutator):
             return node.target
 
         return node
+
+    def bind_unresolved_symbols(self):
+        for node in self._unresolved_symbols:
+            if self.bind_unresolved(node):
+                self._unresolved_symbols.remove(node)
+
+    utypes = ast.UVarRef | ast.UAttr | ast.UFunction | ast.UClass
+
+    def bind_unresolved(self, node: utypes) -> bool:
+        '''
+        Try to bind the unresolved symbol.
+
+        Return True if the symbol is resolved.
+        '''
+        match type(node):
+            case ast.UFunction:
+                if isinstance(node, ast.UAttr):
+                    raise NotImplementedError()
+                    return
+                func_overloads = node.scope.lookup(FuncSymbol(node.name))
+                if func_overloads is None:
+                    return False  # remain unresolved
+                assert len(node.users) == 1  # only one caller
+                call = list(node.users)[0]
+                assert isinstance(call, ast.Call)
+                if func := func_overloads.lookup(call.args):
+                    node.replace_all_uses_with(func)
+                    return True
+                return False
+
+            case ast.UVarRef:
+                # type: ignore
+                if sym := node.scope.lookup(Symbol(name=node.name, kind=Symbol.Kind.Var)):
+                    node.replace_all_uses_with(sym)
+                    return True
+                return False
+
+            case ast.UAttr:
+                # TODO: resolve the attribute
+                return False
+
+            case ast.UClass:
+                # TODO: resolve the class
+                return False
+
+        return False

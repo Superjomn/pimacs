@@ -65,7 +65,7 @@ class FuncOverloads:
 
     @property
     def name(self) -> str:
-        return Symbol.name
+        return self.symbol.name
 
     def lookup(self, args: List[CallParam | Expr]) -> Optional[Function]:
         """Find the function that matches the arguments"""
