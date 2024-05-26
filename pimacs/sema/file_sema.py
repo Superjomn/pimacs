@@ -367,10 +367,6 @@ class FileSema(IRMutator):
             return node
         return node
 
-    def visit_CallParam(self, node: ast.CallParam):
-        node = super().visit_CallParam(node)
-        return node
-
     def visit_Block(self, node: ast.Block):
         with self.sym_tbl.scope_guard():
             node = super().visit_Block(node)
