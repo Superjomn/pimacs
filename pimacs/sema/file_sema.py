@@ -10,36 +10,14 @@ from typing import Dict, List
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 from pimacs.ast.utils import WeakSet
+from pimacs.logger import logger
 from pimacs.sema.ast_visitor import IRMutator, IRVisitor
 from pimacs.sema.func import FuncOverloads
 
 from .ast import AnalyzedClass
 from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
+from .type_inference import TypeInference
 from .utils import ClassId, FuncSymbol, ModuleId, bcolors, print_colored
-
-PIMACS_SEMA_RAISE_EXCEPTION: bool = os.environ.get(
-    "PIMACS_SEMA_RAISE_EXCEPTION", "0") == "1"
-
-
-class SemaError(Exception):
-    pass
-
-
-def report_sema_error(node: ast.Node, message: str):
-    if PIMACS_SEMA_RAISE_EXCEPTION:
-        raise SemaError(f"{node.loc}\nError: {message}")
-    else:
-        node.sema_failed = True
-        print_colored(f"{node.loc}\n")
-        print_colored(f"Error: {message}\n\n", bcolors.FAIL)
-
-
-def catch_sema_error(cond: bool, node: ast.Node, message: str) -> bool:
-    if cond:
-        node.sema_failed = True
-        report_sema_error(node, message)
-        return True
-    return False
 
 
 def any_failed(*nodes: ast.Node) -> bool:
@@ -81,15 +59,27 @@ class FileSema(IRMutator):
         self.ctx = ctx
         self._succeeded = True
 
+        self._type_inference = TypeInference(ctx)
+
         self._cur_class: ast.Class | None = None
         # holds all the unresolved symbol instances
         self._unresolved_symbols: WeakSet = WeakSet()
+        # The newly resolved symbols those need to be type-inferred
+        self._newly_resolved_symbols: WeakSet = WeakSet()
 
     def __call__(self, node: ast.Node):
         tree = self.visit(node)
+        # First turn of type inference
+        self._type_inference(tree)
+
         self.bind_unresolved_symbols()
         # TODO: the root might be re-bound
         return tree
+
+    def visit(self, node):
+        node = super().visit(node)
+        self.infer_type()
+        return node
 
     @property
     def sym_tbl(self) -> SymbolTable:
@@ -100,16 +90,26 @@ class FileSema(IRMutator):
         return self._succeeded
 
     def report_error(self, node: ast.Node, message: str):
-        report_sema_error(node, message)
+        self.ctx.report_sema_error(node, message)
         node.sema_failed = True
         self._succeeded = False
 
     def collect_unresolved(self, node: ast.Node):
-        logging.warning(f"Collect unresolved symbol {node}")
+        logging.debug(f"Collect unresolved symbol {node}")
         assert node.resolved is False, f"{node} is already resolved"
         # bind scope for second-turn name binding
         node.scope = self.sym_tbl.current_scope  # type: ignore
         self._unresolved_symbols.add(node)
+
+    def collect_newly_resolved(self, node: ast.Node):
+        # Since the IRMutator cannot get parent in a single visit method, we need to collect the newly resolved symbols and type-infer them in the next turn.
+        if not node.sema_failed:
+            self._newly_resolved_symbols.add(node)
+
+    def infer_type(self):
+        for node in self._newly_resolved_symbols:
+            self._type_inference(node, force_update=True)
+        self._newly_resolved_symbols.clear()
 
     def visit_UVarRef(self, node: ast.UVarRef):
         node = super().visit_UVarRef(node)
@@ -137,7 +137,9 @@ class FileSema(IRMutator):
 
         # case 1: Lisp symbol
         elif node.name.startswith('%'):
-            return ast.VarRef(name=node.name, loc=node.loc, type=_ty.LispType)
+            ret = ast.VarRef(name=node.name, loc=node.loc, type=_ty.LispType)
+            self.collect_newly_resolved(ret)
+            return ret
 
         # case 2: a local variable or argument
         elif sym := self.sym_tbl.lookup(
@@ -152,11 +154,13 @@ class FileSema(IRMutator):
                 var = sym
             else:
                 raise ValueError(f"{node.loc}\nUnknown symbol type {sym}")
+
+            self.collect_newly_resolved(var)
             return var
 
         else:
             symbol = Symbol(name=node.name, kind=Symbol.Kind.Var)
-            report_sema_error(node, f"Symbol {symbol} not found")
+            self.ctx.report_sema_error(node, f"Symbol {symbol} not found")
             return node
 
     def visit_VarDecl(self, node: ast.VarDecl):
@@ -363,6 +367,10 @@ class FileSema(IRMutator):
             return node
         return node
 
+    def visit_CallParam(self, node: ast.CallParam):
+        node = super().visit_CallParam(node)
+        return node
+
     def visit_Block(self, node: ast.Block):
         with self.sym_tbl.scope_guard():
             node = super().visit_Block(node)
@@ -421,6 +429,9 @@ class FileSema(IRMutator):
         if any_failed(node.left, node.right):
             node.sema_failed = True
             return node
+        if not (node.left.type_determined and node.right.type_determined):
+            # Not all the operands's type are determined
+            return node
 
         op_to_op_check = {
             ast.BinaryOperator.ADD: self.can_type_add,
@@ -452,6 +463,9 @@ class FileSema(IRMutator):
         node.type = get_common_type(
             node.left.get_type(), node.right.get_type())
         return node
+
+    def is_type_numeric(self, type: _ty.Type) -> bool:
+        return type in (_ty.Int, _ty.Float)
 
     def can_type_add(self, left, right):
         return self.is_type_numeric(left.get_type()) and self.is_type_numeric(
@@ -529,7 +543,7 @@ class FileSema(IRMutator):
         '''
         match type(node):
             case ast.UFunction:
-                logging.warning(f"Bind unresolved function {node}")
+                logging.debug(f"Bind unresolved function {node}")
                 func_overloads = node.scope.get(
                     FuncSymbol(node.name))  # type: ignore
                 if func_overloads is None:
@@ -539,6 +553,8 @@ class FileSema(IRMutator):
                 assert isinstance(call, ast.Call)
                 if func := func_overloads.lookup(call.args):
                     node.replace_all_uses_with(func)
+
+                    self._type_inference(call, force_update=True)
                     return True
                 return False
 
@@ -548,15 +564,19 @@ class FileSema(IRMutator):
 
                 if sym := node.scope.lookup(symbol):
                     node.replace_all_uses_with(sym)
+
+                    self._type_inference(sym, force_update=True)
                     return True
                 return False
 
             case ast.UAttr:
                 # TODO: resolve the attribute
+                logger.debug(f"TODO Bind unresolved attribute {node}")
                 return False
 
             case ast.UClass:
                 # TODO: resolve the class
+                logger.debug(f"TODO Bind unresolved class {node}")
                 return False
 
         return False

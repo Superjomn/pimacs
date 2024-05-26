@@ -34,8 +34,19 @@ class IRVisitor:
         self.visit(node.init)
 
     def visit_Constant(self, node: ast.Constant):
-        if node.value is not None:
-            self.visit(node.value)
+        pass
+
+    def visit_Template(self, node: ast.Template):
+        for t in node.types:
+            self.visit(t)
+
+    def visit_Call(self, node: ast.Call):
+        self.visit(node.func)
+        for arg in node.args:
+            self.visit(arg)
+
+    def visit_CallParam(self, node: ast.CallParam):
+        self.visit(node.value)
 
     def visit_int(self, node: int):
         pass
@@ -45,6 +56,10 @@ class IRVisitor:
 
     def visit_Type(self, node: ast.Type):
         pass
+
+    def visit_Arg(self, node: ast.Arg):
+        self.visit(node.type)
+        self.visit(node.default)
 
     def visit_Function(self, node: ast.Function):
         for decorator in node.decorators:
@@ -402,7 +417,7 @@ class IRPrinter(IRVisitor):
             case ast.Class:
                 self.put(f"{node.func.name}")
             case ast.Arg:
-                self.put(f"{node.func.name}")
+                self.put(f"{node.func.name}")  # type: ignore
             case ast.VarDecl:
                 assert node.func.init is not None
                 self.visit(node.func.init)

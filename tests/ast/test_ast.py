@@ -59,19 +59,19 @@ def test_replace_child_UnaryOp():
 
 def test_replace_child_Call():
     value = Constant(value=100, loc=None)
-    call = Call(func=value, args=(value,), loc=None)
+    func = UFunction(name='fn', return_type=None, loc=None)
+    call = Call(func=func, args=(value,), loc=None)
+    func1 = UFunction(name='fn1', return_type=None, loc=None)
     value1 = Constant(value=200, loc=None)
-    call.replace_child(value, value1)
-    assert call.func == value1
+    call.replace_child(func, func1)
+    assert call.func == func1
 
-    print('value1.users:', value1.users, type(value1.users)),
-    for no, user in enumerate(value1.users):
+    for no, user in enumerate(func1.users):
         assert user == call
-        print('user:', no, user, id(user))
 
-    assert len(value1.users) == 1
-    value1.replace_all_uses_with(value)
-    assert len(value1.users) == 0
+    assert len(func1.users) == 1
+    func1.replace_all_uses_with(func)
+    assert len(func1.users) == 0
 
 
 def test_replace_child_If():

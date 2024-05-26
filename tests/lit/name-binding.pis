@@ -1,6 +1,25 @@
 # forward reference
-# CHECK: var a :Unk = foo()
-var a = foo()
+# perform:
+#   - name binding
+#   - function overloading
+#   - type inference
 
-def foo():
-    return
+# CHECK: var a :Int = foo()
+# CHECK: var b :Float = foo(1)
+var a = foo()
+var b = foo(1)
+let a-int = 1
+let a-float = 1.0
+
+# CHECK: var c :Float = foo(a-int, a-float)
+var c = foo(a-int, a-float)
+
+
+def foo() -> Int:
+    return 1
+
+def foo(a: Int) -> Float:
+    return 1.0
+
+def foo(a: Int, b :Float) -> Float:
+    return a-float
