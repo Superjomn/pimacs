@@ -22,7 +22,7 @@ class Node(ABC):
     users: WeakSet = field(default_factory=WeakSet,
                            repr=False, init=False, hash=False)
     sema_failed: bool = field(
-        default=False, repr=False, init=False, hash=False)
+        default=False, init=False, hash=False, repr=True, compare=False)
 
     # Whether the symbol is resolved
     resolved: bool = field(default=True, repr=False, init=False, hash=False)
@@ -65,9 +65,14 @@ class VisiableSymbol:
 
 @dataclass
 class Expr(Node, ABC):
-    @abstractmethod
+    type: Optional[Type] = field(default=None, init=False, hash=False)
+
+    @property
+    def type_determined(self) -> bool:
+        return self.type not in (None, _type.Unk)
+
     def get_type(self) -> Type:
-        pass
+        return self.type or _type.Unk
 
 
 @dataclass
@@ -139,6 +144,9 @@ class VarDecl(Stmt, VisiableSymbol):
     def __post_init__(self):
         self._refresh_users()
 
+        if is_unk(self.type) and self.init:
+            self.type = self.init.type
+
     def _refresh_users(self):
         if self.init:
             self.init.add_user(self)
@@ -165,15 +173,6 @@ class VarRef(Expr):
     def is_lisp(self) -> bool:
         return self.name.startswith("%")
 
-    def get_type(self) -> Type:
-        if self.type:
-            return self.type
-        elif isinstance(self.target, UVarRef):
-            return self.target.target_type
-        else:
-            assert self.target is not None and self.target.type is not None
-            return self.target.type
-
     def replace_child(self, old, new):
         if self.target == old:
             with self.write_guard():
@@ -182,14 +181,17 @@ class VarRef(Expr):
     def __post_init__(self):
         self._refresh_users()
 
+        if self.target:
+            self.type = self.target.type
+
     def _refresh_users(self):
         if self.target:
             self.target.add_user(self)
 
 
 @dataclass(slots=True, unsafe_hash=True)
-class Arg(Stmt):
-    name: str
+class Arg(Expr):
+    name: str = field(default="")
     type: Type = field(default_factory=lambda: _type.Unk)
     default: Optional[Expr] = None
     is_variadic: bool = False
@@ -217,6 +219,9 @@ class Arg(Stmt):
 
     def __post_init__(self):
         self._refresh_users()
+
+        if is_unk(self.type) and self.default:
+            self.type = self.default.type
 
     def _refresh_users(self):
         if self.default:
@@ -419,7 +424,7 @@ class For(Stmt):
 class Constant(Expr):
     value: Any
 
-    def get_type(self) -> Type:
+    def _get_type(self) -> Type:
         if isinstance(self.value, int):
             return _type.Int
         if isinstance(self.value, float):
@@ -434,6 +439,8 @@ class Constant(Expr):
 
     def __post_init__(self):
         self._refresh_users()
+
+        self.type = self._get_type()
 
     def _refresh_users(self):
         pass
@@ -474,7 +481,7 @@ class BinaryOp(Expr):
         (TypeId.BOOL, TypeId.INT): _type.Int,
     }
 
-    def get_type(self) -> Type:
+    def _get_type(self) -> Type:
         if self.type:
             return self.type
 
@@ -501,6 +508,8 @@ class BinaryOp(Expr):
     def __post_init__(self):
         self._refresh_users()
 
+        self.type = self._get_type()
+
     def _refresh_users(self):
         self.left.add_user(self)
         self.right.add_user(self)
@@ -516,11 +525,13 @@ class UnaryOp(Expr):
     op: UnaryOperator
     operand: Expr
 
-    def get_type(self) -> Type:
+    def _get_type(self) -> Type:
         return self.operand.get_type()
 
     def __post_init__(self):
         self._refresh_users()
+
+        self.type = self._get_type()
 
     def _refresh_users(self):
         self.operand.add_user(self)
@@ -536,11 +547,10 @@ class CallParam(Expr):
     name: str
     value: Expr
 
-    def get_type(self) -> Type:
-        return self.value.get_type()
-
     def __post_init__(self):
         self._refresh_users()
+
+        self.type = self.value.get_type()
 
     def _refresh_users(self):
         self.value.add_user(self)
@@ -569,7 +579,7 @@ class Call(Expr):
     args: Tuple[CallParam | Expr, ...] = field(default_factory=tuple)
     type_spec: Tuple[Type, ...] = field(default_factory=tuple)
 
-    def get_type(self) -> Type:
+    def _get_type(self) -> Type:
         if isinstance(self.func, Function):
             assert self.func.return_type is not None
             return self.func.return_type
@@ -579,6 +589,8 @@ class Call(Expr):
             return _type.Unk
         elif isinstance(self.func, UFunction):
             return _type.Unk
+        elif isinstance(self.func, UAttr):
+            return _type.Unk
         else:
             raise Exception(f"Unknown function type: {
                             type(self.func)}: {self.func}")
@@ -586,6 +598,8 @@ class Call(Expr):
     def __post_init__(self):
         assert isinstance(self.args, tuple)
         self._refresh_users()
+
+        self.type = self._get_type()
 
     def _refresh_users(self):
         if isinstance(self.func, Node):
@@ -646,7 +660,7 @@ class Decorator(Stmt):
 
 
 @dataclass(slots=True, unsafe_hash=True)
-class Assign(Stmt):
+class Assign(Expr):
     '''
     a = 1
     '''
@@ -655,6 +669,8 @@ class Assign(Stmt):
 
     def __post_init__(self):
         self._refresh_users()
+
+        self.type = self.value.get_type()
 
     def _refresh_users(self):
         self.target.add_user(self)
@@ -678,6 +694,8 @@ class Attribute(Expr):
 
     def _refresh_users(self):
         self.value.add_user(self)
+
+        # TODO: set type
 
     def replace_child(self, old, new):
         with self.write_guard():
@@ -733,13 +751,15 @@ class Select(Expr):
     then_expr: Expr
     else_expr: Expr
 
-    def get_type(self) -> Type:
+    def _get_type(self) -> Type:
         if self.then_expr.get_type() == self.else_expr.get_type():
             return self.then_expr.get_type()
         return _type.Unk
 
     def __post_init__(self):
         self._refresh_users()
+
+        self.type = self._get_type()
 
     def _refresh_users(self):
         self.cond.add_user(self)
@@ -809,9 +829,6 @@ class UAttr(Expr):
 
     resolved: bool = field(default=False, init=False, hash=False)
 
-    def get_type(self) -> Type:
-        return _type.Unk
-
     def _refresh_users(self):
         self.value.add_user(self)
 
@@ -819,6 +836,8 @@ class UAttr(Expr):
         self._refresh_users()
 
         self.scope = None
+
+        self.type = _type.Unk
 
     def replace_child(self, old, new):
         with self.write_guard():
@@ -875,3 +894,7 @@ class LispList(Expr):
 
     def replace_child(self, old, new):
         pass
+
+
+def is_unk(type: Type) -> bool:
+    return type == _type.Unk or type is None

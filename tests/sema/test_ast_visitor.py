@@ -35,7 +35,7 @@ def test_IRPrinter_func():
         output.strip()
         == """
 def hello-0 (name :Str) -> nil:
-    var a = "Hello " + name
+    var a :Unk = "Hello " + name
     print("hello %s", a)
 
 
@@ -73,10 +73,10 @@ def hello (name :Str) -> nil:
             """
 var a :Int
 var b :Int = 1
-var c = 1
+var c :Int = 1
 var d :Float
 var e :Float = 1.0
-var f = 1.0
+var f :Float = 1.0
 """,
         ),
         (
