@@ -23,3 +23,10 @@ def foo(a: Int) -> Float:
 
 def foo(a: Int, b :Float) -> Float:
     return a-float
+
+class Pet:
+    var name: Str
+    var age: Int
+
+var a-pet = Pet("hello", 1)
+var age-1 = a-pet.age

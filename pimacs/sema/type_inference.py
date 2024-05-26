@@ -1,8 +1,9 @@
 import pimacs.ast.type as _ty
 from pimacs.ast import ast
 from pimacs.logger import logger
-from pimacs.sema.ast_visitor import IRVisitor
 from pimacs.sema.context import ModuleContext
+
+from .ast_visitor import IRVisitor
 
 
 class TypeInference(IRVisitor):
@@ -126,9 +127,23 @@ class TypeInference(IRVisitor):
             self.report_error(node, f'Type mismatch: {
                               node.value.type} != {node.target.type}')
 
+    def visit_UAttr(self, node: ast.UAttr):
+        if node.sema_failed:
+            return
+        super().visit_UAttr(node)
+
+        scope = node.scope
+        if is_unk(node.value.get_type()):
+            return
+        class_node = node.value.get_type().name
+
     def visit_str(self, node: str):
         pass
 
     def _visit_users(self, node: ast.Node):
         for user in node.users:
             self.visit(user)
+
+
+def is_unk(type: _ty.Type) -> bool:
+    return type in (_ty.Unk, None)

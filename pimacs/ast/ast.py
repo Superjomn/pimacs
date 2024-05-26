@@ -250,7 +250,7 @@ class Block(Stmt):
 
 @dataclass(slots=True)
 class File(Stmt):
-    stmts: Tuple[Stmt]
+    stmts: List[Stmt]
 
     def _refresh_users(self):
         pass
@@ -277,7 +277,12 @@ class Function(Stmt, VisiableSymbol):
         Func = 0
         Method = 1  # class method
 
+    class Annotation(Enum):
+        Class_constructor = 0
+
     kind: Kind = field(default=Kind.Func, repr=False)
+    annotation: Annotation = field(
+        default=Annotation.Class_constructor, repr=False, init=False, compare=False)
 
     def __post_init__(self):
         assert self.args is not None

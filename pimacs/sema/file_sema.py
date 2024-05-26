@@ -11,11 +11,12 @@ import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 from pimacs.ast.utils import WeakSet
 from pimacs.logger import logger
-from pimacs.sema.ast_visitor import IRMutator, IRVisitor
 from pimacs.sema.func import FuncOverloads
 
-from .ast import AnalyzedClass
+from .ast import AnalyzedClass, MakeObject
+from .ast_visitor import IRMutator, IRVisitor
 from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
+from .func import FuncSig
 from .type_inference import TypeInference
 from .utils import ClassId, FuncSymbol, ModuleId, bcolors, print_colored
 
@@ -62,6 +63,8 @@ class FileSema(IRMutator):
         self._type_inference = TypeInference(ctx)
 
         self._cur_class: ast.Class | None = None
+        self._cur_file: ast.File | None = None
+
         # holds all the unresolved symbol instances
         self._unresolved_symbols: WeakSet = WeakSet()
         # The newly resolved symbols those need to be type-inferred
@@ -110,6 +113,11 @@ class FileSema(IRMutator):
         for node in self._newly_resolved_symbols:
             self._type_inference(node, force_update=True)
         self._newly_resolved_symbols.clear()
+
+    def visit_File(self, node: ast.File):
+        self._cur_file = node
+        super().visit_File(node)
+        return node
 
     def visit_UVarRef(self, node: ast.UVarRef):
         node = super().visit_UVarRef(node)
@@ -312,26 +320,88 @@ class FileSema(IRMutator):
 
             with self.sym_tbl.scope_guard(kind=ScopeKind.Class):
                 node = super().visit_Class(node)
-                # self.sym_tbl.print_summary()
 
             symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
             if self.sym_tbl.contains_locally(symbol):
                 self.report_error(node, f"Class {node.name} already exists")
 
             node = self.sym_tbl.insert(symbol, node)
-            return self.verify_Class(node)
+
+        # Add constructors to the class into the global scope
+        self._add_constructors(node)
+
+        return self.verify_Class(node)
+
+    def _add_constructors(self, node: AnalyzedClass):
+        ''' Add constructor functions to the class. '''
+        symbol = FuncSymbol("__init__")
+        overloads = node.symbols.get(symbol)
+
+        assert self._cur_file
+        if overloads is None:
+            # add a default constructor
+            fn = self._get_default_constructor(node)
+
+            # append to the file for sema later
+            self._cur_file.stmts.append(fn)
+        else:
+            # add constructor for each __init__ method
+            for init_fn in overloads:
+                fn = self._get_constructor(node.name, init_fn)
+                symbol = FuncSymbol(fn.name)
+                assert self.sym_tbl.current_scope.parent
+                if overloads := self.sym_tbl.global_scope.get(symbol):
+                    if overloads.lookup(FuncSig.create(fn)):
+                        self.report_error(
+                            node, f"Constructor {fn.name} already exists")
+
+                # append to the file for sema later
+                self._cur_file.stmts.append(fn)
+
+    def _get_default_constructor(self, node: AnalyzedClass) -> ast.Function:
+        '''
+        Create a default constructor for the class.
+        '''
+        members = node.symbols.get(Symbol.Kind.Member)
+        args = []
+        for member in members:
+            arg = ast.Arg(name=member.name, loc=member.loc)
+            arg.type = member.type
+            if member.init:
+                arg.default = member.init
+            args.append(arg)
+
+        return_type = _ty.make_customed(node.name, None)
+
+        make_obj_expr = MakeObject(class_name=node.name, loc=node.loc)
+        make_obj_expr.type = return_type
+
+        return_stmt = ast.Return(value=make_obj_expr, loc=node.loc)
+
+        body = ast.Block(stmts=(return_stmt,
+                                ), loc=node.loc)
+        fn = ast.Function(name=node.name, args=tuple(args),
+                          body=body, loc=node.loc, return_type=return_type)
+        fn.annotation = ast.Function.Annotation.Class_constructor
+        return fn
+
+    def _get_constructor(self, class_name: str, init_fn: ast.Function):
+        '''
+        Create a constructor function for the class.
+        '''
+        assert init_fn.args[0].name == "self"
+        args = init_fn.args[1:]
+        body = init_fn.body
+        return_type = init_fn.args[0].type
+        fn = ast.Function(name=class_name, args=tuple(args), body=body, loc=init_fn.loc,
+                          return_type=return_type)
+        fn.annotation = ast.Function.Annotation.Class_constructor
+        return fn
 
     def verify_Class(self, node: AnalyzedClass) -> ast.Class:
         if node.sema_failed:
             return node
         return node
-
-    def resolve_class_body(self, node: AnalyzedClass):
-        '''
-        Resolve the member-reference in the class body.
-        '''
-        for func in filter(lambda x: isinstance(x, ast.Function), node.body):
-            pass
 
     def visit_Call(self, node: ast.Call):
         node = super().visit_Call(node)
@@ -344,6 +414,7 @@ class FileSema(IRMutator):
             func_overloads = self.sym_tbl.lookup(FuncSymbol(func_name))
             if func_overloads and (func := func_overloads.lookup(node.args)):
                 node.func = func  # bind the function
+                self.collect_newly_resolved(node)
             else:
                 self.collect_unresolved(node.func)
 
@@ -508,6 +579,14 @@ class FileSema(IRMutator):
             return node
         return node
 
+    def visit_MakeObject(self, node: MakeObject):
+        return node
+
+    def visit_UAttr(self, node: ast.UAttr):
+        node = super().visit_UAttr(node)
+        self.collect_unresolved(node)
+        return node
+
     @staticmethod
     def get_true_var(
         node: ast.VarDecl | ast.VarRef,
@@ -566,9 +645,27 @@ class FileSema(IRMutator):
                 return False
 
             case ast.UAttr:
-                # TODO: resolve the attribute
-                logger.debug(f"TODO Bind unresolved attribute {node}")
-                return False
+                attr_name = node.attr  # type: ignore
+                if node.value.get_type() in (None, _ty.Unk):
+                    return False
+
+                class_symbol = Symbol(
+                    name=node.value.get_type().name, kind=Symbol.Kind.Class)
+                print(f"class_symbol: {class_symbol}")
+                class_node = self.sym_tbl.global_scope.get(class_symbol)
+
+                member = class_node.symbols.get(
+                    Symbol(name=attr_name, kind=Symbol.Kind.Member))
+                if not member:
+                    self.report_error(node, f"Attribute {attr_name} not found")
+                    return False
+
+                new_node = ast.Attribute(
+                    value=node.value, attr=attr_name, loc=node.loc)  # type: ignore
+                new_node.type = member.type
+                node.replace_all_uses_with(new_node)
+                self.collect_newly_resolved(new_node)
+                return True
 
             case ast.UClass:
                 # TODO: resolve the class

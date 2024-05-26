@@ -13,7 +13,7 @@ from lark.lexer import Token
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _type
-from pimacs.sema.ast_visitor import IRMutator, IRVisitor
+from pimacs.ast.ast_visitor import IRMutator, IRVisitor
 
 
 def get_lark_parser():

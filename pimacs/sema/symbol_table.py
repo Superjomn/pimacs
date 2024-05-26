@@ -26,10 +26,13 @@ class Scope:
         else:
             self._add_symbol(symbol, item)
 
+    @multimethod
     def get(self, symbol: Symbol) -> SymbolItem | None:
-        # if symbol.kind == Symbol.Kind.Func:
-        # return self._get_func(symbol)
         return self._get_symbol(symbol)
+
+    @multimethod
+    def get(self, kind: Symbol.Kind) -> List[SymbolItem]:
+        return [item for symbol, item in self.data.items() if symbol.kind == kind]
 
     def get_local(self, symbol: Symbol) -> SymbolItem | None:
         return self.data.get(symbol, None)
@@ -96,6 +99,10 @@ class Scope:
 class SymbolTable(Scoped):
     def __init__(self):
         self._scopes = [Scope(kind=ScopeKind.Global)]
+
+    @property
+    def global_scope(self) -> Scope:
+        return self._scopes[0]
 
     @property
     def current_scope(self) -> Scope:

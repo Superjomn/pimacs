@@ -8,6 +8,7 @@ from typing import Dict
 import pimacs.ast.ast as ast
 
 from .func import FuncOverloads, FuncSymbol
+from .symbol_table import Scope
 from .utils import Symbol
 
 
@@ -15,8 +16,7 @@ from .utils import Symbol
 class AnalyzedClass(ast.Class):
     # symbols hold all the members and methods of the class
     # It should be updated once the class is modified
-    symbols: Dict[Symbol, ast.VarDecl | FuncOverloads] = field(
-        default_factory=dict, init=False, hash=False)
+    symbols: Scope = field(default_factory=Scope, init=False, hash=False)
 
     @classmethod
     def create(cls, node: ast.Class) -> "AnalyzedClass":
@@ -32,15 +32,33 @@ class AnalyzedClass(ast.Class):
         self.update_symbols()
 
     def update_symbols(self):
-        self.symbols = {}
+        self.symbols = Scope()
         for node in self.body:
             if isinstance(node, ast.VarDecl):
                 symbol = Symbol(name=node.name, kind=Symbol.Kind.Member)
-                self.symbols[symbol] = node
+                self.symbols.add(symbol, node)
             elif isinstance(node, ast.Function):
-                symbol = FuncSymbol(node.name)
-                self.symbols.get(symbol, FuncOverloads(
-                    symbol=symbol)).insert(node)
+                self.symbols.add(node)
+
+
+@dataclass(slots=True)
+class MakeObject(ast.Expr):
+    '''
+    Create an object from a class.
+
+    e.g.
+      App()      # => MakeObject(class_name='App')
+    '''
+    class_name: str
+
+    def _refresh_users(self):
+        pass
+
+    def replace_child(self, old, new):
+        pass
+
+    def __str__(self):
+        return f"{self.class_name}()"
 
 
 @dataclass(slots=True)
