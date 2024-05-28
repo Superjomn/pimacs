@@ -38,7 +38,7 @@ class AnalyzedClass(ast.Class):
                 symbol = Symbol(name=node.name, kind=Symbol.Kind.Member)
                 self.symbols.add(symbol, node)
             elif isinstance(node, ast.Function):
-                self.symbols.add(node)
+                self.symbols.add(FuncSymbol(node.name), node)
 
 
 @dataclass(slots=True)

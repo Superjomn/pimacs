@@ -22,7 +22,7 @@ class Node(ABC):
     users: WeakSet = field(default_factory=WeakSet,
                            repr=False, init=False, hash=False)
     sema_failed: bool = field(
-        default=False, init=False, hash=False, repr=True, compare=False)
+        default=False, init=False, hash=False, repr=False, compare=False)
 
     # Whether the symbol is resolved
     resolved: bool = field(default=True, repr=False, init=False, hash=False)

@@ -17,7 +17,7 @@ from .ast import AnalyzedClass, MakeObject
 from .ast_visitor import IRMutator, IRVisitor
 from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
 from .func import FuncSig
-from .type_inference import TypeInference
+from .type_infer import TypeInfer
 from .utils import ClassId, FuncSymbol, ModuleId, bcolors, print_colored
 
 
@@ -60,7 +60,7 @@ class FileSema(IRMutator):
         self.ctx = ctx
         self._succeeded = True
 
-        self._type_inference = TypeInference(ctx)
+        self._type_infer = TypeInfer(ctx)
 
         self._cur_class: ast.Class | None = None
         self._cur_file: ast.File | None = None
@@ -73,9 +73,13 @@ class FileSema(IRMutator):
     def __call__(self, node: ast.Node):
         tree = self.visit(node)
         # First turn of type inference
-        self._type_inference(tree)
+        self._type_infer(tree)
 
-        self.bind_unresolved_symbols()
+        # Try to bind the unresolved symbols repeatedly
+        remaining = self.bind_unresolved_symbols()
+        while remaining > 0 and self.bind_unresolved_symbols() < remaining:
+            remaining = self.bind_unresolved_symbols()
+
         # TODO: the root might be re-bound
         return tree
 
@@ -98,7 +102,7 @@ class FileSema(IRMutator):
         self._succeeded = False
 
     def collect_unresolved(self, node: ast.Node):
-        logging.debug(f"Collect unresolved symbol {node}")
+        logger.info(f"Collect unresolved symbol {node}")
         assert node.resolved is False, f"{node} is already resolved"
         # bind scope for second-turn name binding
         node.scope = self.sym_tbl.current_scope  # type: ignore
@@ -111,7 +115,7 @@ class FileSema(IRMutator):
 
     def infer_type(self):
         for node in self._newly_resolved_symbols:
-            self._type_inference(node, force_update=True)
+            self._type_infer(node, forward_push=False)
         self._newly_resolved_symbols.clear()
 
     def visit_File(self, node: ast.File):
@@ -349,7 +353,6 @@ class FileSema(IRMutator):
             for init_fn in overloads:
                 fn = self._get_constructor(node.name, init_fn)
                 symbol = FuncSymbol(fn.name)
-                assert self.sym_tbl.current_scope.parent
                 if overloads := self.sym_tbl.global_scope.get(symbol):
                     if overloads.lookup(FuncSig.create(fn)):
                         self.report_error(
@@ -599,14 +602,20 @@ class FileSema(IRMutator):
 
         return node
 
-    def bind_unresolved_symbols(self):
-        logging.debug(f"unresolved symbols: {self._unresolved_symbols}")
+    def bind_unresolved_symbols(self) -> int:
+        '''
+        Try to bind the unresolved symbols.
+        Return the number of resolved symbols.
+        '''
+        logger.debug(f"unresolved symbols: {self._unresolved_symbols}")
         resolved = []
         for node in self._unresolved_symbols:
             if self.bind_unresolved(node):
                 resolved.append(node)
         for node in resolved:
             self._unresolved_symbols.remove(node)
+
+        return len(resolved)
 
     utypes = ast.UVarRef | ast.UAttr | ast.UFunction | ast.UClass
 
@@ -616,12 +625,17 @@ class FileSema(IRMutator):
 
         Return True if the symbol is resolved.
         '''
+        logger.info(f"Try to bind unresolved symbol {node}")
+        if node.resolved:
+            return True
+
         match type(node):
             case ast.UFunction:
-                logging.debug(f"Bind unresolved function {node}")
+                logger.debug(f"Bind unresolved function {node}")
                 func_overloads = node.scope.get(
                     FuncSymbol(node.name))  # type: ignore
                 if func_overloads is None:
+                    logger.debug(f"Function {node.name} not found")
                     return False  # remain unresolved
                 assert len(node.users) == 1  # only one caller
                 call = list(node.users)[0]
@@ -629,7 +643,7 @@ class FileSema(IRMutator):
                 if func := func_overloads.lookup(call.args):
                     node.replace_all_uses_with(func)
 
-                    self._type_inference(call, force_update=True)
+                    self._type_infer(func, forward_push=False)
                     return True
                 return False
 
@@ -640,7 +654,7 @@ class FileSema(IRMutator):
                 if sym := node.scope.lookup(symbol):
                     node.replace_all_uses_with(sym)
 
-                    self._type_inference(sym, force_update=True)
+                    self._type_infer(sym, forward_push=False)
                     return True
                 return False
 
@@ -651,7 +665,6 @@ class FileSema(IRMutator):
 
                 class_symbol = Symbol(
                     name=node.value.get_type().name, kind=Symbol.Kind.Class)
-                print(f"class_symbol: {class_symbol}")
                 class_node = self.sym_tbl.global_scope.get(class_symbol)
 
                 member = class_node.symbols.get(
@@ -664,7 +677,8 @@ class FileSema(IRMutator):
                     value=node.value, attr=attr_name, loc=node.loc)  # type: ignore
                 new_node.type = member.type
                 node.replace_all_uses_with(new_node)
-                self.collect_newly_resolved(new_node)
+
+                self._type_infer(new_node, forward_push=False)
                 return True
 
             case ast.UClass:

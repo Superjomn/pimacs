@@ -28,5 +28,7 @@ class Pet:
     var name: Str
     var age: Int
 
+# CHECK: var a-pet :Pet = Pet("hello", 1)
+# CHECK-NEXT: var age-1 :Int = a-pet.age
 var a-pet = Pet("hello", 1)
 var age-1 = a-pet.age
