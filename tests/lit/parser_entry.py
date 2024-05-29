@@ -13,13 +13,14 @@ from pimacs.transpiler.phases import parse_ast, perform_sema
 @click.argument("filename", type=str)
 @click.option("--sema", type=bool, default=False)
 @click.option("--mark-unresolved", type=bool, default=False)
-def main(filename: str, sema: bool, mark_unresolved: bool):
+@click.option("--enable-exception", type=bool, default=False)
+def main(filename: str, sema: bool, mark_unresolved: bool, enable_exception: bool):
     file = parse_ast(filename=filename, sema=sema)
 
     print("AST:\n")
     pprint(file)
     if sema:
-        ctx = ModuleContext()
+        ctx = ModuleContext(enable_exception=enable_exception)
         file = perform_sema(ctx, file)  # type: ignore
         pprint(file)
 

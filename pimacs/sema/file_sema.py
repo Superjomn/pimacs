@@ -17,7 +17,7 @@ from .ast import AnalyzedClass, MakeObject
 from .ast_visitor import IRMutator, IRVisitor
 from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
 from .func import FuncSig
-from .type_infer import TypeInfer
+from .type_infer import TypeInfer, is_unk
 from .utils import ClassId, FuncSymbol, ModuleId, bcolors, print_colored
 
 
@@ -317,13 +317,13 @@ class FileSema(IRMutator):
     def visit_Class(self, the_node: ast.Class):
         node = AnalyzedClass.create(the_node)  # type: ignore
         with node.auto_update_symbols():
-            self._cur_class = node
             if self.sym_tbl.current_scope.kind is not ScopeKind.Global:
                 self.report_error(
                     node, f"Class should be declared in the global scope")
 
             with self.sym_tbl.scope_guard(kind=ScopeKind.Class):
-                node = super().visit_Class(node)
+                with self.class_scope_guard(node):
+                    node = super().visit_Class(node)
 
             symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
             if self.sym_tbl.contains_locally(symbol):
@@ -408,6 +408,7 @@ class FileSema(IRMutator):
 
     def visit_Call(self, node: ast.Call):
         node = super().visit_Call(node)
+
         func_name = node.func
         if isinstance(func_name, ast.UFunction):
             func_name = func_name.name  # type: ignore
@@ -462,11 +463,28 @@ class FileSema(IRMutator):
         node.return_type = list(return_types) if return_types else [_ty.Nil]
         return node
 
+    @contextmanager
+    def class_scope_guard(self, class_node: ast.Class):
+        self._cur_class = class_node
+        yield
+        self._cur_class = None
+
     def visit_Arg(self, node: ast.Arg):
         node = super().visit_Arg(node)
         assert (
             self.sym_tbl.current_scope.kind is ScopeKind.Func
         ), f"{node.loc}\nArgDecl should be in a function, but get {self.sym_tbl.current_scope.kind}"
+
+        if self._cur_class:
+            if node.name == "self":
+                node.kind = ast.Arg.Kind.self_placeholder
+                if not is_unk(node.type):
+                    self.report_error(node, f"self should not have a type")
+            elif node.name == "cls":
+                node.kind = ast.Arg.Kind.cls_placeholder
+                if not is_unk(node.type):
+                    self.report_error(node, f"self should not have a type")
+
         symbol = Symbol(name=node.name, kind=Symbol.Kind.Arg)
         if self.sym_tbl.contains_locally(symbol):
             self.report_error(node, f"Argument {node.name} already exists")
@@ -489,6 +507,14 @@ class FileSema(IRMutator):
                         f"Cannot assign {node.default.get_type()} to {
                             node.type}",
                     )
+        elif node.is_self_placeholder:
+            if not is_unk(node.type):
+                self.report_error(
+                    node,
+                    f"{node.loc}\nself should not have a type",
+                )
+            else:
+                node.type = _ty.make_customed(self._cur_class.name, None)
         return node
 
     def visit_BinaryOp(self, node: ast.BinaryOp):

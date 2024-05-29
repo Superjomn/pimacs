@@ -28,6 +28,10 @@ class Pet:
     var name: Str
     var age: Int
 
+    def hello(self):
+        # CHECK: UF<%message>("%s", self.name)
+        %message("%s", self.name)
+
 # CHECK: var a-pet :Pet = Pet("hello", 1)
 # CHECK-NEXT: var age-1 :Int = a-pet.age
 var a-pet = Pet("hello", 1)
