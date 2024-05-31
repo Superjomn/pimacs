@@ -22,7 +22,7 @@ class Scope:
 
     def add(self, symbol: Symbol, item: SymbolItem):
         if symbol.kind == Symbol.Kind.Func:
-            self._add_func(item)
+            self._add_func(symbol, item)
         else:
             self._add_symbol(symbol, item)
 
@@ -71,9 +71,8 @@ class Scope:
             return tmp
         return None
 
-    def _add_func(self, func: ast.Function):
+    def _add_func(self, symbol: Symbol, func: ast.Function):
         ''' Add function record. '''
-        symbol = FuncSymbol(func.name)
         record = self._get_func(symbol)
         if record:
             record.insert(func)

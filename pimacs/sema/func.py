@@ -61,7 +61,7 @@ class FuncOverloads:
     """FuncOverloads represents the functions with the same name but different signatures.
     It could be records in the symbol table, and it could be scoped."""
 
-    symbol: FuncSymbol
+    symbol: Symbol
     # funcs with the same name
     funcs: Dict[FuncSig, Function] = field(default_factory=dict)
 

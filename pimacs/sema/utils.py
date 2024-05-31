@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from tabulate import tabulate  # type: ignore
 
+from pimacs.ast import ast
+
 
 class ScopeKind(Enum):
     Local = 0
@@ -86,6 +88,8 @@ class Symbol:
 
     name: str  # the name without "self." prefix if it is a member
     kind: Kind
+    annotation: Optional[ast.Function.Annotation] = field(
+        default=None, hash=True, repr=False)
 
     # The module or class of the symbol, it could be a chain of modules and classes.
     # `mod0::mod1::var0`
@@ -106,8 +110,8 @@ class Symbol:
 
 
 class FuncSymbol(Symbol):
-    def __init__(self, name: str, context: Tuple[Union[ModuleId, ClassId], ...] = ()):
-        super().__init__(name, Symbol.Kind.Func, context=context)
+    def __init__(self, name: str, context: Tuple[Union[ModuleId, ClassId], ...] = (), annotation: Optional[ast.Function.Annotation] = None):
+        super().__init__(name, Symbol.Kind.Func, context=context, annotation=annotation)
 
 
 class VarSymbol(Symbol):

@@ -361,6 +361,22 @@ class FileSema(IRMutator):
                 # append to the file for sema later
                 self._cur_file.stmts.append(fn)
 
+    def _add_methods(self, node: AnalyzedClass):
+        ''' Add method functions to the class. '''
+        members = node.symbols.get(Symbol.Kind.Member)
+        for member in members:
+            if isinstance(member, ast.Function) and member.name != "__init__":
+                method = self._add_method(node.name, member)
+                symbol = FuncSymbol(
+                    method.name, annotation=ast.Function.Annotation.Class_method)
+                if overloads := self.sym_tbl.global_scope.get(symbol):
+                    if overloads.lookup(FuncSig.create(method)):
+                        self.report_error(
+                            node, f"Class method {method.name} duplicates")
+
+                # append to the file for sema later
+                self._cur_file.stmts.append(method)
+
     def _get_default_constructor(self, node: AnalyzedClass) -> ast.Function:
         '''
         Create a default constructor for the class.
@@ -401,6 +417,20 @@ class FileSema(IRMutator):
         fn.annotation = ast.Function.Annotation.Class_constructor
         return fn
 
+    def _add_method(self, class_name: str, method: ast.Function):
+        '''
+        Create a method function for the class in the global scope.
+        The method will guard with annotation `Class_method`, and the first argument should be `self`.
+        '''
+        assert method.args[0].name == "self"
+        args = method.args
+        body = method.body
+        return_type = method.return_type
+        fn = ast.Function(name=method.name, args=tuple(args), body=body, loc=method.loc,
+                          return_type=return_type)
+        fn.annotation = ast.Function.Annotation.Class_method
+        return fn
+
     def verify_Class(self, node: AnalyzedClass) -> ast.Class:
         if node.sema_failed:
             return node
@@ -412,7 +442,8 @@ class FileSema(IRMutator):
         func_name = node.func
         if isinstance(func_name, ast.UFunction):
             func_name = func_name.name  # type: ignore
-        assert isinstance(func_name, str)
+
+        assert isinstance(func_name, str), f"call: {node}"
 
         if isinstance(node.func, ast.UFunction):
             func_overloads = self.sym_tbl.lookup(FuncSymbol(func_name))

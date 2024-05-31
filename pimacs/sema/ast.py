@@ -3,7 +3,7 @@ This file contains several additional AST node for semantic analysis.
 '''
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Optional
 
 import pimacs.ast.ast as ast
 
@@ -59,6 +59,23 @@ class MakeObject(ast.Expr):
 
     def __str__(self):
         return f"{self.class_name}()"
+
+
+@dataclass
+class UCallAttr(ast.Call):
+    '''
+    Call an attribute of an object.
+
+    It will be replaced to a actual method call in the Sema.
+
+    e.g.
+      app = App()
+      app.time()      # => UCallAttr(app, attr='time')
+    '''
+    obj: Optional[ast.Expr] = None
+    attr: str = ""
+
+    resolved: bool = field(default=False, init=False)
 
 
 @dataclass(slots=True)

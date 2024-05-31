@@ -279,6 +279,7 @@ class Function(Stmt, VisiableSymbol):
 
     class Annotation(Enum):
         Class_constructor = 0
+        Class_method = 1
 
     kind: Kind = field(default=Kind.Func, repr=False)
     annotation: Annotation = field(
