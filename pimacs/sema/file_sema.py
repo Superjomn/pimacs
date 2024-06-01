@@ -705,8 +705,6 @@ class FileSema(IRMutator):
                 func_overloads = node.scope.get(
                     FuncSymbol(node.name))  # type: ignore
                 if func_overloads is None:
-                    # type: ignore
-                    logger.debug(f"Function {node.name} not found")
                     return False  # remain unresolved
                 assert len(node.users) == 1  # only one caller
                 call = list(node.users)[0]
