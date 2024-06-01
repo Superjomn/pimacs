@@ -2,7 +2,7 @@ from io import StringIO
 
 import pytest
 
-from pimacs.ast.ast_visitor import IRPrinter, StringStream
+from pimacs.sema.ast_visitor import IRPrinter
 from pimacs.sema.context import ModuleContext
 from pimacs.sema.file_sema import *
 from pimacs.transpiler.phases import parse_ast, perform_sema

@@ -34,7 +34,7 @@ class TypeInfer(IRVisitor):
         while self._newly_updated_nodes:
             node = self._newly_updated_nodes.pop()
             for user in node.users:
-                logger.info(f'Pollute {node}')
+                logger.debug(f'Pollute {node}')
                 self.visit(user)
 
     def __call__(self, node: ast.Node, forward_push: bool = True):
@@ -52,6 +52,10 @@ class TypeInfer(IRVisitor):
         else:
             self.visit(node)
 
+    def visit_File(self, node: ast.File):
+        if self._forward_push:
+            super().visit_File(node)
+
     def visit_Call(self, node: ast.Call):
         # visit leaf nodes
         if self._forward_push:
@@ -64,7 +68,7 @@ class TypeInfer(IRVisitor):
             case ast.Function:
                 self.update_type(node, node.func.return_type)  # type: ignore
             case _:
-                logger.info(f'Unresolved function call: {node.func}')
+                logger.debug(f'Unresolved function call: {node.func}')
                 return
 
     def visit_VarDecl(self, node: ast.VarDecl):

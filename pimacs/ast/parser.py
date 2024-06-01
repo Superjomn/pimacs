@@ -193,7 +193,9 @@ class PimacsTransformer(Transformer):
             name = items[0].name
             loc = items[0].loc
         elif isinstance(items[0], ast.UAttr):
-            args = filter(lambda x: x is not None, items[1:])
+            args = list(filter(lambda x: x is not None, items[1:]))
+            if args and isinstance(args[0], list):
+                args = args[0]
             return ast.Call(func=items[0], args=tuple(args), loc=items[0].loc)
         else:
             name = items[0].value

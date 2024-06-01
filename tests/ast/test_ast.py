@@ -1,4 +1,5 @@
 from pimacs.ast.ast import *
+from pimacs.ast.utils import WeakSet
 
 
 def test_basic():
@@ -12,7 +13,7 @@ def test_WeakSet_behavior():
     value0 = Constant(value=100, loc=None)
     value1 = Constant(value=200, loc=None)
 
-    set = weakref.WeakSet()
+    set = WeakSet()
     for i in range(10):
         set.add(value0)
         set.add(value1)
@@ -104,3 +105,25 @@ def test_replace_child_Function():
     arg0.replace_all_uses_with(arg1)
     assert len(arg0.users) == 0
     assert len(arg1.users) == 2
+
+
+def test_replace_child_File():
+    body = Block(stmts=tuple(), loc=None)
+    func = Function(name='fn', args=tuple(), body=body, loc=None)
+
+    var = VarDecl('x', init=Constant(value=100, loc=None))
+    assign = Assign(target=var, value=Constant(value=200, loc=None), loc=None)
+    file = File(stmts=(func, var, assign), loc=None)
+
+    # Function has one user (File)
+    assert len(func.users) == 1
+
+    var2 = VarDecl('y', init=Constant(value=200, loc=None))
+    assert len(var2.users) == 0
+
+    var.replace_all_uses_with(var2)
+
+    assert len(var.users) == 0
+    assert len(var2.users) == 2  # Two users: Block and Assign
+
+    assert var2 in file.stmts

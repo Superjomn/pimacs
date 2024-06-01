@@ -1,11 +1,12 @@
 '''
-This file contains several additional AST node for semantic analysis.
+This file contains several additional AST nodes dedicated to semantic analysis.
 '''
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import *
 
-import pimacs.ast.ast as ast
+import pimacs.ast.type as ty
+from pimacs.ast.ast import *
 
 from .func import FuncOverloads, FuncSymbol
 from .symbol_table import Scope
@@ -13,13 +14,13 @@ from .utils import Symbol
 
 
 @dataclass(slots=True, unsafe_hash=True)
-class AnalyzedClass(ast.Class):
+class AnalyzedClass(Class):
     # symbols hold all the members and methods of the class
     # It should be updated once the class is modified
     symbols: Scope = field(default_factory=Scope, init=False, hash=False)
 
     @classmethod
-    def create(cls, node: ast.Class) -> "AnalyzedClass":
+    def create(cls, node: Class) -> "AnalyzedClass":
         return cls(
             name=node.name,
             body=node.body,
@@ -34,15 +35,15 @@ class AnalyzedClass(ast.Class):
     def update_symbols(self):
         self.symbols = Scope()
         for node in self.body:
-            if isinstance(node, ast.VarDecl):
+            if isinstance(node, VarDecl):
                 symbol = Symbol(name=node.name, kind=Symbol.Kind.Member)
                 self.symbols.add(symbol, node)
-            elif isinstance(node, ast.Function):
+            elif isinstance(node, Function):
                 self.symbols.add(FuncSymbol(node.name), node)
 
 
 @dataclass(slots=True)
-class MakeObject(ast.Expr):
+class MakeObject(Expr):
     '''
     Create an object from a class.
 
@@ -62,9 +63,9 @@ class MakeObject(ast.Expr):
 
 
 @dataclass
-class UCallAttr(ast.Call):
+class UCallMethod(Unresolved, Expr):
     '''
-    Call an attribute of an object.
+    Call a method of an object.
 
     It will be replaced to a actual method call in the Sema.
 
@@ -72,23 +73,52 @@ class UCallAttr(ast.Call):
       app = App()
       app.time()      # => UCallAttr(app, attr='time')
     '''
-    obj: Optional[ast.Expr] = None
+    obj: Optional[CallParam] = None
     attr: str = ""
+    args: Tuple[CallParam, ...] = field(default_factory=tuple)
 
-    resolved: bool = field(default=False, init=False)
+    def __post_init__(self):
+        self._refresh_users()
+
+    def _refresh_users(self):
+        if self.obj:
+            self.obj.add_user(self)
+        for arg in self.args:
+            arg.add_user(self)
+
+    def replace_child(self, old, new):
+        if self.obj == old:
+            self.obj = new
+        for i, arg in enumerate(self.args):
+            if arg == old:
+                self.args[i] = new
 
 
 @dataclass(slots=True)
-class GetAttr(ast.Node):
+class CallMethod(Expr):
     '''
-    Get an attribute from an object.
+    Call an method of an object.
 
     e.g.
       app = App()
-      app.time      # => GetAttr(obj=app, attr='time')
+      app.time()      # => CallAttr(app, attr='time')
     '''
-    obj: ast.Expr
-    attr: str
+    obj: CallParam  # The object to call
+    method: Function
+    args: Tuple[CallParam, ...]
 
-    def __str__(self):
-        return f"{self.obj}.{self.attr}"
+    def __post_init__(self):
+        self._refresh_users()
+
+    def _refresh_users(self):
+        self.users.clear()
+        self.obj.add_user(self)
+        for arg in self.args:
+            arg.add_user(self)
+
+    def replace_child(self, old, new):
+        if self.obj == old:
+            self.obj = new
+        for i, arg in enumerate(self.args):
+            if arg == old:
+                self.args[i] = new

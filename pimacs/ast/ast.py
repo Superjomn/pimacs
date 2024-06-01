@@ -1,6 +1,45 @@
 """
 The ast module contains the AST nodes for Pimacs syntax.
 """
+
+__all__ = ['Node',
+           'Expr',
+           'Stmt',
+           'FileName',
+           'PlainCode',
+           'Location',
+           'VarDecl',
+           'VarRef',
+           'Arg',
+           'Block',
+           'File',
+           'Function',
+           'If',
+           'While',
+           'For',
+           'Constant',
+           'BinaryOperator',
+           'BinaryOp',
+           'UnaryOperator',
+           'UnaryOp',
+           'CallParam',
+           'Call',
+           'Return',
+           'Decorator',
+           'Assign',
+           'Attribute',
+           'Class',
+           'DocString',
+           'Select',
+           'Guard',
+           'Unresolved',
+           'UVarRef',
+           'UAttr',
+           'UClass',
+           'UFunction',
+           'LispList',
+           ]
+
 import os
 import weakref
 from abc import ABC, abstractmethod
@@ -34,9 +73,9 @@ class Node(ABC):
     def replace_all_uses_with(self, new: "Node"):
         for user in self.users:
             user.replace_child(self, new)
-        self.users.clear()
         for user in self.users:
             new.add_user(user)
+        self.users.clear()
 
     @contextmanager
     def write_guard(self):
@@ -236,8 +275,12 @@ class Block(Stmt):
     # If get a return value, return_type is set
     return_type: List[Type] = field(default_factory=list, hash=False)
 
+    # TODO: Does the container node need to refresh users?
     def _refresh_users(self):
-        pass  # container node, no need to refresh users
+        # For the Call node, we need Block to be its user to replace a Call without a return value
+        # e.g. Block(Call("some_fn")) -> Block(Call("other fn")), the Call node should have at least one user for replacing
+        for stmt in self.stmts:
+            stmt.add_user(self)
 
     def replace_child(self, old, new):
         with self.write_guard():
@@ -253,15 +296,20 @@ class File(Stmt):
     stmts: List[Stmt]
 
     def _refresh_users(self):
-        pass
+        self.users.clear()
+        for stmt in self.stmts:
+            stmt.add_user(self)
+
+    def __post_init__(self):
+        self._refresh_users()
 
     def replace_child(self, old, new):
+        stmts = list(self.stmts)
         with self.write_guard():
-            stmts = list(self.stmts)
             for i, stmt in enumerate(stmts):
                 if stmt == old:
                     stmts[i] = new
-            self.stmts = tuple(stmts)
+        self.stmts = list(stmts)  # TODO: make stmts always a list
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -806,16 +854,20 @@ def make_const(value: int | float | str | bool | None, loc: Location) -> Constan
     return Constant(value=value, loc=loc)
 
 
+@dataclass
+class Unresolved:
+    scope: Any = field(default=None, init=False, repr=False, hash=False)
+    resolved: bool = field(default=False, init=False, repr=False, hash=False)
+
+    def __post_init__(self):
+        self.resolved = False
+
+
 @dataclass(slots=True, unsafe_hash=True)
-class UVarRef(Expr):
+class UVarRef(Unresolved, Expr):
     ''' Unresolved variable reference, such as `a` in `a.b`. '''
     name: str
     target_type: Type = field(default_factory=lambda: _type.Unk)
-
-    resolved: bool = field(default=False, init=False, hash=False, repr=False)
-
-    def __post_init__(self):
-        self.scope = None
 
     def get_type(self) -> Type:
         return self.target_type
@@ -828,20 +880,16 @@ class UVarRef(Expr):
 
 
 @dataclass(slots=True, unsafe_hash=True)
-class UAttr(Expr):
+class UAttr(Unresolved, Expr):
     ''' Unresolved attribute, such as `a.b` in `a.b.c` '''
     value: VarRef | UVarRef
     attr: str
-
-    resolved: bool = field(default=False, init=False, hash=False)
 
     def _refresh_users(self):
         self.value.add_user(self)
 
     def __post_init__(self):
         self._refresh_users()
-
-        self.scope = None
 
         self.type = _type.Unk
 
@@ -852,11 +900,9 @@ class UAttr(Expr):
 
 
 @dataclass(slots=True, unsafe_hash=True)
-class UClass(Stmt):
+class UClass(Unresolved, Stmt):
     ''' Unresolved class, such as `A` in `A.b`. '''
     name: str
-
-    resolved: bool = field(default=False, init=False, hash=False)
 
     def _refresh_users(self):
         pass
@@ -864,26 +910,18 @@ class UClass(Stmt):
     def replace_child(self, old, new):
         pass
 
-    def __post_init__(self):
-        self.scope = None
-
 
 @dataclass(slots=True, unsafe_hash=True)
-class UFunction(Stmt):
+class UFunction(Unresolved, Stmt):
     ''' Unresolved function, such as `f` in `f()`. '''
     name: str
     return_type: Type = _type.Unk
 
-    resolved: bool = field(default=False, init=False, hash=False)
-
     def _refresh_users(self):
         pass
 
     def replace_child(self, old, new):
         pass
-
-    def __post_init__(self):
-        self.scope = None
 
 
 # TODO: To be deprecated
