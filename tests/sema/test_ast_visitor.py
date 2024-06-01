@@ -5,8 +5,8 @@ from code_snippets import snippets
 
 import pimacs.ast.ast as ir
 from pimacs import BUILTIN_SOURCE_ROOT, SOURCE_ROOT
+from pimacs.ast.ast_visitor import IRPrinter, IRVisitor
 from pimacs.ast.parser import get_lark_parser, get_parser
-from pimacs.sema.ast_visitor import IRPrinter, IRVisitor
 from pimacs.transpiler.phases import parse_ast, perform_sema
 
 

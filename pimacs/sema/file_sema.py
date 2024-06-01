@@ -5,18 +5,19 @@ import logging
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
 from pimacs.ast.utils import WeakSet
 from pimacs.logger import logger
-from pimacs.sema.ast_visitor import IRMutator, IRVisitor
 from pimacs.sema.func import FuncOverloads
 
-from .ast import AnalyzedClass
+from . import ast
+from .ast import AnalyzedClass, CallMethod, MakeObject, UCallMethod
+from .ast_visitor import IRMutator, IRVisitor
 from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
-from .type_inference import TypeInference
+from .func import FuncSig
+from .type_infer import TypeInfer, is_unk
 from .utils import ClassId, FuncSymbol, ModuleId, bcolors, print_colored
 
 
@@ -59,9 +60,11 @@ class FileSema(IRMutator):
         self.ctx = ctx
         self._succeeded = True
 
-        self._type_inference = TypeInference(ctx)
+        self._type_infer = TypeInfer(ctx)
 
         self._cur_class: ast.Class | None = None
+        self._cur_file: ast.File | None = None
+
         # holds all the unresolved symbol instances
         self._unresolved_symbols: WeakSet = WeakSet()
         # The newly resolved symbols those need to be type-inferred
@@ -70,9 +73,13 @@ class FileSema(IRMutator):
     def __call__(self, node: ast.Node):
         tree = self.visit(node)
         # First turn of type inference
-        self._type_inference(tree)
+        self._type_infer(tree)
 
-        self.bind_unresolved_symbols()
+        # Try to bind the unresolved symbols repeatedly
+        remaining = self.bind_unresolved_symbols()
+        while remaining > 0 and self.bind_unresolved_symbols() < remaining:
+            remaining = self.bind_unresolved_symbols()
+
         # TODO: the root might be re-bound
         return tree
 
@@ -95,7 +102,7 @@ class FileSema(IRMutator):
         self._succeeded = False
 
     def collect_unresolved(self, node: ast.Node):
-        logging.debug(f"Collect unresolved symbol {node}")
+        logger.debug(f"Collect unresolved symbol {node}")
         assert node.resolved is False, f"{node} is already resolved"
         # bind scope for second-turn name binding
         node.scope = self.sym_tbl.current_scope  # type: ignore
@@ -108,8 +115,13 @@ class FileSema(IRMutator):
 
     def infer_type(self):
         for node in self._newly_resolved_symbols:
-            self._type_inference(node, force_update=True)
+            self._type_infer(node, forward_push=False)
         self._newly_resolved_symbols.clear()
+
+    def visit_File(self, node: ast.File):
+        self._cur_file = node
+        super().visit_File(node)
+        return node
 
     def visit_UVarRef(self, node: ast.UVarRef):
         node = super().visit_UVarRef(node)
@@ -305,47 +317,153 @@ class FileSema(IRMutator):
     def visit_Class(self, the_node: ast.Class):
         node = AnalyzedClass.create(the_node)  # type: ignore
         with node.auto_update_symbols():
-            self._cur_class = node
             if self.sym_tbl.current_scope.kind is not ScopeKind.Global:
                 self.report_error(
                     node, f"Class should be declared in the global scope")
 
             with self.sym_tbl.scope_guard(kind=ScopeKind.Class):
-                node = super().visit_Class(node)
-                # self.sym_tbl.print_summary()
+                with self.class_scope_guard(node):
+                    node = super().visit_Class(node)
 
             symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
             if self.sym_tbl.contains_locally(symbol):
                 self.report_error(node, f"Class {node.name} already exists")
 
             node = self.sym_tbl.insert(symbol, node)
-            return self.verify_Class(node)
+
+        # Add constructors to the class into the global scope
+        self._add_class_constructors(node)
+
+        return self.verify_Class(node)
+
+    def _add_class_constructors(self, node: AnalyzedClass):
+        ''' Add constructor functions to the class. '''
+        symbol = FuncSymbol("__init__")
+        overloads = node.symbols.get(symbol)
+
+        assert self._cur_file
+        if overloads is None:
+            # add a default constructor
+            fn = self._get_class_default_constructor(node)
+
+            # append to the file for sema later
+            self._cur_file.stmts.append(fn)
+        else:
+            # add constructor for each __init__ method
+            for init_fn in overloads:
+                fn = self._get_class_constructor(node.name, init_fn)
+                symbol = FuncSymbol(fn.name)
+                if overloads := self.sym_tbl.global_scope.get(symbol):
+                    if overloads.lookup(FuncSig.create(fn)):
+                        self.report_error(
+                            node, f"Constructor {fn.name} already exists")
+
+                # append to the file for sema later
+                self._cur_file.stmts.append(fn)
+
+    def _add_class_methods(self, node: AnalyzedClass):
+        ''' Add method functions to the class. '''
+        members = node.symbols.get(Symbol.Kind.Member)
+        assert self._cur_file
+        for member in members:
+            if isinstance(member, ast.Function) and member.name != "__init__":
+                method = self._add_method(node.name, member)
+                symbol = FuncSymbol(
+                    method.name, annotation=ast.Function.Annotation.Class_method)
+                if overloads := self.sym_tbl.global_scope.get(symbol):
+                    if overloads.lookup(FuncSig.create(method)):
+                        self.report_error(
+                            node, f"Class method {method.name} duplicates")
+
+                # append to the file for sema later
+                self._cur_file.stmts.append(method)
+
+    def _get_class_default_constructor(self, node: AnalyzedClass) -> ast.Function:
+        '''
+        Create a default constructor for the class.
+        '''
+        members = node.symbols.get(Symbol.Kind.Member)
+        args = []
+        for member in members:
+            arg = ast.Arg(name=member.name, loc=member.loc)
+            arg.type = member.type
+            if member.init:
+                arg.default = member.init
+            args.append(arg)
+
+        return_type = _ty.make_customed(node.name, None)
+
+        make_obj_expr = MakeObject(class_name=node.name, loc=node.loc)
+        make_obj_expr.type = return_type
+
+        return_stmt = ast.Return(value=make_obj_expr, loc=node.loc)
+
+        body = ast.Block(stmts=(return_stmt,
+                                ), loc=node.loc)
+        fn = ast.Function(name=node.name, args=tuple(args),
+                          body=body, loc=node.loc, return_type=return_type)
+        fn.annotation = ast.Function.Annotation.Class_constructor
+        return fn
+
+    def _get_class_constructor(self, class_name: str, init_fn: ast.Function):
+        '''
+        Create a constructor function for the class.
+        '''
+        assert init_fn.args[0].name == "self"
+        args = init_fn.args[1:]
+        body = init_fn.body
+        return_type = init_fn.args[0].type
+        fn = ast.Function(name=class_name, args=tuple(args), body=body, loc=init_fn.loc,
+                          return_type=return_type)
+        fn.annotation = ast.Function.Annotation.Class_constructor
+        return fn
+
+    def _add_method(self, class_name: str, method: ast.Function):
+        '''
+        Create a method function for the class in the global scope.
+        The method will guard with annotation `Class_method`, and the first argument should be `self`.
+        '''
+        assert method.args[0].name == "self"
+        args = method.args
+        body = method.body
+        return_type = method.return_type
+        fn = ast.Function(name=method.name, args=tuple(args), body=body, loc=method.loc,
+                          return_type=return_type)
+        fn.annotation = ast.Function.Annotation.Class_method
+        return fn
 
     def verify_Class(self, node: AnalyzedClass) -> ast.Class:
         if node.sema_failed:
             return node
         return node
 
-    def resolve_class_body(self, node: AnalyzedClass):
-        '''
-        Resolve the member-reference in the class body.
-        '''
-        for func in filter(lambda x: isinstance(x, ast.Function), node.body):
-            pass
-
     def visit_Call(self, node: ast.Call):
         node = super().visit_Call(node)
-        func_name = node.func
-        if isinstance(func_name, ast.UFunction):
-            func_name = func_name.name  # type: ignore
-        assert isinstance(func_name, str)
 
-        if isinstance(node.func, ast.UFunction):
-            func_overloads = self.sym_tbl.lookup(FuncSymbol(func_name))
-            if func_overloads and (func := func_overloads.lookup(node.args)):
-                node.func = func  # bind the function
-            else:
-                self.collect_unresolved(node.func)
+        func = node.func
+
+        match type(func):
+            case ast.UFunction:
+                func_name = func.name  # type: ignore
+                func_overloads = self.sym_tbl.lookup(FuncSymbol(func_name))
+                if func_overloads and (func := func_overloads.lookup(node.args)):
+                    node.func = func  # bind the function
+                    self.collect_newly_resolved(node)
+                else:
+                    self.collect_unresolved(node.func)  # type: ignore
+
+            case ast.UAttr:
+                new_node = UCallMethod(
+                    obj=func.value, attr=func.attr,  # type: ignore
+                    args=node.args, loc=func.loc)  # type: ignore
+                logger.debug(f"ast.UAttr users: {node.users}")
+                node.replace_all_uses_with(new_node)
+                logger.debug(f"ast.UCallAttr users: {new_node.users}")
+                self.collect_unresolved(new_node)
+                return new_node
+
+            case _:
+                assert isinstance(func, str), f"call: {node}"
 
         # TODO: check if the function is a member function
         # TODO: check if the function is a class
@@ -388,11 +506,28 @@ class FileSema(IRMutator):
         node.return_type = list(return_types) if return_types else [_ty.Nil]
         return node
 
+    @contextmanager
+    def class_scope_guard(self, class_node: ast.Class):
+        self._cur_class = class_node
+        yield
+        self._cur_class = None
+
     def visit_Arg(self, node: ast.Arg):
         node = super().visit_Arg(node)
         assert (
             self.sym_tbl.current_scope.kind is ScopeKind.Func
         ), f"{node.loc}\nArgDecl should be in a function, but get {self.sym_tbl.current_scope.kind}"
+
+        if self._cur_class:
+            if node.name == "self":
+                node.kind = ast.Arg.Kind.self_placeholder
+                if not is_unk(node.type):
+                    self.report_error(node, f"self should not have a type")
+            elif node.name == "cls":
+                node.kind = ast.Arg.Kind.cls_placeholder
+                if not is_unk(node.type):
+                    self.report_error(node, f"self should not have a type")
+
         symbol = Symbol(name=node.name, kind=Symbol.Kind.Arg)
         if self.sym_tbl.contains_locally(symbol):
             self.report_error(node, f"Argument {node.name} already exists")
@@ -415,6 +550,15 @@ class FileSema(IRMutator):
                         f"Cannot assign {node.default.get_type()} to {
                             node.type}",
                     )
+        elif node.is_self_placeholder:
+            assert self._cur_class
+            if not is_unk(node.type):
+                self.report_error(
+                    node,
+                    f"{node.loc}\nself should not have a type",
+                )
+            else:
+                node.type = _ty.make_customed(self._cur_class.name, None)
         return node
 
     def visit_BinaryOp(self, node: ast.BinaryOp):
@@ -508,6 +652,14 @@ class FileSema(IRMutator):
             return node
         return node
 
+    def visit_MakeObject(self, node: MakeObject):
+        return node
+
+    def visit_UAttr(self, node: ast.UAttr):
+        node = super().visit_UAttr(node)
+        self.collect_unresolved(node)
+        return node
+
     @staticmethod
     def get_true_var(
         node: ast.VarDecl | ast.VarRef,
@@ -520,14 +672,20 @@ class FileSema(IRMutator):
 
         return node
 
-    def bind_unresolved_symbols(self):
-        logging.debug(f"unresolved symbols: {self._unresolved_symbols}")
+    def bind_unresolved_symbols(self) -> int:
+        '''
+        Try to bind the unresolved symbols.
+        Return the number of resolved symbols.
+        '''
+        logger.debug(f"unresolved symbols: {self._unresolved_symbols}")
         resolved = []
         for node in self._unresolved_symbols:
             if self.bind_unresolved(node):
                 resolved.append(node)
         for node in resolved:
             self._unresolved_symbols.remove(node)
+
+        return len(resolved)
 
     utypes = ast.UVarRef | ast.UAttr | ast.UFunction | ast.UClass
 
@@ -537,9 +695,13 @@ class FileSema(IRMutator):
 
         Return True if the symbol is resolved.
         '''
+        logger.debug(f"Try to bind unresolved symbol {node}")
+        if node.resolved:
+            return True
+
         match type(node):
             case ast.UFunction:
-                logging.debug(f"Bind unresolved function {node}")
+                logger.debug(f"Bind unresolved function {node}")
                 func_overloads = node.scope.get(
                     FuncSymbol(node.name))  # type: ignore
                 if func_overloads is None:
@@ -550,7 +712,7 @@ class FileSema(IRMutator):
                 if func := func_overloads.lookup(call.args):
                     node.replace_all_uses_with(func)
 
-                    self._type_inference(call, force_update=True)
+                    self._type_infer(func, forward_push=False)
                     return True
                 return False
 
@@ -561,14 +723,65 @@ class FileSema(IRMutator):
                 if sym := node.scope.lookup(symbol):
                     node.replace_all_uses_with(sym)
 
-                    self._type_inference(sym, force_update=True)
+                    self._type_infer(sym, forward_push=False)
                     return True
                 return False
 
             case ast.UAttr:
-                # TODO: resolve the attribute
-                logger.debug(f"TODO Bind unresolved attribute {node}")
-                return False
+                attr_name = node.attr  # type: ignore
+                if node.value.get_type() in (None, _ty.Unk):  # type: ignore
+                    return False
+
+                class_symbol = Symbol(
+                    name=node.value.get_type().name, kind=Symbol.Kind.Class)  # type: ignore
+                class_node = self.sym_tbl.global_scope.get(class_symbol)
+
+                member = class_node.symbols.get(
+                    Symbol(name=attr_name, kind=Symbol.Kind.Member))
+                if not member:
+                    self.report_error(node, f"Attribute {attr_name} not found")
+                    return False
+
+                new_node = ast.Attribute(
+                    value=node.value, attr=attr_name, loc=node.loc)  # type: ignore
+                new_node.type = member.type
+                node.replace_all_uses_with(new_node)
+
+                self._type_infer(new_node, forward_push=False)
+                return True
+
+            case ast.UCallMethod:
+                if node.obj.get_type() in (None, _ty.Unk):
+                    logger.debug(f"Cannot resolve {node.obj}")
+                    return False
+
+                class_symbol = Symbol(
+                    name=node.obj.get_type().name, kind=Symbol.Kind.Class)
+                class_node = self.sym_tbl.global_scope.get(class_symbol)
+                assert class_node
+
+                func_symbol = FuncSymbol(node.attr)
+                methods: Optional[FuncOverloads] = class_node.symbols.get(
+                    func_symbol)
+                if not methods:
+                    self.report_error(node, f"No method called {
+                                      node.attr} in class {node.obj.get_type()}")
+                    return False
+
+                args = tuple([node.obj] + list(node.args))  # self + args
+                if method := methods.lookup(args):
+                    logger.debug(f"UCallAttr found method: {method}")
+                    new_node = CallMethod(
+                        obj=node.obj, method=method, args=node.args, loc=node.loc)
+                    new_node.type = method.return_type
+
+                    node.replace_all_uses_with(new_node)
+                    self._type_infer(new_node, forward_push=False)
+                    self.collect_newly_resolved(new_node)
+                    return True
+                else:
+                    self.report_error(node, f"Method {node.attr} not found")
+                    return False
 
             case ast.UClass:
                 # TODO: resolve the class

@@ -43,8 +43,8 @@ class Fruit:
     var -weight: Int
     var -name: Str
 
-    # CHECK: def __init__ (self, name :Str, size :Str) -> nil:
-    def __init__(self, name:Str, size:Str):
+    # CHECK: def __init__ (self :Fruit, name :Str, size :Int) -> nil:
+    def __init__(self, name:Str, size:Int):
         # CHECK-NEXT: self.-name = name
         self.-name = name
         # CHECK-NEXT: self.-size = size
@@ -58,8 +58,7 @@ class Fruit:
     def size(self) -> Int:
         return self.-size
 
-# CHECK: let apple :Float = Fruit("Apple", 12)
-let apple :Float = Fruit("Apple", 12)
+let apple = Fruit("Apple", 12)
 
 @pub
 def pub-foo():

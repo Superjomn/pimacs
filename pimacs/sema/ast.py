@@ -1,25 +1,26 @@
 '''
-This file contains several additional AST node for semantic analysis.
+This file contains several additional AST nodes dedicated to semantic analysis.
 '''
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import *
 
-import pimacs.ast.ast as ast
+import pimacs.ast.type as ty
+from pimacs.ast.ast import *
 
 from .func import FuncOverloads, FuncSymbol
+from .symbol_table import Scope
 from .utils import Symbol
 
 
 @dataclass(slots=True, unsafe_hash=True)
-class AnalyzedClass(ast.Class):
+class AnalyzedClass(Class):
     # symbols hold all the members and methods of the class
     # It should be updated once the class is modified
-    symbols: Dict[Symbol, ast.VarDecl | FuncOverloads] = field(
-        default_factory=dict, init=False, hash=False)
+    symbols: Scope = field(default_factory=Scope, init=False, hash=False)
 
     @classmethod
-    def create(cls, node: ast.Class) -> "AnalyzedClass":
+    def create(cls, node: Class) -> "AnalyzedClass":
         return cls(
             name=node.name,
             body=node.body,
@@ -32,28 +33,92 @@ class AnalyzedClass(ast.Class):
         self.update_symbols()
 
     def update_symbols(self):
-        self.symbols = {}
+        self.symbols = Scope()
         for node in self.body:
-            if isinstance(node, ast.VarDecl):
+            if isinstance(node, VarDecl):
                 symbol = Symbol(name=node.name, kind=Symbol.Kind.Member)
-                self.symbols[symbol] = node
-            elif isinstance(node, ast.Function):
-                symbol = FuncSymbol(node.name)
-                self.symbols.get(symbol, FuncOverloads(
-                    symbol=symbol)).insert(node)
+                self.symbols.add(symbol, node)
+            elif isinstance(node, Function):
+                self.symbols.add(FuncSymbol(node.name), node)
 
 
 @dataclass(slots=True)
-class GetAttr(ast.Node):
+class MakeObject(Expr):
     '''
-    Get an attribute from an object.
+    Create an object from a class.
+
+    e.g.
+      App()      # => MakeObject(class_name='App')
+    '''
+    class_name: str
+
+    def _refresh_users(self):
+        pass
+
+    def replace_child(self, old, new):
+        pass
+
+    def __str__(self):
+        return f"{self.class_name}()"
+
+
+@dataclass
+class UCallMethod(Unresolved, Expr):
+    '''
+    Call a method of an object.
+
+    It will be replaced to a actual method call in the Sema.
 
     e.g.
       app = App()
-      app.time      # => GetAttr(obj=app, attr='time')
+      app.time()      # => UCallAttr(app, attr='time')
     '''
-    obj: ast.Expr
-    attr: str
+    obj: Optional[CallParam] = None
+    attr: str = ""
+    args: Tuple[CallParam, ...] = field(default_factory=tuple)
 
-    def __str__(self):
-        return f"{self.obj}.{self.attr}"
+    def __post_init__(self):
+        self._refresh_users()
+
+    def _refresh_users(self):
+        if self.obj:
+            self.obj.add_user(self)
+        for arg in self.args:
+            arg.add_user(self)
+
+    def replace_child(self, old, new):
+        if self.obj == old:
+            self.obj = new
+        for i, arg in enumerate(self.args):
+            if arg == old:
+                self.args[i] = new
+
+
+@dataclass(slots=True)
+class CallMethod(Expr):
+    '''
+    Call an method of an object.
+
+    e.g.
+      app = App()
+      app.time()      # => CallAttr(app, attr='time')
+    '''
+    obj: CallParam  # The object to call
+    method: Function
+    args: Tuple[CallParam, ...]
+
+    def __post_init__(self):
+        self._refresh_users()
+
+    def _refresh_users(self):
+        self.users.clear()
+        self.obj.add_user(self)
+        for arg in self.args:
+            arg.add_user(self)
+
+    def replace_child(self, old, new):
+        if self.obj == old:
+            self.obj = new
+        for i, arg in enumerate(self.args):
+            if arg == old:
+                self.args[i] = new

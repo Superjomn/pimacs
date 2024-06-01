@@ -13,7 +13,7 @@ from lark.lexer import Token
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _type
-from pimacs.sema.ast_visitor import IRMutator, IRVisitor
+from pimacs.ast.ast_visitor import IRMutator, IRVisitor
 
 
 def get_lark_parser():
@@ -193,7 +193,10 @@ class PimacsTransformer(Transformer):
             name = items[0].name
             loc = items[0].loc
         elif isinstance(items[0], ast.UAttr):
-            return ast.Call(func=items[0], args=tuple(items[1]), loc=items[0].loc)
+            args = list(filter(lambda x: x is not None, items[1:]))
+            if args and isinstance(args[0], list):
+                args = args[0]
+            return ast.Call(func=items[0], args=tuple(args), loc=items[0].loc)
         else:
             name = items[0].value
             loc = self._get_loc(items[0])

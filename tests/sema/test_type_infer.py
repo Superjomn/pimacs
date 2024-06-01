@@ -4,13 +4,13 @@ import pytest
 
 import pimacs.ast.type as _ty
 from pimacs.sema import SemaError
-from pimacs.sema.type_inference import *
+from pimacs.sema.type_infer import *
 from pimacs.transpiler.phases import *
 
 
 def test_VarDecl():
     ctx = ModuleContext()
-    ti = TypeInference(ctx)
+    ti = TypeInfer(ctx)
     node = ast.VarDecl(name='a', init=ast.Constant(
         value=1, loc=None), loc=None)
     ti(node)
@@ -29,7 +29,7 @@ var c = b
     tree = parse_ast(code.rstrip())
     tree = perform_sema(ctx, tree)
 
-    type_inferene = TypeInference(ctx)
+    type_inferene = TypeInfer(ctx)
     type_inferene(tree)
     pprint(tree)
 
@@ -52,7 +52,7 @@ def foo() -> Int:
     tree = perform_sema(ctx, tree)
     pprint(tree)
 
-    type_inferene = TypeInference(ctx)
+    type_inferene = TypeInfer(ctx)
     type_inferene(tree)
     pprint(tree)
 

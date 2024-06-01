@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Union
 
+from multimethod import multimethod
+
 import pimacs.ast.type as _ty
 from pimacs.ast.ast import Call, CallParam, Expr, Function
 from pimacs.ast.type import Type as _type
@@ -59,7 +61,7 @@ class FuncOverloads:
     """FuncOverloads represents the functions with the same name but different signatures.
     It could be records in the symbol table, and it could be scoped."""
 
-    symbol: FuncSymbol
+    symbol: Symbol
     # funcs with the same name
     funcs: Dict[FuncSig, Function] = field(default_factory=dict)
 
@@ -67,18 +69,27 @@ class FuncOverloads:
     def name(self) -> str:
         return self.symbol.name
 
-    def lookup(self, args: List[CallParam | Expr]) -> Optional[Function]:
+    @multimethod
+    def lookup(self, args: tuple) -> Optional[Function]:
         """Find the function that matches the arguments"""
         for sig in self.funcs:
             if sig.match_call(args):
                 return self.funcs[sig]
         return None
 
+    @multimethod  # type: ignore
+    def lookup(self, sig: FuncSig) -> Optional[Function]:
+        """Find the function that matches the signature"""
+        return self.funcs.get(sig, None)
+
     def insert(self, func: Function):
         sig = FuncSig.create(func)
         if sig in self.funcs:
             raise FuncDuplicationError(f"Function {func.name} already exists")
         self.funcs[sig] = func
+
+    def __iter__(self):
+        return iter(self.funcs.values())
 
     def __add__(self, other: "FuncOverloads") -> "FuncOverloads":
         assert self.symbol == other.symbol
@@ -96,7 +107,7 @@ class FuncOverloads:
     def __len__(self) -> int:
         return len(self.funcs)
 
-    def __iter__(self):
+    def __iter__(self):  # type: ignore
         return iter(self.funcs.values())
 
     def __repr__(self):
