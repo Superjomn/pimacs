@@ -270,7 +270,7 @@ class IRMutator:
         stmts = []
         for i, stmt in enumerate(node.stmts):
             stmts.append(self.visit(stmt))
-        node.stmts = tuple(stmts)
+        node.stmts = tuple(stmts)  # type: ignore
 
         return node
 

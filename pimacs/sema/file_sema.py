@@ -551,6 +551,7 @@ class FileSema(IRMutator):
                             node.type}",
                     )
         elif node.is_self_placeholder:
+            assert self._cur_class
             if not is_unk(node.type):
                 self.report_error(
                     node,
@@ -704,6 +705,7 @@ class FileSema(IRMutator):
                 func_overloads = node.scope.get(
                     FuncSymbol(node.name))  # type: ignore
                 if func_overloads is None:
+                    # type: ignore
                     logger.debug(f"Function {node.name} not found")
                     return False  # remain unresolved
                 assert len(node.users) == 1  # only one caller
@@ -729,11 +731,11 @@ class FileSema(IRMutator):
 
             case ast.UAttr:
                 attr_name = node.attr  # type: ignore
-                if node.value.get_type() in (None, _ty.Unk):
+                if node.value.get_type() in (None, _ty.Unk):  # type: ignore
                     return False
 
                 class_symbol = Symbol(
-                    name=node.value.get_type().name, kind=Symbol.Kind.Class)
+                    name=node.value.get_type().name, kind=Symbol.Kind.Class)  # type: ignore
                 class_node = self.sym_tbl.global_scope.get(class_symbol)
 
                 member = class_node.symbols.get(

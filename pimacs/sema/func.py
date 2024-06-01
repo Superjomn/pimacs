@@ -107,7 +107,7 @@ class FuncOverloads:
     def __len__(self) -> int:
         return len(self.funcs)
 
-    def __iter__(self):
+    def __iter__(self):  # type: ignore
         return iter(self.funcs.values())
 
     def __repr__(self):

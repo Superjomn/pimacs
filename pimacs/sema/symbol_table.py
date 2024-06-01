@@ -30,7 +30,7 @@ class Scope:
     def get(self, symbol: Symbol) -> SymbolItem | None:
         return self._get_symbol(symbol)
 
-    @multimethod
+    @multimethod  # type: ignore
     def get(self, kind: Symbol.Kind) -> List[SymbolItem]:
         return [item for symbol, item in self.data.items() if symbol.kind == kind]
 
