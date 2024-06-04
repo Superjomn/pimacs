@@ -1,37 +1,23 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 class Type:
-    _instances: Dict[tuple, "Type"] = {}
+    _instances = {}
 
-    def __new__(cls, name, parent=None, params: Optional[List["Type"]] = None, is_concrete=True):
-        key = (name, parent, tuple(params) if params else None, is_concrete)
+    def __new__(cls, *args, **kwargs):
+        key = (cls, args, tuple(kwargs.items()))
         if key not in cls._instances:
-            instance = super().__new__(cls)
-            cls._instances[key] = instance
+            cls._instances[key] = super().__new__(cls)
         return cls._instances[key]
 
-    def __init__(self, name, parent=None, params: Optional[List["Type"]] = None, is_concrete=True):
-        if not hasattr(self, 'initialized'):  # Prevent reinitialization
-            self.name = name
-            self.params = params or []
-            self.parent = parent
-            self._is_concrete: bool = is_concrete
-            self.initialized = True
-
-    def __repr__(self):
-        return f"{self.name}[{', '.join(repr(p) for p in self.params)}]"
-
-    def compatible_with(self, other):
-        ''' Check if self is a subtype of other '''
-        current = self
-        while current is not None:
-            if current == other:
-                return True
-            current = current.parent
-        return False
+    def __init__(self, name, parent=None, params: Optional[Tuple["Type", ...]] = None, is_concrete=True):
+        self.name = name
+        self.params = params or tuple()
+        self.parent = parent
+        self._is_concrete = is_concrete
+        self._initialized = True
 
     @property
     def is_concrete(self) -> bool:
@@ -40,16 +26,16 @@ class Type:
 
 class BasicType(Type):
     def __init__(self, name, parent=None):
-        super().__init__(name, parent, is_concrete=True)
-
-    @property
-    def is_concrete(self) -> bool:
-        return True
+        super().__init__(name=name, parent=parent, is_concrete=True)
 
 
 class CompositeType(Type):
     def __init__(self, name, parent=None, params: Optional[List[Type]] = None):
         super().__init__(name, parent, params=params)
+
+    @property
+    def is_concrete(self):
+        return all(param.is_concrete for param in self.params)
 
 
 class PlaceholderType(Type):
@@ -84,7 +70,7 @@ class FunctionType(Type):
 
 class NumberType(BasicType):
     def __init__(self, parent=None):
-        super().__init__("Number", parent=parent)
+        super().__init__(name="Number", parent=parent)
 
 
 class IntType(BasicType):
