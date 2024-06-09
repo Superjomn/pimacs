@@ -31,7 +31,7 @@ def test_func_sig():
     sig = FuncSig.create(func)
     assert sig.symbol.name == "foo"
     assert not sig.input_types
-    assert sig.output_type == _ty.Nil
+    assert sig.output_type == _ty.Void
 
     # foo(x: Int) -> nil
     func = Function(
@@ -49,7 +49,7 @@ def test_func_sig():
             _ty.Int,
         ),
     )
-    assert sig.output_type == _ty.Nil
+    assert sig.output_type == _ty.Void
 
     # foo(x: Int, y: Int) -> Int
     func = Function(

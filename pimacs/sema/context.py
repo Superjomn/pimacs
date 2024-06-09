@@ -67,6 +67,7 @@ class ModuleContext:
         return self._name
 
 
+'''
 class TypeSystem(_ty.TypeSystemBase):
     """
     The TypeSystem to handle the types and classes.
@@ -117,3 +118,4 @@ class TypeSystem(_ty.TypeSystemBase):
         """
         self.type_place_holder_counter += 1
         return self.get_type_placeholder(f"__T{self.type_place_holder_counter}")
+'''

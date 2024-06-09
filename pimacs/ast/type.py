@@ -1,217 +1,186 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 
-class TypeId(Enum):
-    INT = "Int"
-    FLOAT = "Float"
-    BOOL = "Bool"
-    STRING = "Str"
-    Unk = "Unk"
+class Type:
+    _instances: Dict[tuple, "Type"] = {}
 
-    # coumpound types
-    Set = "Set"
-    Dict = "Dict"
-    List = "List"
+    def __new__(cls, *args, **kwargs):
+        key = (cls, args, tuple(kwargs.items()))
+        if key not in cls._instances:
+            cls._instances[key] = super().__new__(cls)
+        return cls._instances[key]
 
-    NIL = "nil"
-
-    CUSTOMED = "Customed"
-
-
-@dataclass(slots=True)
-class TypeBase(ABC):
-    type_id: TypeId
-    name: Optional[str] = None
-
-    @property
-    @abstractmethod
-    def is_concrete(self) -> bool:
-        # the type is concrete
-        # i.e. a TypeTemplate is not concrete, such as List[T]
-        return True
-
-    def __str__(self):
-        return self.name or self.type_id.value
-
-
-@dataclass(slots=True, unsafe_hash=True)
-class Type(TypeBase):
-    inner_types: Tuple["Type", ...] = field(default_factory=tuple)
-    is_optional: bool = False  # Optional type such as Int?
+    def __init__(self, name, parent=None, params: Optional[Tuple["Type", ...]] = None, is_concrete=True):
+        self.name = name
+        self.params = params or tuple()
+        self.parent = parent
+        self._is_concrete = is_concrete
+        self._initialized = True
 
     @property
     def is_concrete(self) -> bool:
-        return all(t.is_concrete for t in self.inner_types)
+        return self._is_concrete
 
-    def is_subtype(self, other: "Type") -> bool:
+    def can_accept(self, other: "Type") -> bool:
         if self == other:
             return True
-        elif self == Nil and other.is_optional:
-            return True
+        if isinstance(other, Type) and other.parent is not None:
+            return self.can_accept(other.parent)
         return False
 
-    def __post_init__(self):
-        if self.is_optional:
-            assert self.type_id != TypeId.NIL, "nil type cannot be optional"
-        if self.type_id in (TypeId.Set, TypeId.List):
-            assert (
-                len(self.inner_types) == 1
-            ), f"Set/List type must have exactly one inner type, got {len(self.inner_types)}"
-        if self.type_id == TypeId.Dict:
-            assert (
-                len(self.inner_types) == 2
-            ), f"Dict type must have exactly two inner types, got {len(self.inner_types)}"
-        if self.type_id == TypeId.NIL:
-            assert not self.inner_types, "nil type cannot have inner types"
-        if self.type_id == TypeId.CUSTOMED:
-            assert self.name is not None, "Customed type must have a name"
-        if self.type_id == TypeId.Unk:
-            assert not self.inner_types, "Unk type cannot have inner types"
+    @classmethod
+    def get_primitive(cls, name) -> Optional["Type"]:
+        if name == "Int":
+            return Int
+        elif name == "Float":
+            return Float
+        elif name == "Bool":
+            return Bool
+        elif name == "Str":
+            return Str
+        return None
 
-    def __str__(self) -> str:
-        if self.type_id is TypeId.NIL:
-            return "nil"
-        elif self.type_id is TypeId.Set:
-            return "{%s}" % self.inner_types[0]
-        elif self.type_id is TypeId.List:
-            return "[%s]" % self.inner_types[0]
-        elif self.type_id is TypeId.Dict:
-            return "{%s: %s}" % self.inner_types
-        elif self.type_id is TypeId.Unk:
-            return "Unk"
-        elif self.type_id is TypeId.INT:
-            return "Int"
-        elif self.type_id is TypeId.FLOAT:
-            return "Float"
-        elif self.type_id is TypeId.BOOL:
-            return "Bool"
-        elif self.type_id is TypeId.STRING:
-            return "Str"
-        elif self.type_id is TypeId.CUSTOMED:
-            if not self.inner_types:
-                return self.name or self.type_id.value
-            optional = "?" if self.is_optional else ""
+    def is_List(self) -> bool:
+        return self.name == "List"
 
-            return f"{self.name or self.type_id.name.lower()}[{', '.join(map(str, self.inner_types))}]{optional}"
-        else:
-            raise ValueError(f"Unknown type {self.type_id}")
-        return ""
+    def is_Set(self):
+        return self.name == "Set"
 
-    def __repr__(self) -> str:
-        return str(self)
+    def is_Dict(self):
+        return self.name == "Dict"
+
+    def __str__(self):
+        return self.name + (f"[{', '.join(str(p) for p in self.params)}]" if self.params else "")
 
 
-@dataclass(slots=True)
-class TemplateType(Type):
-    """
-    Template type, such as T.
-    Such type should be substituted with a concrete type before type checking.
+class BasicType(Type):
+    def __init__(self, name, parent=None):
+        super().__init__(name=name, parent=parent, is_concrete=True)
 
-    TemplateType should be unique accross a whole module for easier to substitute with concrete types.
-    """
 
-    type_id: TypeId = field(default=TypeId.CUSTOMED, init=False)
+class CompositeType(Type):
+    def __init__(self, name, parent=None, params: Optional[Tuple[Type, ...]] = None):
+        super().__init__(name, parent, params=params)
 
     @property
-    def is_concrete(self) -> bool:
-        return False
+    def is_concrete(self):
+        return all(param.is_concrete for param in self.params)
+
+    def clone_with(self, *params):
+        return type(self)(self.name, self.parent, params)
+
+    def __eq__(self, other):
+        if self.name != other.name:
+            return False
+
+        if len(self.params) != len(other.params):
+            return False
+
+        # TODO: check if the placeholder is the same
+        for p1, p2 in zip(self.params, other.params):
+            if isinstance(p1, PlaceholderType) and isinstance(p2, PlaceholderType):
+                continue
+            else:
+                return p1 == p2
+        return True
 
 
-@dataclass(slots=True)
-class TypeTemplate(Type):
-    """
-    The type template, such as List in List[T].
+class PlaceholderType(Type):
+    def __init__(self, name, parent=None):
+        super().__init__(name, parent, is_concrete=False)
 
-    To declare a type template, use TypeTemplate instead of actual Type.
-    e.g.
+    def __repr__(self):
+        return self.name
 
-    # It will declare a class MyClass with two type parameters T0 and T1
-    @template[T0, T1]
-    class MyClass: ...
-
-    The type MyClass[T0, T1] is a TypeTemplate, and it is not concrete.
-    """
-
-    def __post_init__(self):
-        self.is_concrete = all(t.is_concrete for t in self.inner_types)
+    def compatible_with(self, other):
+        return True
 
 
-# Built-in types
-Int = Type(TypeId.INT)
-Float = Type(TypeId.FLOAT)
-Bool = Type(TypeId.BOOL)
-Str = Type(TypeId.STRING)
-Nil = Type(TypeId.NIL)
-# Lisp type is a special type that is used to represent the type of a lisp object
-LispType = Type(TypeId.CUSTOMED, "Lisp")
-Unk = Type(TypeId.Unk)
+class GenericType(Type):
+    def __init__(self, name, parent=None, *params):
+        super().__init__(name, parent, params=params)
 
 
-@dataclass(slots=True)
-class SetType(Type):
-    type_id: TypeId = field(default=TypeId.Set, init=False)
+class FunctionType(Type):
+    def __init__(self, return_type, arg_types: List[Type], params: Optional[Tuple[Type, ...]] = None):
+        super().__init__("Function", params=params)
+        self.return_type = return_type
+        self.arg_types = arg_types
+
+    def __repr__(self):
+        arg_types = ', '.join(repr(arg) for arg in self.arg_types)
+        param_types = ', '.join(repr(param) for param in self.params)
+        return f"({arg_types})[{param_types}] -> {self.return_type}"
+
+# Basic types
 
 
-@dataclass(slots=True, unsafe_hash=True)
-class ListType(Type):
-    type_id: TypeId = field(default=TypeId.List, init=False)
+class NumberType(BasicType):
+    def __init__(self, parent=None):
+        super().__init__(name="Number", parent=parent)
 
 
-@dataclass(slots=True)
-class DictType(Type):
-    type_id: TypeId = field(default=TypeId.Dict, init=False)
-    key_type: Type | None = None
-    value_type: Type | None = None
-
-    def __post_init__(self):
-        self.inner_types = (self.key_type, self.value_type)
-
-    def __str__(self) -> str:
-        assert self.key_type is not None
-        assert self.value_type is not None
-        return f"Dict[{self.key_type}, {self.value_type}]"
+class IntType(BasicType):
+    def __init__(self):
+        super().__init__("Int", parent=NumberType())
 
 
-def make_customed(name: str, subtypes: Optional[Tuple["Type", ...]] = None) -> Type:
-    type = Type(TypeId.CUSTOMED, name)
-    if subtypes:
-        type.inner_types = tuple(subtypes)
-    return type
+class FloatType(BasicType):
+    def __init__(self):
+        super().__init__("Float", parent=NumberType())
 
 
-class TypeSystemBase:
-    def __init__(self) -> None:
-        self.types: Dict[str, Type] = {}
-
-    def _init_basic_type(self):
-        self.types["Int"] = Int
-        self.types["Float"] = Float
-        self.types["Bool"] = Bool
-        self.types["Str"] = Str
-        self.types["nil"] = Nil
-
-    def define_composite_type(self, name: str, *args: Type) -> Type:
-        ty = make_customed(name, args)
-        key = str(ty)
-        if key not in self.types:
-            self.types[key] = make_customed(name, args)
-        return self.types[key]
-
-    def get_type(self, name: str) -> Optional[Type]:
-        return self.types.get(name, None)
+class BoolType(BasicType):
+    def __init__(self):
+        super().__init__("Bool")
 
 
-STR_TO_PRIMITIVE_TYPE = {
-    "Int": Int,
-    "Float": Float,
-    "Bool": Bool,
-    "Str": Str,
-    "Nil": Nil,
-}
+class StrType(BasicType):
+    def __init__(self):
+        super().__init__("Str")
 
 
-def parse_primitive_type(type_str: str) -> Optional[Type]:
-    return STR_TO_PRIMITIVE_TYPE.get(type_str, None)
+class VoidType(BasicType):
+    def __init__(self):
+        super().__init__("Void")
+
+
+class UnkType(BasicType):
+    def __init__(self):
+        super().__init__("Unk")
+
+
+class LispType_(BasicType):
+    def __init__(self):
+        super().__init__("Lisp")
+
+
+# basic types
+Number = NumberType()
+Int = IntType()
+Float = FloatType()
+Bool = BoolType()
+Str = StrType()
+Void = VoidType()
+Unk = UnkType()
+LispType = LispType_()
+
+# container
+Set_ = CompositeType("Set", parent=GenericType, params=(PlaceholderType("T"),))
+List_ = CompositeType("List", parent=GenericType,
+                      params=(PlaceholderType("T"),))
+Dict_ = CompositeType("Dict", parent=GenericType, params=(
+    PlaceholderType("K"), PlaceholderType("V")))
+
+
+def get_resultant_type(type1, type2):
+    if type1 == Float and type1 == Int:
+        return Float
+    elif type1 == Int and type2 == Float:
+        return Float
+    elif type1 == type2:
+        return type1
+    else:
+        return Unk
