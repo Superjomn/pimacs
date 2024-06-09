@@ -49,5 +49,5 @@ a-pet.hello()
 def foo-2 (a:T0, b:T1) -> T0:
     return a + b + 1
 
-
+# CHECK: var call-foo-2 :Int = foo-2(1, 2)
 var call-foo-2 = foo-2(1, 2)

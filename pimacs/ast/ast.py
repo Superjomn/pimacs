@@ -931,6 +931,9 @@ class DocString(Node):
     def replace_child(self, old, new):
         pass
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        pass
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class Select(Expr):

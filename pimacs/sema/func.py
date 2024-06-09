@@ -56,7 +56,6 @@ class FuncSig:
             return None
 
         ret = copy.copy(self)
-        n_params = len(template_specs)
 
         # replace inputs
         input_types = []
@@ -66,8 +65,8 @@ class FuncSig:
             input_types.append((name, arg))
         ret.input_types = tuple(input_types)
 
-        if self.output_type in template_specs:
-            ret.output_type = template_specs[self.output_type]
+        if output_type := template_specs.get(self.output_type, None):
+            ret.output_type = output_type
 
         return ret
 
@@ -107,8 +106,12 @@ class FuncSig:
         if func_args and func_args[0].name == "self" and func_args[0].is_self_placeholder:
             del kwargs["self"]
             del func_args[0]
+            # call_method always put the instance as the first argument
+            call_params = call_params[1:]
 
         for no, param in enumerate(call_params):
+            if no >= len(func_args):
+                return None  # too many arguments
             if isinstance(param, CallParam):
                 if not param.name:
                     arg = func_args[no]
@@ -123,7 +126,10 @@ class FuncSig:
 
             logger.debug(f"get_full_arg_list: {arg.name} -> {param}")
 
-            if not match_argument(arg, param):
+            if match_argument(arg, param):  # type: ignore
+                arg_name = func_args[no].name
+                kwargs[arg_name] = param.value  # type: ignore
+            else:
                 return None
 
         for name, value in kwargs.items():
@@ -173,16 +179,15 @@ class FuncOverloads:
         return self.symbol.name
 
     @multimethod
-    def lookup(self, args: tuple) -> Optional[Function]:
+    def lookup(self, args: tuple) -> List[Tuple[Function, FuncSig]]:
         """Find the function that matches the arguments"""
+        candidates = []
         for sig, func in self.funcs.items():
-            print(f"** sig: {sig}")
-            if sig.match_call(args):
-                return func
-            elif func.template_params:
-                # to deduce the value of the template params
-                pass
-        return None
+            if ret := sig.get_full_arg_list(args):
+                _, template_specs = ret
+                concrete_sig = sig.specialize(template_specs)
+                candidates.append((func, concrete_sig))
+        return candidates
 
     @multimethod  # type: ignore
     def lookup(self, args: tuple, template_specs: Dict[_ty.Type, _ty.Type]):
@@ -193,10 +198,10 @@ class FuncOverloads:
         for sig in self.funcs:
             if not sig.all_param_types_concrete():
                 continue
-            sig = sig.specialize(template_specs)
-            if sig is None:
+            concrete_sig = sig.specialize(template_specs)
+            if concrete_sig is None:
                 continue
-            candidate = self.funcs.get(sig, None)
+            candidate = self.funcs.get(sig, None), concrete_sig
             candidates.append(candidate)
 
         return candidates

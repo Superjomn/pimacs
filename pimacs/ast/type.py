@@ -58,6 +58,8 @@ class Type:
         return self.name + (f"[{', '.join(str(p) for p in self.params)}]" if self.params else "")
 
     def __eq__(self, other) -> bool:
+        if not isinstance(other, Type):
+            return False
         return self.name == other.name and \
             self.params == other.params and \
             self.parent == other.parent and \
@@ -113,6 +115,9 @@ class PlaceholderType(Type):
 class GenericType(Type):
     def __init__(self, name, parent=None, *params):
         super().__init__(name, parent, params=params)
+
+    def __repr__(self):
+        return f"GenericType<{self.name}[{', '.join(repr(p) for p in self.params)}]>"
 
 
 class FunctionType(Type):

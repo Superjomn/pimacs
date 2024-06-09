@@ -101,10 +101,42 @@ def foo(x: T0, y: T1) -> T0:
 
 var a = foo(1, 2)
 '''
-    ctx = ModuleContext()
+    ctx = ModuleContext(enable_exception=True)
     tree = parse_ast(code)
     tree = perform_sema(ctx, tree)
     pprint(tree)
 
 
-test_func_sig_template()
+def test_func_sig_specialize():
+    T0 = _ty.GenericType(name="T0")
+    T1 = _ty.GenericType(name="T1")
+    func = Function(
+        name="foo",
+        args=[
+            ast.Arg(name="x", type=T0, loc=None),
+            ast.Arg(name="y", type=T1, loc=None),
+        ],
+        return_type=T1,
+        loc=None,
+        body=[],
+    )
+    sig = FuncSig.create(func)
+
+    T0_ = _ty.PlaceholderType(name="T0")
+    T1_ = _ty.PlaceholderType(name="T1")
+    mapping = {
+        T0: T0_,
+        T1: T1_,
+    }
+
+    new_sig = sig.specialize(mapping)
+    assert not new_sig.all_param_types_concrete()
+    assert new_sig.output_type is T1_
+
+    mapping = {
+        T0_: _ty.Int,
+        T1_: _ty.Float,
+    }
+
+    new_sig = new_sig.specialize(mapping)
+    assert new_sig.all_param_types_concrete()

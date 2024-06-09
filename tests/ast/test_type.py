@@ -38,3 +38,10 @@ def test_PlaceholderType():
     assert T0 is not T0_1, "PlaceholderType should be unique"
     assert T0 == T0_0
     assert T0 != T0_1
+
+
+def test_GenericType():
+    T0 = ty.GenericType("T0")
+    T0_1 = ty.GenericType("T0")
+
+    assert T0 is T0_1
