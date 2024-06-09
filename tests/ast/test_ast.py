@@ -1,3 +1,6 @@
+from pprint import pprint
+
+import pimacs.ast.type as _ty
 from pimacs.ast.ast import *
 from pimacs.ast.utils import WeakSet
 
@@ -127,3 +130,20 @@ def test_replace_child_File():
     assert len(var2.users) == 2  # Two users: Block and Assign
 
     assert var2 in file.stmts
+
+
+def test_replace_types_Function():
+    T0 = _ty.GenericType(name='T0')
+    arg0 = Arg(name='arg0', type=T0, loc=None)
+    var = VarDecl('x', init=arg0)
+    var1 = VarDecl('y', init=arg0)
+    body = Block(stmts=(var, var1), loc=None)
+    func = Function(name='fn', args=(arg0,), body=body, loc=None)
+
+    T0_1 = _ty.PlaceholderType(name='T0')
+    assert T0 != T0_1
+
+    func.replace_types({T0: T0_1})
+
+    assert arg0.type is T0_1
+    assert var.type is T0_1

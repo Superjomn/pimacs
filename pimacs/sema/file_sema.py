@@ -13,7 +13,7 @@ from pimacs.logger import logger
 from pimacs.sema.func import FuncOverloads
 
 from . import ast
-from .ast import AnalyzedClass, CallMethod, MakeObject, UCallMethod
+from .ast import AnalyzedClass, CallMethod, MakeObject, Template, UCallMethod
 from .ast_visitor import IRMutator, IRVisitor
 from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
 from .func import FuncSig
@@ -236,7 +236,57 @@ class FileSema(IRMutator):
             return node
         return node
 
+    def func_setup_template(self, node: ast.Function):
+        '''
+        Parse the template from decorators.
+        '''
+        if node.template_params is not None:
+            return
+
+        for no, decorator in enumerate(node.decorators):
+            if isinstance(decorator.action, ast.Template):
+                tpl: ast.Template = decorator.action
+                # assert all the arg from call.args are Type
+                assert all(isinstance(type, _ty.PlaceholderType)
+                           for type in tpl.types)
+                node.template_params = tpl.types
+                break
+        if node.template_params is None:  # mark as inited
+            node.template_params = tuple()
+
+    def func_pollute_tpl_placeholder_in_func_signature(self, node: ast.Function):
+        '''
+        Replace the T0,T1 types in the args with the actual PlaceholderTypes.
+        This is necessary since the ast parser parse T0,T1 as GenericType and mark them as concrete.
+        '''
+        if not node.template_params:
+            return
+
+        name_to_param = {param.name: param for param in node.template_params}
+        args = [arg for arg in node.args]
+        for arg in args:
+            if param_type := name_to_param.get(arg.type.name, None):
+                arg.type = param_type
+        node.args = tuple(args)
+
+        if node.return_type:
+            if param_type := name_to_param.get(node.return_type.name, None):
+                node.return_type = param_type
+
+    '''
+    def func_setup_method_self(self, node: ast.Function):
+        if self._cur_class:
+            if node.args and node.args[0].name == "self":
+                args = [arg for arg in node.args]
+                args[0].is_self_placeholder = True # type: ignore
+                node.args = tuple(args)
+    '''
+
     def visit_Function(self, node: ast.Function):
+        self.func_setup_template(node)
+        # self.func_setup_method_self(node)
+        self.func_pollute_tpl_placeholder_in_func_signature(node)
+
         within_class = self.sym_tbl.current_scope.kind is ScopeKind.Class
         if within_class:
             assert self._cur_class
@@ -244,6 +294,7 @@ class FileSema(IRMutator):
         with self.sym_tbl.scope_guard(kind=ScopeKind.Func):
             node = super().visit_Function(node)
             symbol = FuncSymbol(node.name)
+
             # TODO[Superjomn]: support function overloading
             if self.sym_tbl.contains_locally(symbol):
                 self.report_error(node, f"Function {node.name} already exists")
@@ -446,9 +497,18 @@ class FileSema(IRMutator):
             case ast.UFunction:
                 func_name = func.name  # type: ignore
                 func_overloads = self.sym_tbl.lookup(FuncSymbol(func_name))
-                if func_overloads and (func := func_overloads.lookup(node.args)):
-                    node.func = func  # bind the function
-                    self.collect_newly_resolved(node)
+                if func_overloads and (func_candidates := func_overloads.lookup(node.args)):
+                    if len(func_candidates) > 1:
+                        self.report_error(
+                            node, f"Function {func_name} has more than one candidates")
+                        node.sema_failed = True
+                    elif len(func_candidates) == 1:
+                        logger.debug(f"Resolved function {
+                                     func_name}: {func_candidates}")
+                        func, func_sig = func_candidates[0]
+                        node.func = func  # bind the func
+                        node.type = func_sig.output_type
+                        self.collect_newly_resolved(node)
                 else:
                     self.collect_unresolved(node.func)  # type: ignore
 
@@ -701,17 +761,30 @@ class FileSema(IRMutator):
 
         match type(node):
             case ast.UFunction:
+                assert isinstance(node, ast.UFunction)  # pass the typing
                 logger.debug(f"Bind unresolved function {node}")
                 func_overloads = node.scope.get(
                     FuncSymbol(node.name))  # type: ignore
+                logger.debug(f"resolving UFunction found overloads: {
+                             func_overloads}")
                 if func_overloads is None:
                     return False  # remain unresolved
                 assert len(node.users) == 1  # only one caller
                 call = list(node.users)[0]
                 assert isinstance(call, ast.Call)
-                if func := func_overloads.lookup(call.args):
-                    node.replace_all_uses_with(func)
+                # assert func_overloads.lookup(call.args)
 
+                if func_candidates := func_overloads.lookup(call.args):
+                    if len(func_candidates) > 1:
+                        self.report_error(
+                            node, f"Function {node.name} has more than one candidates")
+                        return False
+                    elif not func_candidates:
+                        return False
+
+                    func, func_sig = func_candidates[0]
+
+                    node.replace_all_uses_with(func)
                     self._type_infer(func, forward_push=False)
                     return True
                 return False
@@ -769,8 +842,18 @@ class FileSema(IRMutator):
                     return False
 
                 args = tuple([node.obj] + list(node.args))  # self + args
-                if method := methods.lookup(args):
-                    logger.debug(f"UCallAttr found method: {method}")
+                if method_candidates := methods.lookup(args):
+                    logger.debug(f"UCallAttr found method: {
+                                 method_candidates}")
+                    if len(method_candidates) > 1:
+                        self.report_error(
+                            node, f"Method {node.attr} has more than one candidates")
+                        return False
+                    elif not method_candidates:
+                        return False
+
+                    method, method_sig = method_candidates[0]
+
                     new_node = CallMethod(
                         obj=node.obj, method=method, args=node.args, loc=node.loc)
                     new_node.type = method.return_type

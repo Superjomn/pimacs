@@ -37,6 +37,7 @@ __all__ = ['Node',
            'UAttr',
            'UClass',
            'UFunction',
+           'Template',
            ]
 
 import os
@@ -45,7 +46,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, ClassVar, List, Optional, Set, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Optional, Set, Tuple, Union
 
 import pimacs.ast.type as ty
 from pimacs.ast.type import Type
@@ -76,6 +77,11 @@ class Node(ABC):
             new.add_user(user)
         self.users.clear()
 
+    def get_updated_type(self, old: ty.Type, mapping: Dict[ty.Type, ty.Type]) -> ty.Type:
+        if target := mapping.get(old, None):
+            return target
+        return old
+
     @contextmanager
     def write_guard(self):
         yield
@@ -90,6 +96,11 @@ class Node(ABC):
         ''' Replace a child with a new node. '''
         raise NotImplementedError()
 
+    @abstractmethod
+    def replace_types(self, mapping: Dict[ty.Type, ty.Type]) -> None:
+        ''' Replace the types in the node with a new type in the mapping. '''
+        raise NotImplementedError()
+
 
 @dataclass(slots=True)
 class VisiableSymbol:
@@ -102,7 +113,7 @@ class VisiableSymbol:
 # The Expr or Stmt are not strickly separated in the AST now.
 
 @dataclass
-class Expr(Node, ABC):
+class Expr(Node):
     type: Optional[Type] = field(default=None, init=False, hash=False)
 
     @property
@@ -112,10 +123,16 @@ class Expr(Node, ABC):
     def get_type(self) -> Type:
         return self.type or ty.Unk
 
+    def replace_types(self, mapping: Dict[ty.Type, ty.Type]) -> None:
+        # A default implementation
+        pass
+
 
 @dataclass
 class Stmt(Node):
-    pass
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        # A default implementation
+        pass
 
 
 @dataclass(slots=True)
@@ -189,6 +206,11 @@ class VarDecl(Stmt, VisiableSymbol):
         if self.init:
             self.init.add_user(self)
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.type = self.get_updated_type(self.type, mapping)
+        if self.init:
+            self.init.replace_types(mapping)
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class VarRef(Expr):
@@ -225,6 +247,12 @@ class VarRef(Expr):
     def _refresh_users(self):
         if self.target:
             self.target.add_user(self)
+
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        if self.type:
+            self.type = self.get_updated_type(self.type, mapping)
+        if self.target:
+            self.target.replace_types(mapping)
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -265,6 +293,17 @@ class Arg(Expr):
         if self.default:
             self.default.add_user(self)
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.type = self.get_updated_type(self.type, mapping)
+        if self.default:
+            self.default.replace_types(mapping)
+
+    def __str__(self):
+        return f"{self.name}: {self.type}"
+
+    def __repr__(self):
+        return self.__str__()
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class Block(Stmt):
@@ -289,6 +328,13 @@ class Block(Stmt):
                     stmts[i] = new
             self.stmts = tuple(stmts)
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        for stmt in self.stmts:
+            stmt.replace_types(mapping)
+        if self.return_type:
+            for i, ret in enumerate(self.return_type):
+                self.return_type[i] = self.get_updated_type(ret, mapping)
+
 
 @dataclass(slots=True)
 class File(Stmt):
@@ -310,6 +356,10 @@ class File(Stmt):
                     stmts[i] = new
         self.stmts = list(stmts)  # TODO: make stmts always a list
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        for stmt in self.stmts:
+            stmt.replace_types(mapping)
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class Function(Stmt, VisiableSymbol):
@@ -318,6 +368,13 @@ class Function(Stmt, VisiableSymbol):
     args: Tuple[Arg, ...] = field(default_factory=tuple)
     return_type: Type = ty.Unk
     decorators: Tuple["Decorator", ...] = field(default_factory=tuple)
+
+    # Store the template parameters
+    # e.g.
+    # @template[T0, T1]
+    # def foo(a: T0, b: T1) -> T0: ...
+    # The `template_params` is (T0, T1)
+    template_params: Optional[Tuple[Type, ...]] = None
 
     class Kind(Enum):
         Unknown = -1
@@ -376,6 +433,18 @@ class Function(Stmt, VisiableSymbol):
                     decorators[i] = new
             self.decorators = tuple(decorators)
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.body.replace_types(mapping)
+        args = [arg for arg in self.args]
+        for arg in args:
+            arg.replace_types(mapping)
+        self.args = tuple(args)
+
+        self.return_type = self.get_updated_type(self.return_type, mapping)
+
+        for decorator in self.decorators:
+            decorator.replace_types(mapping)
+
     def _verify_decorators_unique(self):
         seen = set()
         for decorator in self.decorators:
@@ -417,6 +486,15 @@ class If(Stmt):
             if self.else_branch == old:
                 self.else_branch = new
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.cond.replace_types(mapping)
+        self.then_branch.replace_types(mapping)
+        for cond, block in self.elif_branches:
+            cond.replace_types(mapping)
+            block.replace_types(mapping)
+        if self.else_branch:
+            self.else_branch.replace_types(mapping)
+
     def _refresh_users(self):
         self.cond.add_user(self)
         self.then_branch.add_user(self)
@@ -445,6 +523,10 @@ class While(Stmt):
             if self.body == old:
                 self.body = new
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.condition.replace_types(mapping)
+        self.body.replace_types(mapping)
+
 
 @dataclass(slots=True)
 class For(Stmt):
@@ -471,6 +553,12 @@ class For(Stmt):
                 self.increment = new
             if self.body == old:
                 self.body = new
+
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.init.replace_types(mapping)
+        self.condition.replace_types(mapping)
+        self.increment.replace_types(mapping)
+        self.body.replace_types(mapping)
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -550,6 +638,12 @@ class BinaryOp(Expr):
             if self.right == old:
                 self.right = new
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.left.replace_types(mapping)
+        self.right.replace_types(mapping)
+        if self.type:
+            self.type = self.get_updated_type(self.type, mapping)
+
     def __post_init__(self):
         self._refresh_users()
 
@@ -586,6 +680,11 @@ class UnaryOp(Expr):
             if self.operand == old:
                 self.operand = new
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.operand.replace_types(mapping)
+        if self.type:
+            self.type = self.get_updated_type(self.type, mapping)
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class CallParam(Expr):
@@ -604,6 +703,11 @@ class CallParam(Expr):
         with self.write_guard():
             if self.value == old:
                 self.value = new
+
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.value.replace_types(mapping)
+        if self.type:
+            self.type = self.get_updated_type(self.type, mapping)
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -653,8 +757,16 @@ class Call(Expr):
                     args[i] = new
             self.args = tuple(args)
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        if isinstance(self.func, Node):
+            self.func.replace_types(mapping)
+        for arg in self.args:
+            arg.replace_types(mapping)
+        if self.type:
+            self.type = self.get_updated_type(self.type, mapping)
 
-@dataclass(slots=True)
+
+@dataclass(slots=True, unsafe_hash=True)
 class Template:
     types: Tuple[ty.Type, ...]
 
@@ -675,6 +787,10 @@ class Return(Stmt):
             if self.value == old:
                 self.value = new
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        if self.value:
+            self.value.replace_types(mapping)
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class Decorator(Stmt):
@@ -691,6 +807,10 @@ class Decorator(Stmt):
         with self.write_guard():
             if self.action == old:
                 self.action = new
+
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        if isinstance(self.action, Node):
+            self.action.replace_types(mapping)
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -717,6 +837,10 @@ class Assign(Expr):
             if self.value == old:
                 self.value = new
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.target.replace_types(mapping)
+        self.value.replace_types(mapping)
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class Attribute(Expr):
@@ -735,6 +859,9 @@ class Attribute(Expr):
         with self.write_guard():
             if self.value == old:
                 self.value = new
+
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.value.replace_types(mapping)
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -787,6 +914,12 @@ class Class(Stmt, VisiableSymbol):
                 return ty.GenericType(self.name, params=decorator.action.types)
         return ty.GenericType(self.name)
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        for stmt in self.body:
+            stmt.replace_types(mapping)
+        for decorator in self.decorators:
+            decorator.replace_types(mapping)
+
 
 @dataclass(slots=True)
 class DocString(Node):
@@ -796,6 +929,9 @@ class DocString(Node):
         pass
 
     def replace_child(self, old, new):
+        pass
+
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
         pass
 
 
@@ -829,6 +965,11 @@ class Select(Expr):
             if self.else_expr == old:
                 self.else_expr = new
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.cond.replace_types(mapping)
+        self.then_expr.replace_types(mapping)
+        self.else_expr.replace_types(mapping)
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class Guard(Stmt):
@@ -848,6 +989,10 @@ class Guard(Stmt):
                 self.header = new
             if self.body == old:
                 self.body = new
+
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.header.replace_types(mapping)
+        self.body.replace_types(mapping)
 
 
 def make_const(value: int | float | str | bool | None, loc: Location) -> Constant:
@@ -878,6 +1023,9 @@ class UVarRef(Unresolved, Expr):
     def replace_child(self, old, new):
         pass
 
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.target_type = self.get_updated_type(self.target_type, mapping)
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class UAttr(Unresolved, Expr):
@@ -897,6 +1045,9 @@ class UAttr(Unresolved, Expr):
         with self.write_guard():
             if self.value == old:
                 self.value = new
+
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.value.replace_types(mapping)
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -922,6 +1073,9 @@ class UFunction(Unresolved, Stmt):
 
     def replace_child(self, old, new):
         pass
+
+    def replace_types(self, mapping: Dict[Type, Type]) -> None:
+        self.return_type = self.get_updated_type(self.return_type, mapping)
 
 
 def is_unk(type: Type) -> bool:

@@ -73,6 +73,9 @@ class IRVisitor:
     def visit_GenericType(self, node: ty.GenericType):
         pass
 
+    def visit_PlaceholderType(self, node: ty.PlaceholderType):
+        pass
+
     def visit_Arg(self, node: ast.Arg):
         self.visit(node.type)
         self.visit(node.default)
@@ -237,6 +240,9 @@ class IRMutator:
         return node
 
     def visit_GenericType(self, node: ty.GenericType):
+        return node
+
+    def visit_PlaceholderType(self, node: ty.PlaceholderType):
         return node
 
     def visit_Function(self, node: ast.Function):
@@ -632,6 +638,9 @@ class IRPrinter(IRVisitor):
 
     def visit_VoidType(self, node: ty.VoidType):
         self.put("Void")
+
+    def visit_PlaceholderType(self, node: ty.PlaceholderType):
+        self.put(f"{node.name}")
 
     def visit_Attribute(self, node: ast.Attribute):
         self.visit(node.value)

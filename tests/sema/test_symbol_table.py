@@ -97,22 +97,24 @@ def test_SymbolTable_func_override():
         name="z", value=ast.make_const(0, loc=None), loc=None)
 
     call = ast.Call(func=unresolved_func, args=tuple(), loc=None)
-    target_func = funcs.lookup(call.args)
-    assert target_func is foo0
+    target_func_candidates = funcs.lookup(call.args)
+    assert len(target_func_candidates) == 1
+    assert target_func_candidates[0][0] is foo0
 
     call = ast.Call(func=unresolved_func, args=(param0,), loc=None)
-    target_func = funcs.lookup(call.args)
-    assert target_func is foo1
+    target_func_candidates = funcs.lookup(call.args)
+    assert target_func_candidates[0][0] is foo1
 
     call = ast.Call(func=unresolved_func, args=(param0, param1), loc=None)
-    target_func = funcs.lookup(call.args)
-    assert target_func is foo2
+    target_func_candidates = funcs.lookup(call.args)
+    assert target_func_candidates[0][0] is foo2
 
 
 def test_SymbolTable_class_method():
     table = SymbolTable()
 
-    self = ast.Arg(name="self", type=_ty.GenericType("App"), loc=None)
+    self = ast.Arg(name="self", type=_ty.GenericType("App"),
+                   loc=None, kind=ast.Arg.Kind.self_placeholder)
 
     foo0 = ast.Function(name="foo", args=[self],
                         return_type=None, loc=None, body=[])
@@ -124,7 +126,8 @@ def test_SymbolTable_class_method():
     assert not table.lookup(non_method_symbol)
 
     overloads: FuncOverloads = table.lookup(symbol)
-    assert overloads.lookup((self,)) is foo0
+    candidates = overloads.lookup(tuple())
+    assert len(candidates) == 1
 
 
 def test_SymbolTable_basic():

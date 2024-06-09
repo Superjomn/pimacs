@@ -61,6 +61,9 @@ class TypeInfer(IRVisitor):
         if self._forward_push:
             super().visit_Call(node)
 
+        if not is_unk(node.type):
+            return
+
         match type(node.func):
             case ast.UFunction:
                 logger.debug(f"visit_Call: UFuntion: {node.func}")
