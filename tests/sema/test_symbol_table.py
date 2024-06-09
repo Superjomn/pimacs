@@ -112,7 +112,8 @@ def test_SymbolTable_func_override():
 def test_SymbolTable_class_method():
     table = SymbolTable()
 
-    self = ast.Arg(name="self", type=_ty.GenericType("App"), loc=None)
+    self = ast.Arg(name="self", type=_ty.GenericType("App"),
+                   loc=None, kind=ast.Arg.Kind.self_placeholder)
 
     foo0 = ast.Function(name="foo", args=[self],
                         return_type=None, loc=None, body=[])
@@ -124,7 +125,7 @@ def test_SymbolTable_class_method():
     assert not table.lookup(non_method_symbol)
 
     overloads: FuncOverloads = table.lookup(symbol)
-    assert overloads.lookup((self,)) is foo0
+    assert overloads.lookup(tuple()) is foo0
 
 
 def test_SymbolTable_basic():

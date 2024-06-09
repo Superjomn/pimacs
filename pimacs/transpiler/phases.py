@@ -7,7 +7,7 @@ from pimacs.sema.file_sema import FileSema
 
 
 def parse_ast(
-    code: str | None = None, filename: str = "<pimacs>", sema=False
+    code: str | None = None, filename: str = "<pimacs>"
 ) -> ast.File:
     """
     Parse the code and return the AST.

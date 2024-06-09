@@ -7,10 +7,13 @@ class Type:
     _instances: Dict[tuple, "Type"] = {}
 
     def __new__(cls, *args, **kwargs):
-        key = (cls, args, tuple(kwargs.items()))
-        if key not in cls._instances:
-            cls._instances[key] = super().__new__(cls)
-        return cls._instances[key]
+        if not cls is PlaceholderType:
+            key = (cls, args, tuple(kwargs.items()))
+            if key not in cls._instances:
+                cls._instances[key] = super().__new__(cls)
+            return cls._instances[key]
+        else:
+            return super().__new__(cls)
 
     def __init__(self, name, parent=None, params: Optional[Tuple["Type", ...]] = None, is_concrete=True):
         self.name = name
@@ -53,6 +56,15 @@ class Type:
 
     def __str__(self):
         return self.name + (f"[{', '.join(str(p) for p in self.params)}]" if self.params else "")
+
+    def __eq__(self, other) -> bool:
+        return self.name == other.name and \
+            self.params == other.params and \
+            self.parent == other.parent and \
+            self._is_concrete == other._is_concrete
+
+    def __hash__(self):
+        return hash((self.name, self.parent, self.params, self._is_concrete))
 
 
 class BasicType(Type):

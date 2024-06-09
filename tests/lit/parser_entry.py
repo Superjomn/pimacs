@@ -16,7 +16,7 @@ from pimacs.transpiler.phases import parse_ast, perform_sema
 @click.option("--enable-exception", type=bool, default=False)
 @click.option("--display-ast", type=bool, default=False)
 def main(filename: str, sema: bool, mark_unresolved: bool, enable_exception: bool, display_ast: bool):
-    file = parse_ast(filename=filename, sema=sema)
+    file = parse_ast(filename=filename)
     if display_ast:
         print("AST:\n")
         pprint(file)

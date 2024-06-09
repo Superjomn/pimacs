@@ -1,9 +1,13 @@
+from pprint import pprint
+
 import pytest
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as _ty
+from pimacs.sema.context import ModuleContext
 from pimacs.sema.func import *
 from pimacs.sema.utils import *
+from pimacs.transpiler.phases import *
 
 
 def test_func_symbol():
@@ -87,3 +91,20 @@ def test_func_sig():
         ("y", _ty.Int),
     )
     assert sig.output_type == _ty.Int
+
+
+def test_func_sig_template():
+    code = '''
+@template[T0, T1]
+def foo(x: T0, y: T1) -> T0:
+    return x
+
+var a = foo(1, 2)
+'''
+    ctx = ModuleContext()
+    tree = parse_ast(code)
+    tree = perform_sema(ctx, tree)
+    pprint(tree)
+
+
+test_func_sig_template()

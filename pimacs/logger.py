@@ -1,13 +1,8 @@
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
-logger.setLevel(logging.INFO)
+log_level = os.getenv("PIMACS_LOG_LEVEL", "WARNING")
 
-# handler = logging.StreamHandler()
-# handler.setLevel(logging.INFO)
-
-# formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# handler.setFormatter(formatter)
-
-# logger.addHandler(handler)
+logger.setLevel(getattr(logging, log_level))

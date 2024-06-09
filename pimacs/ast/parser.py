@@ -423,7 +423,10 @@ class PimacsTransformer(Transformer):
         elif isinstance(items[0], Token):
             loc = self._get_loc(items[0])
             if items[0].value == "template":
-                action = ast.Template(items[1])
+                # convert GenericType to PlaceholderType
+                placeholders = tuple(
+                    list(ty.PlaceholderType(gty.name) for gty in items[1]))
+                action = ast.Template(placeholders)
             else:
                 assert isinstance(items[0].value, str)
                 action: str = items[0].value

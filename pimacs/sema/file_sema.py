@@ -13,7 +13,7 @@ from pimacs.logger import logger
 from pimacs.sema.func import FuncOverloads
 
 from . import ast
-from .ast import AnalyzedClass, CallMethod, MakeObject, UCallMethod
+from .ast import AnalyzedClass, CallMethod, MakeObject, Template, UCallMethod
 from .ast_visitor import IRMutator, IRVisitor
 from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
 from .func import FuncSig
@@ -236,7 +236,36 @@ class FileSema(IRMutator):
             return node
         return node
 
+    def func_setup_template(self, node: ast.Function):
+        '''
+        Parse the template from decorators.
+        '''
+        if node.template_params is not None:
+            return
+
+        for no, decorator in enumerate(node.decorators):
+            if isinstance(decorator.action, ast.Template):
+                tpl: ast.Template = decorator.action
+                # assert all the arg from call.args are Type
+                assert all(isinstance(type, _ty.Type) for type in tpl.types)
+                node.template_params = tpl.types
+                break
+        if node.template_params is None:  # mark as inited
+            node.template_params = tuple()
+
+    '''
+    def func_setup_method_self(self, node: ast.Function):
+        if self._cur_class:
+            if node.args and node.args[0].name == "self":
+                args = [arg for arg in node.args]
+                args[0].is_self_placeholder = True # type: ignore
+                node.args = tuple(args)
+    '''
+
     def visit_Function(self, node: ast.Function):
+        self.func_setup_template(node)
+        # self.func_setup_method_self(node)
+
         within_class = self.sym_tbl.current_scope.kind is ScopeKind.Class
         if within_class:
             assert self._cur_class
@@ -244,6 +273,7 @@ class FileSema(IRMutator):
         with self.sym_tbl.scope_guard(kind=ScopeKind.Func):
             node = super().visit_Function(node)
             symbol = FuncSymbol(node.name)
+
             # TODO[Superjomn]: support function overloading
             if self.sym_tbl.contains_locally(symbol):
                 self.report_error(node, f"Function {node.name} already exists")
@@ -704,11 +734,15 @@ class FileSema(IRMutator):
                 logger.debug(f"Bind unresolved function {node}")
                 func_overloads = node.scope.get(
                     FuncSymbol(node.name))  # type: ignore
+                logger.debug(f"resolving UFunction found overloads: {
+                             func_overloads}")
                 if func_overloads is None:
                     return False  # remain unresolved
                 assert len(node.users) == 1  # only one caller
                 call = list(node.users)[0]
                 assert isinstance(call, ast.Call)
+                # assert func_overloads.lookup(call.args)
+
                 if func := func_overloads.lookup(call.args):
                     node.replace_all_uses_with(func)
 

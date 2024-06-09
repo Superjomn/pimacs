@@ -42,7 +42,7 @@ class AnalyzedClass(Class):
                 self.symbols.add(FuncSymbol(node.name), node)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, unsafe_hash=True)
 class MakeObject(Expr):
     '''
     Create an object from a class.
