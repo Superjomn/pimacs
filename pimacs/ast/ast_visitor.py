@@ -2,11 +2,11 @@ import logging
 from contextlib import contextmanager
 
 import pimacs.ast.ast as ast
-import pimacs.ast.type as _type
+import pimacs.ast.type as ty
 
 
 class IRVisitor:
-    def visit(self, node: ast.Node | _type.Type | str | None):
+    def visit(self, node: ast.Node | ty.Type | str | None):
         if node is None:
             return
         if node is str:
@@ -16,7 +16,7 @@ class IRVisitor:
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
-    def generic_visit(self, node: ast.Node | _type.Type | str):
+    def generic_visit(self, node: ast.Node | ty.Type | str):
         raise Exception(f"No visit_{node.__class__.__name__} method")
 
     def visit_FileName(self, node: ast.FileName):
@@ -50,6 +50,27 @@ class IRVisitor:
         pass
 
     def visit_Type(self, node: ast.Type):
+        pass
+
+    def visit_IntType(self, node: ty.IntType):
+        pass
+
+    def visit_FloatType(self, node: ty.FloatType):
+        pass
+
+    def visit_BoolType(self, node: ty.BoolType):
+        pass
+
+    def visit_StrType(self, node: ty.StrType):
+        pass
+
+    def visit_UnkType(self, node: ty.UnkType):
+        pass
+
+    def visit_VoidType(self, node: ty.VoidType):
+        pass
+
+    def visit_GenericType(self, node: ty.GenericType):
         pass
 
     def visit_Arg(self, node: ast.Arg):
@@ -130,21 +151,13 @@ class IRVisitor:
         self.visit(node.header)
         self.visit(node.body)
 
-    def visit_ListType(self, node: _type.ListType):
-        for inner_type in node.inner_types:
-            self.visit(inner_type)
-
-    def visit_DictType(self, node: _type.DictType):
-        self.visit(node.key_type)
-        self.visit(node.value_type)
-
-    def visit_SetType(self, node: _type.SetType):
-        for inner_type in node.inner_types:
-            self.visit(inner_type)
+    def visit_CompositeType(self, node: ty.CompositeType):
+        for param in node.params:
+            self.visit(param)
 
 
 class IRMutator:
-    def visit(self, node: ast.Node | _type.Type | str | None):
+    def visit(self, node: ast.Node | ty.Type | str | None):
         if node is None:
             return
         logging.debug(f"Visiting {node.__class__.__name__}: {node}")
@@ -152,7 +165,7 @@ class IRMutator:
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
-    def generic_visit(self, node: ast.Node | _type.Type | str):
+    def generic_visit(self, node: ast.Node | ty.Type | str):
         raise Exception(f"No visit_{node.__class__.__name__} method")
 
     def visit_FileName(self, node: ast.FileName):
@@ -206,6 +219,24 @@ class IRMutator:
         return node
 
     def visit_Type(self, node: ast.Type):
+        return node
+
+    def visit_IntType(self, node: ty.IntType):
+        return node
+
+    def visit_FloatType(self, node: ty.FloatType):
+        return node
+
+    def visit_BoolType(self, node: ty.BoolType):
+        return node
+
+    def visit_StrType(self, node: ty.StrType):
+        return node
+
+    def visit_UnkType(self, node: ty.UnkType):
+        return node
+
+    def visit_GenericType(self, node: ty.GenericType):
         return node
 
     def visit_Function(self, node: ast.Function):
@@ -292,17 +323,11 @@ class IRMutator:
         node.body = self.visit(node.body)
         return node
 
-    def visit_ListType(self, node: _type.ListType):
-        node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
-        return node
-
-    def visit_DictType(self, node: _type.DictType):
-        node.key_type = self.visit(node.key_type)
-        node.value_type = self.visit(node.value_type)
-        return node
-
-    def visit_SetType(self, node: _type.SetType):
-        node.inner_types = tuple(self.visit(_) for _ in node.inner_types)
+    def visit_CompositeType(self, node: ty.CompositeType):
+        params = []
+        for param in node.params:
+            params.append(self.visit(param))
+        node.params = tuple(params)
         return node
 
 
@@ -572,22 +597,41 @@ class IRPrinter(IRVisitor):
             self.put(f"{node.name} = ")
         self.visit(node.value)
 
-    def visit_DictType(self, node: _type.DictType):
-        self.put("{")
-        self.visit(node.key_type)
-        self.put(":")
-        self.visit(node.value_type)
-        self.put("}")
+    def visit_GenericType(self, node: ty.GenericType):
+        self.put(f"{node.name}")
+        if node.params:
+            self.put('[')
+            for i, param in enumerate(node.params):
+                if i > 0:
+                    self.put(", ")
+                self.visit(param)
+            self.put("]")
 
-    def visit_ListType(self, node: _type.ListType):
-        self.put("[")
-        self.visit(node.inner_types[0])
+    def visit_CompositeType(self, node: ty.CompositeType):
+        self.put(f"{node.name}[")
+        for i, param in enumerate(node.params):
+            if i > 0:
+                self.put(", ")
+            self.visit(param)
         self.put("]")
 
-    def visit_SetType(self, node: _type.SetType):
-        self.put("{")
-        self.visit(node.inner_types[0])
-        self.put("}")
+    def visit_IntType(self, node: ty.IntType):
+        self.put("Int")
+
+    def visit_FloatType(self, node: ty.FloatType):
+        self.put("Float")
+
+    def visit_BoolType(self, node: ty.BoolType):
+        self.put("Bool")
+
+    def visit_StrType(self, node: ty.StrType):
+        self.put("Str")
+
+    def visit_UnkType(self, node: ty.UnkType):
+        self.put("Unk")
+
+    def visit_VoidType(self, node: ty.VoidType):
+        self.put("Void")
 
     def visit_Attribute(self, node: ast.Attribute):
         self.visit(node.value)

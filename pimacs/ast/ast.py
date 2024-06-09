@@ -37,7 +37,6 @@ __all__ = ['Node',
            'UAttr',
            'UClass',
            'UFunction',
-           'LispList',
            ]
 
 import os
@@ -48,8 +47,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar, List, Optional, Set, Tuple, Union
 
-import pimacs.ast.type as _type
-from pimacs.ast.type import Type, TypeId
+import pimacs.ast.type as ty
+from pimacs.ast.type import Type
 
 from .utils import WeakSet
 
@@ -108,10 +107,10 @@ class Expr(Node, ABC):
 
     @property
     def type_determined(self) -> bool:
-        return self.type not in (None, _type.Unk)
+        return self.type not in (None, ty.Unk)
 
     def get_type(self) -> Type:
-        return self.type or _type.Unk
+        return self.type or ty.Unk
 
 
 @dataclass
@@ -165,7 +164,7 @@ class VarDecl(Stmt, VisiableSymbol):
     VarDecl is a variable declaration, such as `var a: int = 1` or `let a = 1`.
     '''
     name: str = ""
-    type: Type = _type.Unk
+    type: Type = ty.Unk
     init: Optional[Expr] = None
     # If not mutable, it is a constant declared by `let`
     mutable: bool = True
@@ -231,7 +230,7 @@ class VarRef(Expr):
 @dataclass(slots=True, unsafe_hash=True)
 class Arg(Expr):
     name: str = field(default="")
-    type: Type = field(default_factory=lambda: _type.Unk)
+    type: Type = field(default_factory=lambda: ty.Unk)
     default: Optional[Expr] = None
     is_variadic: bool = False
 
@@ -317,7 +316,7 @@ class Function(Stmt, VisiableSymbol):
     name: str
     body: Block
     args: Tuple[Arg, ...] = field(default_factory=tuple)
-    return_type: Type = _type.Unk
+    return_type: Type = ty.Unk
     decorators: Tuple["Decorator", ...] = field(default_factory=tuple)
 
     class Kind(Enum):
@@ -480,15 +479,15 @@ class Constant(Expr):
 
     def _get_type(self) -> Type:
         if isinstance(self.value, int):
-            return _type.Int
+            return ty.Int
         if isinstance(self.value, float):
-            return _type.Float
+            return ty.Float
         if isinstance(self.value, str):
-            return _type.Str
+            return ty.Str
         if isinstance(self.value, bool):
-            return _type.Bool
+            return ty.Bool
         if self.value is None:
-            return _type.Nil
+            return ty.Void
         raise Exception(f"Unknown constant type: {self.value}")
 
     def __post_init__(self):
@@ -525,15 +524,7 @@ class BinaryOp(Expr):
     op: "BinaryOperator"
     right: Expr
 
-    type: Optional[_type.Type] = field(init=False, default=None)
-
-    # handle type conversion
-    type_conversions: ClassVar[Any] = {
-        (TypeId.INT, TypeId.FLOAT): _type.Float,
-        (TypeId.FLOAT, TypeId.INT): _type.Float,
-        (TypeId.INT, TypeId.BOOL): _type.Int,
-        (TypeId.BOOL, TypeId.INT): _type.Int,
-    }
+    type: Optional[ty.Type] = field(init=False, default=None)
 
     def _get_type(self) -> Type:
         if self.type:
@@ -542,15 +533,15 @@ class BinaryOp(Expr):
         if self.left.get_type() == self.right.get_type():
             return self.left.get_type()
 
-        ret = BinaryOp.type_conversions.get(
-            (self.left.get_type().type_id, self.right.get_type().type_id), _type.Unk
-        )
+        ret = ty.get_resultant_type(
+            self.left.get_type(), self.right.get_type())
+
         if ret is None:
             raise Exception(
                 f"{self.loc}:\nType mismatch: {self.left.get_type()} and {
                     self.right.get_type()}"
             )
-        return _type.Unk
+        return ty.Unk
 
     def replace_child(self, old, new):
         with self.write_guard():
@@ -615,17 +606,6 @@ class CallParam(Expr):
                 self.value = new
 
 
-custom_types: Set[_type.Type] = set()
-
-
-def get_custom_type(class_def: "Class"):
-    # TODO: consider module name
-    ret = _type.Type(TypeId.CUSTOMED, class_def.name)
-    if ret not in custom_types:
-        custom_types.add(ret)
-    return ret
-
-
 @dataclass(slots=True, unsafe_hash=True)
 class Call(Expr):
     # ArgDecl as func for self/cls placeholder cases
@@ -638,13 +618,13 @@ class Call(Expr):
             assert self.func.return_type is not None
             return self.func.return_type
         elif isinstance(self.func, Class):
-            return get_custom_type(self.func)
+            return self.func.as_type()
         elif isinstance(self.func, Arg):
-            return _type.Unk
+            return ty.Unk
         elif isinstance(self.func, UFunction):
-            return _type.Unk
+            return ty.Unk
         elif isinstance(self.func, UAttr):
-            return _type.Unk
+            return ty.Unk
         else:
             raise Exception(f"Unknown function type: {
                             type(self.func)}: {self.func}")
@@ -676,7 +656,7 @@ class Call(Expr):
 
 @dataclass(slots=True)
 class Template:
-    types: Tuple[_type.Type, ...]
+    types: Tuple[ty.Type, ...]
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -759,6 +739,10 @@ class Attribute(Expr):
 
 @dataclass(slots=True, unsafe_hash=True)
 class Class(Stmt, VisiableSymbol):
+    '''
+    A class node.
+    '''
+
     name: str
     body: Tuple[Stmt]
     decorators: Tuple["Decorator", ...] = field(default_factory=tuple)
@@ -787,6 +771,22 @@ class Class(Stmt, VisiableSymbol):
                     decorators[i] = new
             self.decorators = tuple(decorators)
 
+    def is_templated(self) -> bool:
+        for decorator in self.decorators:
+            if isinstance(decorator.action, Template):
+                return True
+        return False
+
+    def as_type(self) -> Type:
+        '''
+        Normally, without tempalte decorator, the class is a generic type.
+        With template decorator, the class is a CompositeType with the template types.
+        '''
+        for decorator in self.decorators:
+            if isinstance(decorator.action, Template):
+                return ty.GenericType(self.name, params=decorator.action.types)
+        return ty.GenericType(self.name)
+
 
 @dataclass(slots=True)
 class DocString(Node):
@@ -808,7 +808,7 @@ class Select(Expr):
     def _get_type(self) -> Type:
         if self.then_expr.get_type() == self.else_expr.get_type():
             return self.then_expr.get_type()
-        return _type.Unk
+        return ty.Unk
 
     def __post_init__(self):
         self._refresh_users()
@@ -867,7 +867,7 @@ class Unresolved:
 class UVarRef(Unresolved, Expr):
     ''' Unresolved variable reference, such as `a` in `a.b`. '''
     name: str
-    target_type: Type = field(default_factory=lambda: _type.Unk)
+    target_type: Type = field(default_factory=lambda: ty.Unk)
 
     def get_type(self) -> Type:
         return self.target_type
@@ -891,7 +891,7 @@ class UAttr(Unresolved, Expr):
     def __post_init__(self):
         self._refresh_users()
 
-        self.type = _type.Unk
+        self.type = ty.Unk
 
     def replace_child(self, old, new):
         with self.write_guard():
@@ -915,23 +915,7 @@ class UClass(Unresolved, Stmt):
 class UFunction(Unresolved, Stmt):
     ''' Unresolved function, such as `f` in `f()`. '''
     name: str
-    return_type: Type = _type.Unk
-
-    def _refresh_users(self):
-        pass
-
-    def replace_child(self, old, new):
-        pass
-
-
-# TODO: To be deprecated
-class LispList(Expr):
-    def __init__(self, items: List[Expr], loc: Location):
-        self.items = items
-        self.loc = loc
-
-    def get_type(self) -> Type:
-        return _type.LispType
+    return_type: Type = ty.Unk
 
     def _refresh_users(self):
         pass
@@ -941,4 +925,4 @@ class LispList(Expr):
 
 
 def is_unk(type: Type) -> bool:
-    return type == _type.Unk or type is None
+    return type == ty.Unk or type is None

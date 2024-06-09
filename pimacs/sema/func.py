@@ -25,7 +25,7 @@ class FuncSig:
 
     @classmethod
     def create(cls, func: "Function"):
-        return_type = func.return_type if func.return_type else _ty.Nil
+        return_type = func.return_type if func.return_type else _ty.Void
         symbol = FuncSymbol(func.name)
         # TODO: Support the context
         return FuncSig(
@@ -45,7 +45,7 @@ class FuncSig:
         # TODO: Add the basic func-call rule back to FuncCall
         for no, param in enumerate(params):
             if isinstance(param, Expr):
-                if not param.get_type().is_subtype(args[self.input_types[no][0]]):
+                if not args[self.input_types[no][0]].can_accept(param.get_type()):
                     return False
             else:
                 if param.name not in args:

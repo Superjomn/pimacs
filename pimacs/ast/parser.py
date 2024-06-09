@@ -12,7 +12,7 @@ from lark.indenter import PythonIndenter
 from lark.lexer import Token
 
 import pimacs.ast.ast as ast
-import pimacs.ast.type as _type
+import pimacs.ast.type as ty
 from pimacs.ast.ast_visitor import IRMutator, IRVisitor
 
 
@@ -114,7 +114,7 @@ class PimacsTransformer(Transformer):
         "The type of Set"
         self._force_non_rule(items)
         assert len(items) == 1
-        return _type.SetType(inner_types=items)
+        return ty.Set_.clone_with(*items)
 
     def dict_type(self, items):
         """
@@ -122,26 +122,26 @@ class PimacsTransformer(Transformer):
         """
         self._force_non_rule(items)
         assert len(items) == 2
-        return _type.DictType(key_type=items[0], value_type=items[1])
+        return ty.Dict_.clone_with(*items)
 
     def list_type(self, items):
         """Type of List."""
         self._force_non_rule(items)
         assert len(items) == 1
-        return _type.ListType(inner_types=items)
+        return ty.List_.clone_with(*items)
 
-    def PRIMITIVE_TYPE(self, items) -> _type.Type:
+    def PRIMITIVE_TYPE(self, items) -> ty.Type:
         self._force_non_rule(items)
         # This terminal is failed, because it is covered by the custom_type
         raise NotImplementedError()
 
-    def custom_type(self, items) -> _type.Type:
+    def custom_type(self, items) -> ty.Type:
         self._force_non_rule(items)
         assert len(items) == 1
-        ret = _type.parse_primitive_type(items[0].value)
+        ret = ty.Type.get_primitive(items[0].value)
         if ret is not None:
             return ret
-        return _type.Type(type_id=_type.TypeId.CUSTOMED, name=items[0].value)
+        return ty.GenericType(name=items[0].value)
 
     def block(self, items) -> ast.Block:
         self._force_non_rule(items)
@@ -178,11 +178,11 @@ class PimacsTransformer(Transformer):
         type = items[0]
         spec_types = items[1]
 
-        if len(spec_types) == 1 and spec_types[0].type_id is _type.TypeId.List:
+        if len(spec_types) == 1 and spec_types[0].is_List():
             spec_types = spec_types[0].inner_types
 
         # TODO: Unify the types in ModuleContext
-        return _type.make_customed(name=type.value, subtypes=spec_types)
+        return ty.CompositeType(name=type.value, params=spec_types)
 
     def func_call(self, items) -> ast.Call:
         self._force_non_rule(items)
@@ -259,7 +259,7 @@ class PimacsTransformer(Transformer):
         # self._force_non_rule(items)
         loc = self._get_loc(items[0])
         name = items[1].value
-        type = safe_get(items, 2, _type.Unk)
+        type = safe_get(items, 2, ty.Unk)
         init = safe_get(items, 3, None)
         if isinstance(init, lark.Tree):
             init = init.children[0]
@@ -272,7 +272,7 @@ class PimacsTransformer(Transformer):
         self._force_non_rule(items)
         loc = self._get_loc(items[0])
         name = items[1].value
-        type = safe_get(items, 2, _type.Unk)
+        type = safe_get(items, 2, ty.Unk)
         init = safe_get(items, 3, None)
 
         node = ast.VarDecl(name=name, type=type, init=init,
@@ -515,7 +515,7 @@ class PimacsTransformer(Transformer):
 
     def type_placeholders(self, items):
         self._force_non_rule(items)
-        return [_type.make_customed(name=item.value) for item in items]
+        return [ty.GenericType(name=item.value) for item in items]
 
     def type_placeholder_list(self, items):
         self._force_non_rule(items)

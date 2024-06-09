@@ -140,7 +140,7 @@ class FileSema(IRMutator):
             else:
                 assert self._cur_class
                 # TODO: deal with the templated class
-                obj.type = _ty.make_customed(self._cur_class.name, None)
+                obj.type = _ty.GenericType(self._cur_class.name)
 
             # The Attr cannot be resolved now, it can only be resolved in bulk when a class is fully analyzed.
             attr = ast.UAttr(value=obj, attr=var_name, loc=node.loc)
@@ -294,17 +294,17 @@ class FileSema(IRMutator):
                     arg, f"Argument {arg.name} should have a type")
         # check if return type is valid
         if not node.return_type or node.return_type is _ty.Unk:
-            node.return_type = _ty.Nil
+            node.return_type = _ty.Void
             return_nil = (not node.body.return_type) or (
                 len(
-                    node.body.return_type) == 1 and node.body.return_type[0] is _ty.Nil
+                    node.body.return_type) == 1 and node.body.return_type[0] is _ty.Void
             )
             if not return_nil:
                 self.report_error(
                     node,
                     f"Function which returns non-nil values should set return type",
                 )
-        elif node.body.return_type and node.body.return_type is not _ty.Nil:
+        elif node.body.return_type and node.body.return_type is not _ty.Void:
             if not can_assign_type(node.return_type, node.body.return_type):
                 self.report_error(
                     node,
@@ -391,7 +391,7 @@ class FileSema(IRMutator):
                 arg.default = member.init
             args.append(arg)
 
-        return_type = _ty.make_customed(node.name, None)
+        return_type = _ty.GenericType(node.name)
 
         make_obj_expr = MakeObject(class_name=node.name, loc=node.loc)
         make_obj_expr.type = return_type
@@ -503,7 +503,7 @@ class FileSema(IRMutator):
             if isinstance(return_stmt, ast.Return):
                 if return_stmt.value:
                     return_types.add(return_stmt.value.get_type())
-        node.return_type = list(return_types) if return_types else [_ty.Nil]
+        node.return_type = list(return_types) if return_types else [_ty.Void]
         return node
 
     @contextmanager
@@ -558,7 +558,7 @@ class FileSema(IRMutator):
                     f"{node.loc}\nself should not have a type",
                 )
             else:
-                node.type = _ty.make_customed(self._cur_class.name, None)
+                node.type = self._cur_class.as_type()
         return node
 
     def visit_BinaryOp(self, node: ast.BinaryOp):

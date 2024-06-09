@@ -112,7 +112,7 @@ def test_SymbolTable_func_override():
 def test_SymbolTable_class_method():
     table = SymbolTable()
 
-    self = ast.Arg(name="self", type=_ty.make_customed("App"), loc=None)
+    self = ast.Arg(name="self", type=_ty.GenericType("App"), loc=None)
 
     foo0 = ast.Function(name="foo", args=[self],
                         return_type=None, loc=None, body=[])
