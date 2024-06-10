@@ -73,6 +73,9 @@ class BasicType(Type):
     def __init__(self, name, parent=None):
         super().__init__(name=name, parent=parent, is_concrete=True)
 
+    def __repr__(self):
+        return self.name
+
 
 class CompositeType(Type):
     def __init__(self, name, parent=None, params: Optional[Tuple[Type, ...]] = None):
@@ -100,13 +103,16 @@ class CompositeType(Type):
                 return p1 == p2
         return True
 
+    def __repr__(self):
+        return super().__str__()
+
 
 class PlaceholderType(Type):
     def __init__(self, name, parent=None):
         super().__init__(name, parent, is_concrete=False)
 
     def __repr__(self):
-        return self.name
+        return f"<P {self.name}>"
 
     def compatible_with(self, other):
         return True
@@ -117,7 +123,7 @@ class GenericType(Type):
         super().__init__(name, parent, params=params)
 
     def __repr__(self):
-        return f"GenericType<{self.name}[{', '.join(repr(p) for p in self.params)}]>"
+        return f"G<{super().__str__()}>"
 
 
 class FunctionType(Type):

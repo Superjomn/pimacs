@@ -51,3 +51,19 @@ def foo-2 (a:T0, b:T1) -> T0:
 
 # CHECK: var call-foo-2 :Int = foo-2(1, 2)
 var call-foo-2 = foo-2(1, 2)
+
+@template[T]
+def min(a: T, b: T) -> T:
+    return a if a < b else b
+
+var ab = min(1, 2)
+
+@template[T]
+class List:
+    var list: Lisp
+
+    def __init__(self):
+        self.list = %list()
+
+    def append(self, v: T):
+        %push(v, self.list)
