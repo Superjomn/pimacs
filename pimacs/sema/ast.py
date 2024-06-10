@@ -17,15 +17,30 @@ from .utils import Symbol
 class AnalyzedClass(Class):
     # symbols hold all the members and methods of the class
     # It should be updated once the class is modified
-    symbols: Scope = field(default_factory=Scope, init=False, hash=False)
+    symbols: Scope = field(default_factory=Scope,
+                           init=False, hash=False, repr=False)
+
+    template_params: Tuple[ty.Type, ...] = field(
+        default_factory=tuple, hash=False)
 
     @classmethod
     def create(cls, node: Class) -> "AnalyzedClass":
         return cls(
             name=node.name,
             body=node.body,
+            decorators=node.decorators,
+            template_params=AnalyzedClass._extract_template_params(node),
             loc=node.loc,
         )
+
+    @staticmethod
+    def _extract_template_params(node: Class):
+        if not node.decorators:
+            return tuple()
+        for dec in node.decorators:
+            if isinstance(dec.action, Template):
+                return dec.action.types
+        return tuple()
 
     @contextmanager
     def auto_update_symbols(self):

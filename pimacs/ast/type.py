@@ -81,6 +81,9 @@ class CompositeType(Type):
     def __init__(self, name, parent=None, params: Optional[Tuple[Type, ...]] = None):
         super().__init__(name, parent, params=params)
 
+    def __hash__(self):
+        return super().__hash__()
+
     @property
     def is_concrete(self):
         return all(param.is_concrete for param in self.params)
@@ -89,6 +92,9 @@ class CompositeType(Type):
         return type(self)(self.name, self.parent, params)
 
     def __eq__(self, other):
+        if not isinstance(other, Type):
+            return False
+
         if self.name != other.name:
             return False
 
@@ -112,7 +118,7 @@ class PlaceholderType(Type):
         super().__init__(name, parent, is_concrete=False)
 
     def __repr__(self):
-        return f"<P {self.name}>"
+        return f"<P: {self.name}>"
 
     def compatible_with(self, other):
         return True
@@ -123,7 +129,7 @@ class GenericType(Type):
         super().__init__(name, parent, params=params)
 
     def __repr__(self):
-        return f"G<{super().__str__()}>"
+        return f"<G: {super().__str__()}>"
 
 
 class FunctionType(Type):

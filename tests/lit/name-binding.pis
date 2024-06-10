@@ -57,13 +57,3 @@ def min(a: T, b: T) -> T:
     return a if a < b else b
 
 var ab = min(1, 2)
-
-@template[T]
-class List:
-    var list: Lisp
-
-    def __init__(self):
-        self.list = %list()
-
-    def append(self, v: T):
-        %push(v, self.list)

@@ -874,9 +874,6 @@ class Class(Stmt, VisiableSymbol):
     body: Tuple[Stmt]
     decorators: Tuple["Decorator", ...] = field(default_factory=tuple)
 
-    def __repr__(self) -> str:
-        return f"class {self.name}"
-
     def _refresh_users(self):
         self.body.add_user(self)
         for stmt in self.body:
@@ -911,7 +908,7 @@ class Class(Stmt, VisiableSymbol):
         '''
         for decorator in self.decorators:
             if isinstance(decorator.action, Template):
-                return ty.GenericType(self.name, params=decorator.action.types)
+                return ty.CompositeType(self.name, params=decorator.action.types)
         return ty.GenericType(self.name)
 
     def replace_types(self, mapping: Dict[Type, Type]) -> None:

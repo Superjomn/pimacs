@@ -5,7 +5,7 @@ import logging
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import pimacs.ast.type as _ty
 from pimacs.ast.utils import WeakSet
@@ -15,6 +15,7 @@ from pimacs.sema.func import FuncOverloads
 from . import ast
 from .ast import AnalyzedClass, CallMethod, MakeObject, Template, UCallMethod
 from .ast_visitor import IRMutator, IRVisitor
+from .class_sema import ClassVisitor
 from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
 from .func import FuncSig
 from .type_infer import TypeInfer, is_unk
@@ -69,6 +70,8 @@ class FileSema(IRMutator):
         self._unresolved_symbols: WeakSet = WeakSet()
         # The newly resolved symbols those need to be type-inferred
         self._newly_resolved_symbols: WeakSet = WeakSet()
+
+        self._class_visitor = ClassVisitor(self)
 
     def __call__(self, node: ast.Node):
         tree = self.visit(node)
@@ -321,11 +324,14 @@ class FileSema(IRMutator):
                 node.sema_failed = True
 
         node = self.sym_tbl.insert(symbol, node)
-        return self.verify_FuncDecl(node)
+        return self.verify_Function(node)
 
-    def verify_FuncDecl(self, node: ast.Function) -> ast.Function:
+    def verify_Function(self, node: ast.Function) -> ast.Function:
         if node.sema_failed:
             return node
+
+        if node.template_params is not None:
+            self.verify_template(node.template_params, node)
 
         # check if argument names are unique
         arg_names = [arg.name for arg in node.args]
@@ -365,44 +371,49 @@ class FileSema(IRMutator):
 
         return node
 
+    def verify_template(self, params: Tuple[_ty.Type, ...], node: ast.Node):
+        if not params:
+            return
+        # check placeholder unique
+        type_set = set(params)
+        if len(type_set) != len(params):
+            self.report_error(
+                node, f"Template params should be unique, got {params}")
+
     def visit_Class(self, the_node: ast.Class):
-        node = AnalyzedClass.create(the_node)  # type: ignore
-        with node.auto_update_symbols():
-            if self.sym_tbl.current_scope.kind is not ScopeKind.Global:
-                self.report_error(
-                    node, f"Class should be declared in the global scope")
+        return self._class_visitor.visit_Class(the_node)
 
-            with self.sym_tbl.scope_guard(kind=ScopeKind.Class):
-                with self.class_scope_guard(node):
-                    node = super().visit_Class(node)
+    def class_add_constructors(self, node: AnalyzedClass):
+        ''' Add constructor functions to the class.
+        This will create individual functions in global scope to help create instances of the class.
 
-            symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
-            if self.sym_tbl.contains_locally(symbol):
-                self.report_error(node, f"Class {node.name} already exists")
+        e.g.
 
-            node = self.sym_tbl.insert(symbol, node)
+        class App:
+            def __init__(a: Int):
+                return
 
-        # Add constructors to the class into the global scope
-        self._add_class_constructors(node)
+        will get a function:
 
-        return self.verify_Class(node)
-
-    def _add_class_constructors(self, node: AnalyzedClass):
-        ''' Add constructor functions to the class. '''
+        def App(a: Int) -> App:
+            # create instance
+            # same body of App.__init__(a)
+            return instance
+        '''
         symbol = FuncSymbol("__init__")
         overloads = node.symbols.get(symbol)
 
         assert self._cur_file
         if overloads is None:
             # add a default constructor
-            fn = self._get_class_default_constructor(node)
+            fn = self.class_create_default_constructor(node)
 
             # append to the file for sema later
             self._cur_file.stmts.append(fn)
         else:
             # add constructor for each __init__ method
             for init_fn in overloads:
-                fn = self._get_class_constructor(node.name, init_fn)
+                fn = self.class_create_constructor(node.name, init_fn)
                 symbol = FuncSymbol(fn.name)
                 if overloads := self.sym_tbl.global_scope.get(symbol):
                     if overloads.lookup(FuncSig.create(fn)):
@@ -412,13 +423,13 @@ class FileSema(IRMutator):
                 # append to the file for sema later
                 self._cur_file.stmts.append(fn)
 
-    def _add_class_methods(self, node: AnalyzedClass):
+    def class_add_methods(self, node: AnalyzedClass):
         ''' Add method functions to the class. '''
         members = node.symbols.get(Symbol.Kind.Member)
         assert self._cur_file
         for member in members:
             if isinstance(member, ast.Function) and member.name != "__init__":
-                method = self._add_method(node.name, member)
+                method = self.class_add_method(node.name, member)
                 symbol = FuncSymbol(
                     method.name, annotation=ast.Function.Annotation.Class_method)
                 if overloads := self.sym_tbl.global_scope.get(symbol):
@@ -429,7 +440,7 @@ class FileSema(IRMutator):
                 # append to the file for sema later
                 self._cur_file.stmts.append(method)
 
-    def _get_class_default_constructor(self, node: AnalyzedClass) -> ast.Function:
+    def class_create_default_constructor(self, node: AnalyzedClass) -> ast.Function:
         '''
         Create a default constructor for the class.
         '''
@@ -456,7 +467,7 @@ class FileSema(IRMutator):
         fn.annotation = ast.Function.Annotation.Class_constructor
         return fn
 
-    def _get_class_constructor(self, class_name: str, init_fn: ast.Function):
+    def class_create_constructor(self, class_name: str, init_fn: ast.Function):
         '''
         Create a constructor function for the class.
         '''
@@ -469,7 +480,7 @@ class FileSema(IRMutator):
         fn.annotation = ast.Function.Annotation.Class_constructor
         return fn
 
-    def _add_method(self, class_name: str, method: ast.Function):
+    def class_add_method(self, class_name: str, method: ast.Function):
         '''
         Create a method function for the class in the global scope.
         The method will guard with annotation `Class_method`, and the first argument should be `self`.
@@ -486,6 +497,9 @@ class FileSema(IRMutator):
     def verify_Class(self, node: AnalyzedClass) -> ast.Class:
         if node.sema_failed:
             return node
+
+        self.verify_template(node.template_params, node)
+
         return node
 
     def visit_Call(self, node: ast.Call):
@@ -565,12 +579,6 @@ class FileSema(IRMutator):
                     return_types.add(return_stmt.value.get_type())
         node.return_type = list(return_types) if return_types else [_ty.Void]
         return node
-
-    @contextmanager
-    def class_scope_guard(self, class_node: ast.Class):
-        self._cur_class = class_node
-        yield
-        self._cur_class = None
 
     def visit_Arg(self, node: ast.Arg):
         node = super().visit_Arg(node)
