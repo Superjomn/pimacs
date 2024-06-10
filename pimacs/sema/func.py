@@ -18,6 +18,9 @@ class FuncDuplicationError(Exception):
     pass
 
 
+template_spec_t = Dict[_ty.Type, _ty.Type]  # type: ignore
+
+
 @dataclass(slots=True, unsafe_hash=True)
 class FuncSig:
     """Function signature"""
@@ -70,7 +73,7 @@ class FuncSig:
 
         return ret
 
-    def get_full_arg_list(self, call_params: List[CallParam | Expr]) -> None | Tuple[List[Tuple[str, _ty.Type]], Dict[_ty.Type, _ty.Type]]:
+    def get_full_arg_list(self, call_params: List[CallParam | Expr], template_param_spec: Optional[template_spec_t | List[_ty.Type]] = None) -> None | Tuple[List[Tuple[str, _ty.Type]], template_spec_t]:
         ''' fill in the default values and get a full list of arguments
         Returns:
             None if the arguments do not match the signature
@@ -79,9 +82,27 @@ class FuncSig:
         if self.func() is None:
             logger.debug(f"get_full_arg_list: Function is out-of-date")
             return None
+
         func_args = [arg for arg in self.func().args]  # type: ignore
         kwargs = {arg.name: arg for arg in func_args}   # type: ignore
+        # mapping placeholder type to spec type
+        # e.g. T0 => Int, T1 => Float
         template_specs: Dict[_ty.Type, _ty.Type] = {}
+
+        if template_param_spec and isinstance(template_param_spec, (list, tuple)):
+            if not self.func().template_params or len(template_param_spec) != len(self.func().template_params):   # type: ignore
+                return None
+            for param in template_param_spec:
+                assert param.is_concrete, f"template param {
+                    param} is not concrete"
+            template_param_spec = {arg: spec for arg, spec in zip(
+                self.func().template_params, template_param_spec)}  # type: ignore
+        assert isinstance(template_param_spec, dict) or template_param_spec is None, f"template_param_spec: {
+            template_param_spec}"
+        print(f"*** get template_param_spec: {template_param_spec}")
+
+        if template_param_spec:
+            template_specs.update(template_param_spec)
 
         def set_tpl_param(param: _ty.Type, actual: _ty.Type):
             assert actual.is_concrete
@@ -92,12 +113,13 @@ class FuncSig:
             return True
 
         def match_argument(arg: Arg, param: CallParam) -> bool:
-            if not arg.type.is_concrete:
+            arg_type = template_specs.get(arg.type, arg.type)
+            if not arg_type.is_concrete:
                 logger.debug("get_full_arg_list: Template parameter")
-                return set_tpl_param(arg.type, param.value.get_type())
-            elif not arg.type.can_accept(param.value.get_type()):
+                return set_tpl_param(arg_type, param.value.get_type())
+            elif not arg_type.can_accept(param.value.get_type()):
                 logger.debug(f"get_full_arg_list: Type mismatch: {
-                             arg.type} != {param.value.get_type()}")
+                             arg_type} != {param.value.get_type()}")
                 return False
             return True
 
@@ -153,15 +175,9 @@ class FuncSig:
 
     # TODO: replace the List[CallParam] with FuncCall to support overloading based on return_type
 
-    def match_call(self, params: List[CallParam | Expr]) -> bool:
-        """Check if the arguments match the signature"""
-
-        full_arg_list = self.get_full_arg_list(params)
-        if full_arg_list is None:
-            return False
-
-        # TODO: process the variadic arguments
-        return True
+    def match_call(self, params: List[CallParam | Expr], template_specs: Optional[template_spec_t] = None) -> bool:
+        ''' Check if the arguments match the signature with template specs '''
+        return self.get_full_arg_list(params, template_specs)
 
 
 @dataclass(slots=True)
@@ -179,31 +195,15 @@ class FuncOverloads:
         return self.symbol.name
 
     @multimethod
-    def lookup(self, args: tuple) -> List[Tuple[Function, FuncSig]]:
+    def lookup(self, args: tuple, template_spec: Optional[template_spec_t] = None) -> List[Tuple[Function, FuncSig]]:
         """Find the function that matches the arguments"""
         candidates = []
         for sig, func in self.funcs.items():
-            if ret := sig.get_full_arg_list(args):
+            if ret := sig.get_full_arg_list(args, template_spec):
                 _, template_specs = ret
+                print(f"** sig: {sig}, template_specs: {template_specs}")
                 concrete_sig = sig.specialize(template_specs)
                 candidates.append((func, concrete_sig))
-        return candidates
-
-    @multimethod  # type: ignore
-    def lookup(self, args: tuple, template_specs: Dict[_ty.Type, _ty.Type]):
-        """Find the function that matches the arguments with template specs"""
-        assert template_specs
-
-        candidates = []
-        for sig in self.funcs:
-            if not sig.all_param_types_concrete():
-                continue
-            concrete_sig = sig.specialize(template_specs)
-            if concrete_sig is None:
-                continue
-            candidate = self.funcs.get(sig, None), concrete_sig
-            candidates.append(candidate)
-
         return candidates
 
     @multimethod  # type: ignore

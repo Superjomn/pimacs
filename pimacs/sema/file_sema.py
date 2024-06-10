@@ -658,10 +658,10 @@ class FileSema(IRMutator):
                              func_overloads}")
                 if func_overloads is None:
                     return False  # remain unresolved
+
                 assert len(node.users) == 1  # only one caller
                 call = list(node.users)[0]
                 assert isinstance(call, ast.Call)
-                # assert func_overloads.lookup(call.args)
 
                 if func_candidates := func_overloads.lookup(call.args):
                     if len(func_candidates) > 1:
@@ -731,7 +731,20 @@ class FileSema(IRMutator):
                     return False
 
                 args = tuple([node.obj] + list(node.args))  # self + args
-                if method_candidates := methods.lookup(args):
+
+                logger.debug(f"UCallMethod obj: {node.obj}")
+                class_type = node.obj.get_type()
+
+                # check if is method
+                template_spec = None
+                if isinstance(class_type, _ty.CompositeType):
+                    if class_node.template_params:
+                        assert len(class_node.template_params) == len(
+                            class_type.params)
+                        template_spec = dict(
+                            zip(class_node.template_params, class_type.params))
+
+                if method_candidates := methods.lookup(args, template_spec):
                     logger.debug(f"UCallAttr found method: {
                                  method_candidates}")
                     if len(method_candidates) > 1:
