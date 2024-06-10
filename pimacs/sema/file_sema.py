@@ -5,6 +5,7 @@ import logging
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pprint import pprint
 from typing import Dict, List, Optional, Tuple
 
 import pimacs.ast.type as _ty
@@ -265,7 +266,21 @@ class FileSema(IRMutator):
         if not node.template_params:
             return
 
-        name_to_param = {param.name: param for param in node.template_params}
+        name_to_param = {_ty.GenericType(
+            param.name): param for param in node.template_params}
+
+        if self._cur_class and self._cur_class.template_params:
+            name_to_param.update(
+                {_ty.GenericType(
+                    param.name): param for param in self._cur_class.template_params}
+            )
+
+        node.replace_types(name_to_param)
+
+        print("=" * 10)
+        pprint(node)
+
+        '''
         args = [arg for arg in node.args]
         for arg in args:
             if param_type := name_to_param.get(arg.type.name, None):
@@ -275,6 +290,7 @@ class FileSema(IRMutator):
         if node.return_type:
             if param_type := name_to_param.get(node.return_type.name, None):
                 node.return_type = param_type
+        '''
 
     '''
     def func_setup_method_self(self, node: ast.Function):
@@ -401,6 +417,7 @@ class FileSema(IRMutator):
                         logger.debug(f"Resolved function {
                                      func_name}: {func_candidates}")
                         func, func_sig = func_candidates[0]
+                        assert func_sig.all_param_types_concrete()
                         node.func = func  # bind the func
                         node.type = func_sig.output_type
                         self.collect_newly_resolved(node)
@@ -410,7 +427,8 @@ class FileSema(IRMutator):
             case ast.UAttr:
                 new_node = UCallMethod(
                     obj=func.value, attr=func.attr,  # type: ignore
-                    args=node.args, loc=func.loc)  # type: ignore
+                    args=node.args, loc=func.loc,  # type: ignore
+                    type_spec=node.type_spec)
                 logger.debug(f"ast.UAttr users: {node.users}")
                 node.replace_all_uses_with(new_node)
                 logger.debug(f"ast.UCallAttr users: {new_node.users}")
@@ -663,7 +681,7 @@ class FileSema(IRMutator):
                 call = list(node.users)[0]
                 assert isinstance(call, ast.Call)
 
-                if func_candidates := func_overloads.lookup(call.args):
+                if func_candidates := func_overloads.lookup(call.args, template_spec=call.type_spec):
                     if len(func_candidates) > 1:
                         self.report_error(
                             node, f"Function {node.name} has more than one candidates")
@@ -672,9 +690,18 @@ class FileSema(IRMutator):
                         return False
 
                     func, func_sig = func_candidates[0]
+                    logger.debug(f"bind_unresolved: Resolved sig {
+                                 func_sig}, func: {func}")
+                    if not func_sig.all_param_types_concrete():
+                        return False
 
                     node.replace_all_uses_with(func)
-                    self._type_infer(func, forward_push=False)
+                    if func.template_params:
+                        # The templated func's output could be a non-concrete type
+                        call.type = func_sig.output_type
+                        self._type_infer(call, forward_push=False)
+                    else:
+                        self._type_infer(func, forward_push=False)
                     return True
                 return False
 
@@ -743,6 +770,9 @@ class FileSema(IRMutator):
                             class_type.params)
                         template_spec = dict(
                             zip(class_node.template_params, class_type.params))
+
+                logger.debug(f"resolving UCallMethod: template_spec: {
+                             template_spec}")
 
                 if method_candidates := methods.lookup(args, template_spec):
                     logger.debug(f"UCallAttr found method: {

@@ -78,8 +78,11 @@ class Node(ABC):
         self.users.clear()
 
     def get_updated_type(self, old: ty.Type, mapping: Dict[ty.Type, ty.Type]) -> ty.Type:
-        if target := mapping.get(old, None):
-            return target
+        if isinstance(old, ty.PlaceholderType):
+            if target := mapping.get(old, None):
+                return target
+        elif isinstance(old, ty.CompositeType):
+            return old.replace_with(mapping)
         return old
 
     @contextmanager

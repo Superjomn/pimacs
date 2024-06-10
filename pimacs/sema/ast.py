@@ -92,6 +92,8 @@ class UCallMethod(Unresolved, Expr):
     attr: str = ""
     args: Tuple[CallParam, ...] = field(default_factory=tuple)
 
+    type_spec: Tuple[ty.Type, ...] = field(default_factory=tuple)
+
     def __post_init__(self):
         self._refresh_users()
 

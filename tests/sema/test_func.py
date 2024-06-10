@@ -140,3 +140,43 @@ def test_func_sig_specialize():
 
     new_sig = new_sig.specialize(mapping)
     assert new_sig.all_param_types_concrete()
+
+
+def test_func_sig_specialize_List_T():
+    T = _ty.PlaceholderType(name="T")
+    List_T = _ty.CompositeType(name="List", params=(T,))
+    func = Function(name="List",
+                    return_type=List_T,
+                    loc=None,
+                    body=[],
+                    )
+
+    sig = FuncSig.create(func)
+    assert not sig.all_param_types_concrete()
+
+    mapping = {
+        T: _ty.Int,
+    }
+
+    new_sig = sig.specialize(mapping)
+    assert new_sig.all_param_types_concrete()
+
+
+def test_func_sig_specialize_List_T():
+    T = _ty.PlaceholderType(name="T")
+    List_T = _ty.CompositeType(name="List", params=(T,))
+    func = Function(name="List",
+                    return_type=List_T,
+                    loc=None,
+                    body=[],
+                    )
+
+    sig = FuncSig.create(func)
+    assert not sig.all_param_types_concrete()
+
+    mapping = {
+        T: _ty.Int,
+    }
+
+    new_sig = sig.specialize(mapping)
+    assert new_sig.all_param_types_concrete()

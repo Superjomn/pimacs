@@ -91,6 +91,30 @@ class CompositeType(Type):
     def clone_with(self, *params):
         return type(self)(self.name, self.parent, params)
 
+    def replace_with(self, mapping: Dict[Type, Type]) -> "CompositeType":
+        '''
+        Replace the type with the mapping and get a new type
+        '''
+        params = tuple(mapping.get(param, param) for param in self.params)
+
+        the_params = []
+        for param in params:
+            if (not param.is_concrete) and not isinstance(param, PlaceholderType):
+                assert isinstance(param, CompositeType)
+                param = param.replace_with(mapping)
+            the_params.append(param)
+
+        return CompositeType(self.name, self.parent, tuple(the_params))
+
+    def collect_placeholders(self) -> List["PlaceholderType"]:
+        placeholders = []
+        for param in self.params:
+            if isinstance(param, PlaceholderType):
+                placeholders.append(param)
+            elif isinstance(param, CompositeType):
+                placeholders.extend(param.collect_placeholders())
+        return placeholders
+
     def __eq__(self, other):
         if not isinstance(other, Type):
             return False

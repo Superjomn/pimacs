@@ -1,3 +1,4 @@
+from pprint import pprint
 from typing import Optional
 
 import pimacs.ast.ast as ast
@@ -34,5 +35,7 @@ def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:
     the_ir = sema(the_ast)
     if sema.succeed:
         return the_ir
+
+    pprint(the_ir)
 
     return None

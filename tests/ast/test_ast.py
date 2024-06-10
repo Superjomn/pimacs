@@ -147,3 +147,14 @@ def test_replace_types_Function():
 
     assert arg0.type is T0_1
     assert var.type is T0_1
+
+
+def test_replace_types_Function_1():
+    T = _ty.GenericType(name='T')
+    List_T = _ty.CompositeType(name='List', params=(T,))
+    fn = Function(name="List", body=Block(loc=None),
+                  loc=None, return_type=List_T)
+    mapping = {T: _ty.PlaceholderType(name='T')}
+    fn.replace_types(mapping)
+
+    assert fn.return_type.params[0] == _ty.PlaceholderType(name='T')

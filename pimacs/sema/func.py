@@ -47,29 +47,50 @@ class FuncSig:
         return not self.get_template_params()
 
     def get_template_params(self) -> Set[_ty.Type]:
-        ret = {arg for _, arg in self.input_types if not arg.is_concrete}
-        if not self.output_type.is_concrete:
-            ret.add(self.output_type)
+        ret = set()
+
+        def collect_type(arg_type):
+            if not arg_type.is_concrete:
+                if isinstance(arg_type, _ty.PlaceholderType):
+                    ret.add(arg_type)
+                elif isinstance(arg_type, _ty.CompositeType):
+                    ret.update(arg_type.collect_placeholders())
+                else:
+                    raise NotImplementedError()
+
+        for _, arg_type in self.input_types:
+            collect_type(arg_type)
+        collect_type(self.output_type)
+
         return ret
 
     def specialize(self, template_specs: Dict[_ty.Type, _ty.Type]) -> Optional["FuncSig"]:
         template_params = self.get_template_params()
         spec_params = set(template_specs.keys())
         if not template_params.issubset(spec_params):
+            logger.debug(f"FuncSig.specialize failed: {
+                         template_params} vs {template_specs}")
             return None
 
         ret = copy.copy(self)
 
+        def specialize_type(arg_type):
+            if arg_type in template_specs:
+                return template_specs[arg_type]
+            elif isinstance(arg_type, _ty.CompositeType):
+                return arg_type.replace_with(template_specs)
+            else:
+                raise NotImplementedError()
+            return arg_type
+
         # replace inputs
         input_types = []
         for no, (name, arg) in enumerate(self.input_types):
-            if arg in template_specs:
-                arg = template_specs[arg]
+            arg = specialize_type(arg)
             input_types.append((name, arg))
         ret.input_types = tuple(input_types)
 
-        if output_type := template_specs.get(self.output_type, None):
-            ret.output_type = output_type
+        ret.output_type = specialize_type(self.output_type)
 
         return ret
 
@@ -99,10 +120,12 @@ class FuncSig:
                 self.func().template_params, template_param_spec)}  # type: ignore
         assert isinstance(template_param_spec, dict) or template_param_spec is None, f"template_param_spec: {
             template_param_spec}"
-        print(f"*** get template_param_spec: {template_param_spec}")
 
         if template_param_spec:
             template_specs.update(template_param_spec)
+
+        logger.debug(f"get_full_arg_list: sig of {
+                     self} get template_param_spec: {template_param_spec}")
 
         def set_tpl_param(param: _ty.Type, actual: _ty.Type):
             assert actual.is_concrete
@@ -114,6 +137,8 @@ class FuncSig:
 
         def match_argument(arg: Arg, param: CallParam) -> bool:
             arg_type = template_specs.get(arg.type, arg.type)
+            logger.debug(f"get_full_arg_list: {
+                         arg.name} -> {arg_type} of {type(arg_type)} vs {param.value.get_type()}")
             if not arg_type.is_concrete:
                 logger.debug("get_full_arg_list: Template parameter")
                 return set_tpl_param(arg_type, param.value.get_type())
@@ -201,7 +226,6 @@ class FuncOverloads:
         for sig, func in self.funcs.items():
             if ret := sig.get_full_arg_list(args, template_spec):
                 _, template_specs = ret
-                print(f"** sig: {sig}, template_specs: {template_specs}")
                 concrete_sig = sig.specialize(template_specs)
                 candidates.append((func, concrete_sig))
         return candidates
