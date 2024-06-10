@@ -33,6 +33,7 @@ def get_parser(code: Optional[str] = None, filename: str = "<pimacs>"):
         parser="lalr",
         postlex=PythonIndenter(),
         transformer=PimacsTransformer(source=source),
+        propagate_positions=True,
     )
 
 

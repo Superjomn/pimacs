@@ -7,3 +7,9 @@ class List:
 
     def append(self, v: T):
         %push(v, self.list)
+
+    def __getitem__(self, idx: Int) -> T:
+        return %nth(self.list, idx)
+
+var a = List[Int]()
+a.append(1)

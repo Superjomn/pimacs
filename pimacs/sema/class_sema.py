@@ -100,7 +100,7 @@ class ClassVisitor(IRMutator):
         else:
             # add constructor for each __init__ method
             for init_fn in overloads:
-                fn = self.class_create_constructor(node.name, init_fn)
+                fn = self.class_create_constructor(node, init_fn)
                 symbol = FuncSymbol(fn.name)
                 if overloads := self.sym_tbl.global_scope.get(symbol):
                     if overloads.lookup(FuncSig.create(fn)):
@@ -162,7 +162,7 @@ class ClassVisitor(IRMutator):
         fn.annotation = ast.Function.Annotation.Class_constructor
         return fn
 
-    def class_create_constructor(self, class_name: str, init_fn: ast.Function):
+    def class_create_constructor(self, class_node: AnalyzedClass, init_fn: ast.Function):
         '''
         Create a constructor function for the class.
         '''
@@ -170,9 +170,16 @@ class ClassVisitor(IRMutator):
         args = init_fn.args[1:]
         body = init_fn.body
         return_type = init_fn.args[0].type
-        fn = ast.Function(name=class_name, args=tuple(args), body=body, loc=init_fn.loc,
+        fn = ast.Function(name=class_node.name, args=tuple(args), body=body, loc=init_fn.loc,
                           return_type=return_type)
         fn.annotation = ast.Function.Annotation.Class_constructor
+
+        if class_node.template_params:
+            # create a template decorator
+            decorator = ast.Decorator(action=ast.Template(
+                types=class_node.template_params), loc=fn.loc)
+            fn.decorators = (decorator,)
+
         return fn
 
     def class_add_method(self, class_name: str, method: ast.Function):
