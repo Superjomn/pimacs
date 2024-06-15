@@ -19,7 +19,7 @@ from .ast_visitor import IRMutator, IRVisitor
 from .class_sema import ClassVisitor
 from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
 from .func import FuncSig
-from .type_infer import TypeInfer, is_unk
+from .type_infer import TypeChecker, is_unk
 from .utils import ClassId, FuncSymbol, ModuleId, bcolors, print_colored
 
 
@@ -53,7 +53,13 @@ def get_common_type(left: _ty.Type, right: _ty.Type):
 
 class FileSema(IRMutator):
     """
-    Clean up the symbols in the IR, like unify the VarRef or FuncDecl with the same name in the same scope.
+    Performing Sema on a single File.
+
+    The algorithm:
+
+    1. Perform a bottom-up traversal to try type inference, and collect all unresolved nodes. The symbol table are also
+         created during this phase.
+    2. For each unresolved node, try to bind the symbol with the corresponding scope.
     """
 
     # NOTE, the ir nodes should be created when visited.
@@ -62,7 +68,7 @@ class FileSema(IRMutator):
         self.ctx = ctx
         self._succeeded = True
 
-        self._type_infer = TypeInfer(ctx)
+        self._type_infer = TypeChecker(ctx)
 
         self._cur_class: ast.Class | None = None
         self._cur_file: ast.File | None = None
@@ -113,7 +119,8 @@ class FileSema(IRMutator):
         self._unresolved_symbols.add(node)
 
     def collect_newly_resolved(self, node: ast.Node):
-        # Since the IRMutator cannot get parent in a single visit method, we need to collect the newly resolved symbols and type-infer them in the next turn.
+        # Since the IRMutator cannot get parent in a single visit method, we need to collect the newly resolved symbols
+        # and type-infer them in the next turn.
         if not node.sema_failed:
             self._newly_resolved_symbols.add(node)
 
