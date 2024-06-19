@@ -1,7 +1,6 @@
 from typing import *
 
 from multimethod import multimethod
-from numpy import isin
 
 import pimacs.ast.type as _ty
 from pimacs.ast import ast
