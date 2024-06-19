@@ -53,7 +53,7 @@ foo()'''
 
     call = file.stmts[1]
     assert isinstance(call, ast.Call)
-    assert isinstance(call.func, ast.Function)
+    assert isinstance(call.target, ast.Function)
 
 
 def test_class():

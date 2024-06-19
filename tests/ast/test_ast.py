@@ -6,15 +6,15 @@ from pimacs.ast.utils import WeakSet
 
 
 def test_basic():
-    c = Constant(value=100, loc=None)
+    c = Literal(value=100, loc=None)
     v = VarDecl('x', init=c)
 
     assert v in c.users
 
 
 def test_WeakSet_behavior():
-    value0 = Constant(value=100, loc=None)
-    value1 = Constant(value=200, loc=None)
+    value0 = Literal(value=100, loc=None)
+    value1 = Literal(value=200, loc=None)
 
     set = WeakSet()
     for i in range(10):
@@ -25,9 +25,9 @@ def test_WeakSet_behavior():
 
 
 def test_replace_child_VarDecl():
-    value = Constant(value=100, loc=None)
+    value = Literal(value=100, loc=None)
     var = VarDecl('x', init=value)
-    value1 = Constant(value=200, loc=None)
+    value1 = Literal(value=200, loc=None)
     var.replace_child(value, value1)
     assert var.init == value1
 
@@ -37,10 +37,10 @@ def test_replace_child_VarDecl():
 
 
 def test_replace_child_BinaryOp():
-    value = Constant(value=100, loc=None)
-    value1 = Constant(value=200, loc=None)
+    value = Literal(value=100, loc=None)
+    value1 = Literal(value=200, loc=None)
     binop = BinaryOp(op='+', left=value, right=value1, loc=None)
-    value2 = Constant(value=300, loc=None)
+    value2 = Literal(value=300, loc=None)
     binop.replace_child(value, value2)
     assert binop.left == value2
 
@@ -50,9 +50,9 @@ def test_replace_child_BinaryOp():
 
 
 def test_replace_child_UnaryOp():
-    value = Constant(value=100, loc=None)
+    value = Literal(value=100, loc=None)
     unaryop = UnaryOp(op='-', operand=value, loc=None)
-    value1 = Constant(value=200, loc=None)
+    value1 = Literal(value=200, loc=None)
     unaryop.replace_child(value, value1)
     assert unaryop.operand == value1
 
@@ -62,13 +62,13 @@ def test_replace_child_UnaryOp():
 
 
 def test_replace_child_Call():
-    value = Constant(value=100, loc=None)
+    value = Literal(value=100, loc=None)
     func = UFunction(name='fn', return_type=None, loc=None)
-    call = Call(func=func, args=(value,), loc=None)
+    call = Call(target=func, args=(value,), loc=None)
     func1 = UFunction(name='fn1', return_type=None, loc=None)
-    value1 = Constant(value=200, loc=None)
+    value1 = Literal(value=200, loc=None)
     call.replace_child(func, func1)
-    assert call.func == func1
+    assert call.target == func1
 
     for no, user in enumerate(func1.users):
         assert user == call
@@ -79,9 +79,9 @@ def test_replace_child_Call():
 
 
 def test_replace_child_If():
-    test = Constant(value=100, loc=None)
-    value0 = Constant(value=100, loc=None)
-    value1 = Constant(value=200, loc=None)
+    test = Literal(value=100, loc=None)
+    value0 = Literal(value=100, loc=None)
+    value1 = Literal(value=200, loc=None)
     if_ = If(cond=test, then_branch=value0, else_branch=value1, loc=None)
     if_.replace_child(test, value1)
     assert if_.cond == value1
@@ -97,7 +97,7 @@ def test_replace_child_Function():
     var = VarDecl('x', init=arg0)
     var1 = VarDecl('y', init=arg0)
     body = Block(stmts=(var, var1), loc=None)
-    func = Function(name='fn', args=(arg0), body=body, loc=None)
+    func = Function(name='fn', args=(arg0,), body=body, loc=None)
 
     # Block doesn't "use" the statements
     assert len(var.users) == 0
@@ -114,14 +114,14 @@ def test_replace_child_File():
     body = Block(stmts=tuple(), loc=None)
     func = Function(name='fn', args=tuple(), body=body, loc=None)
 
-    var = VarDecl('x', init=Constant(value=100, loc=None))
-    assign = Assign(target=var, value=Constant(value=200, loc=None), loc=None)
-    file = File(stmts=(func, var, assign), loc=None)
+    var = VarDecl('x', init=Literal(value=100, loc=None))
+    assign = Assign(target=var, value=Literal(value=200, loc=None), loc=None)
+    file = File(stmts=[func, var, assign], loc=None)
 
     # Function has one user (File)
     assert len(func.users) == 1
 
-    var2 = VarDecl('y', init=Constant(value=200, loc=None))
+    var2 = VarDecl('y', init=Literal(value=200, loc=None))
     assert len(var2.users) == 0
 
     var.replace_all_uses_with(var2)
@@ -130,20 +130,3 @@ def test_replace_child_File():
     assert len(var2.users) == 2  # Two users: Block and Assign
 
     assert var2 in file.stmts
-
-
-def test_replace_types_Function():
-    T0 = _ty.GenericType(name='T0')
-    arg0 = Arg(name='arg0', type=T0, loc=None)
-    var = VarDecl('x', init=arg0)
-    var1 = VarDecl('y', init=arg0)
-    body = Block(stmts=(var, var1), loc=None)
-    func = Function(name='fn', args=(arg0,), body=body, loc=None)
-
-    T0_1 = _ty.PlaceholderType(name='T0')
-    assert T0 != T0_1
-
-    func.replace_types({T0: T0_1})
-
-    assert arg0.type is T0_1
-    assert var.type is T0_1

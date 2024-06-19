@@ -3,7 +3,7 @@ This file contains several additional AST nodes dedicated to semantic analysis.
 '''
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import *
+from typing import Optional, Tuple
 
 import pimacs.ast.type as ty
 from pimacs.ast.ast import *
@@ -17,15 +17,26 @@ from .utils import Symbol
 class AnalyzedClass(Class):
     # symbols hold all the members and methods of the class
     # It should be updated once the class is modified
-    symbols: Scope = field(default_factory=Scope, init=False, hash=False)
+    symbols: Scope = field(default_factory=Scope,
+                           init=False, hash=False, repr=False)
 
     @classmethod
     def create(cls, node: Class) -> "AnalyzedClass":
         return cls(
             name=node.name,
             body=node.body,
+            decorators=node.decorators,
             loc=node.loc,
         )
+
+    @staticmethod
+    def _extract_template_params(node: Class):
+        if not node.decorators:
+            return tuple()
+        for dec in node.decorators:
+            if isinstance(dec.action, Template):
+                return dec.action.types
+        return tuple()
 
     @contextmanager
     def auto_update_symbols(self):
@@ -73,9 +84,11 @@ class UCallMethod(Unresolved, Expr):
       app = App()
       app.time()      # => UCallAttr(app, attr='time')
     '''
-    obj: Optional[CallParam] = None
+    obj: Optional[CallParam] = None  # self
     attr: str = ""
     args: Tuple[CallParam, ...] = field(default_factory=tuple)
+
+    type_spec: Tuple[ty.Type, ...] = field(default_factory=tuple)
 
     def __post_init__(self):
         self._refresh_users()
@@ -119,6 +132,31 @@ class CallMethod(Expr):
     def replace_child(self, old, new):
         if self.obj == old:
             self.obj = new
+        for i, arg in enumerate(self.args):
+            if arg == old:
+                self.args[i] = new
+
+
+@dataclass(slots=True)
+class LispCall(Expr):
+    '''
+    Call a Lisp function.
+
+    e.g.
+      (add 1 2)      # => LispCall(name='add', args=(1, 2))
+    '''
+    name: str
+    args: Tuple[Expr, ...]
+
+    def __post_init__(self):
+        self._refresh_users()
+
+    def _refresh_users(self):
+        self.users.clear()
+        for arg in self.args:
+            arg.add_user(self)
+
+    def replace_child(self, old, new):
         for i, arg in enumerate(self.args):
             if arg == old:
                 self.args[i] = new

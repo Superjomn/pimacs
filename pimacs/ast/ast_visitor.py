@@ -28,7 +28,7 @@ class IRVisitor:
             self.visit(decorator)
         self.visit(node.init)
 
-    def visit_Constant(self, node: ast.Constant):
+    def visit_Literal(self, node: ast.Literal):
         pass
 
     def visit_Template(self, node: ast.Template):
@@ -36,7 +36,7 @@ class IRVisitor:
             self.visit(t)
 
     def visit_Call(self, node: ast.Call):
-        self.visit(node.func)
+        self.visit(node.target)
         for arg in node.args:
             self.visit(arg)
 
@@ -207,7 +207,7 @@ class IRMutator:
         node.default = self.visit(node.default)
         return node
 
-    def visit_Constant(self, node: ast.Constant):
+    def visit_Literal(self, node: ast.Literal):
         if node.value is not None:
             node.value = self.visit(node.value)
         return node
@@ -260,7 +260,7 @@ class IRMutator:
         return node
 
     def visit_Call(self, node: ast.Call):
-        node.func = self.visit(node.func)
+        node.target = self.visit(node.target)
         node.args = tuple([self.visit(_) for _ in node.args])
         node.type_spec = tuple([self.visit(_) for _ in node.type_spec])
         return node
@@ -307,7 +307,7 @@ class IRMutator:
         stmts = []
         for i, stmt in enumerate(node.stmts):
             stmts.append(self.visit(stmt))
-        node.stmts = tuple(stmts)  # type: ignore
+        node.stmts = stmts
 
         return node
 
@@ -388,7 +388,7 @@ class IRPrinter(IRVisitor):
             self.put(" = ")
             self.visit(node.init)
 
-    def visit_Constant(self, node: ast.Constant):
+    def visit_Literal(self, node: ast.Literal):
         if node.value is not None:
             self.put(str(node.value))
         else:
@@ -432,34 +432,34 @@ class IRPrinter(IRVisitor):
             self.visit(node.default)
 
     def visit_Call(self, node: ast.Call):
-        match type(node.func):
+        match type(node.target):
             case ast.VarRef:
-                self.put(f"{node.func.name}")  # type: ignore
+                self.put(f"{node.target.name}")  # type: ignore
             case ast.Function:
-                self.put(f"{node.func.name}")  # type: ignore
+                self.put(f"{node.target.name}")  # type: ignore
             case ast.Class:
-                self.put(f"{node.func.name}")
+                self.put(f"{node.target.name}")
             case ast.Arg:
-                self.put(f"{node.func.name}")  # type: ignore
+                self.put(f"{node.target.name}")  # type: ignore
             case ast.VarDecl:
-                assert node.func.init is not None
-                self.visit(node.func.init)
+                assert node.target.init is not None
+                self.visit(node.target.init)
             case ast.UVarRef:
                 if self._mark_unresolved:
-                    self.put(f"UV<{node.func.name}>")  # type: ignore
+                    self.put(f"UV<{node.target.name}>")  # type: ignore
                 else:
-                    self.put(f"{node.func.name}")  # type: ignore
+                    self.put(f"{node.target.name}")  # type: ignore
             case ast.UFunction:
                 if self._mark_unresolved:
-                    self.put(f"UF<{node.func.name}>")  # type: ignore
+                    self.put(f"UF<{node.target.name}>")  # type: ignore
                 else:
-                    self.put(f"{node.func.name}")  # type: ignore
+                    self.put(f"{node.target.name}")  # type: ignore
             case _:
-                if isinstance(node.func, str):
-                    self.put(f"{node.func}")
+                if isinstance(node.target, str):
+                    self.put(f"{node.target}")
                 else:
                     raise Exception(f"{node.loc}\nInvalid function call: {
-                                    node.func}, type: {type(node.func)}")
+                                    node.target}, type: {type(node.target)}")
 
         if node.type_spec:
             self.put("[")
@@ -536,7 +536,7 @@ class IRPrinter(IRVisitor):
 
     def visit_Decorator(self, node: ast.Decorator):
         if isinstance(node.action, ast.Call):
-            self.put(f"@{node.action.func.name}(")  # type: ignore
+            self.put(f"@{node.action.target.name}(")  # type: ignore
             if node.action.args:
                 for i, arg in enumerate(node.action.args):
                     if i > 0:

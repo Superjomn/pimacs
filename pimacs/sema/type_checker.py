@@ -1,3 +1,7 @@
+from typing import *
+
+from multimethod import multimethod
+
 import pimacs.ast.type as _ty
 from pimacs.ast import ast
 from pimacs.ast.utils import WeakSet
@@ -5,18 +9,58 @@ from pimacs.logger import logger
 from pimacs.sema.context import ModuleContext
 
 from .ast_visitor import IRVisitor
+from .ast_walker import ASTWalker, Traversal
 
 
-class TypeInfer(IRVisitor):
+class TypeChecker(IRVisitor):
+    '''
+    TypeChecker helps to infer the type of the AST nodes. It performs a bottom-up type inference first, and for the newly
+    type-updated nodes, it will pollute the users of the nodes.
+    '''
+
     def __init__(self, ctx: ModuleContext):
         self.ctx = ctx
-        self._forward_push = False
+        self.to_push_forward = False
         # hold the nodes that are newly updated
         self._newly_updated_nodes: WeakSet = WeakSet()
 
+    @multimethod
+    def convert_type(self, source: _ty.Type | None, target: _ty.Type) -> _ty.Type | None:
+        '''
+        Convert \p source to \p target. If the conversion is not possible, return None.
+
+        This method could be used to verify if a value could be pass to a argument.
+        '''
+        if source is None:
+            return target
+        if target is None:
+            return None
+
+        if source == target:
+            return source
+
+        if source == _ty.Int and target == _ty.Float:
+            return target
+        if source == _ty.Float and target == _ty.Int:
+            return target
+
+        if source == _ty.Bool and target == _ty.Int:
+            return target
+
+        # TODO: Any class types could be converted to bool if the method __bool__ is defined.
+
+        return None
+
+    @multimethod  # type: ignore
+    def convert_type(self, source: List[_ty.Type], target: _ty.Type) -> List[_ty.Type]:
+        return [self.convert_type(s, target) for s in source]
+
+    def is_type_numeric(self, type: _ty.Type) -> bool:
+        return type in (_ty.Int, _ty.Float)
+
     @property
-    def _backward_push(self) -> bool:
-        return not self._forward_push
+    def to_push_backward(self) -> bool:
+        return not self.to_push_forward
 
     def report_error(self, node: ast.Node, message: str):
         self.ctx.report_sema_error(node, message)
@@ -29,7 +73,7 @@ class TypeInfer(IRVisitor):
         node.type = type
         self._newly_updated_nodes.add(node)
 
-    def pollute_users(self, node: ast.Node):
+    def _pollute_users(self, node: ast.Node):
         ''' Pollute the users of the node. '''
         while self._newly_updated_nodes:
             node = self._newly_updated_nodes.pop()
@@ -43,39 +87,39 @@ class TypeInfer(IRVisitor):
             node: The root node of the AST.
             forward_push: Whether to push the type information forward.
         '''
-        self._forward_push = forward_push
+        self.to_push_forward = forward_push
         self._newly_updated_nodes.clear()
 
-        if self._backward_push:
+        if self.to_push_backward:
             self._newly_updated_nodes.add(node)
-            self.pollute_users(node)
+            self._pollute_users(node)
         else:
             self.visit(node)
 
     def visit_File(self, node: ast.File):
-        if self._forward_push:
+        if self.to_push_forward:
             super().visit_File(node)
 
     def visit_Call(self, node: ast.Call):
         # visit leaf nodes
-        if self._forward_push:
+        if self.to_push_forward:
             super().visit_Call(node)
 
         if not is_unk(node.type):
             return
 
-        match type(node.func):
+        match type(node.target):
             case ast.UFunction:
-                logger.debug(f"visit_Call: UFuntion: {node.func}")
+                logger.debug(f"visit_Call: UFuntion: {node.target}")
                 return
             case ast.Function:
-                self.update_type(node, node.func.return_type)  # type: ignore
+                self.update_type(node, node.target.return_type)  # type: ignore
             case _:
-                logger.debug(f'Unresolved function call: {node.func}')
+                logger.debug(f'Unresolved function call: {node.target}')
                 return
 
     def visit_VarDecl(self, node: ast.VarDecl):
-        if self._forward_push:
+        if self.to_push_forward:
             super().visit_VarDecl(node)
 
         if node.init is not None:
@@ -89,14 +133,14 @@ class TypeInfer(IRVisitor):
                 self.update_type(node, node.init.type)  # type: ignore
 
     def visit_VarRef(self, node: ast.VarRef):
-        if self._forward_push:
+        if self.to_push_forward:
             super().visit_VarRef(node)
 
         if node.target and not is_unk(node.target.type):
             self.update_type(node, node.target.type)  # type: ignore
 
     def visit_Arg(self, node: ast.Arg):
-        if self._forward_push:
+        if self.to_push_forward:
             super().visit_Arg(node)
 
         if not is_unk(node.type):
@@ -111,7 +155,7 @@ class TypeInfer(IRVisitor):
             self.update_type(node, node.default.type)  # type: ignore
 
     def visit_BinaryOp(self, node: ast.BinaryOp):
-        if self._forward_push:
+        if self.to_push_forward:
             super().visit_BinaryOp(node)
 
         if not is_unk(node.type):
@@ -127,7 +171,7 @@ class TypeInfer(IRVisitor):
             self.update_type(node, node.left.type)  # type: ignore
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
-        if self._forward_push:
+        if self.to_push_forward:
             super().visit_UnaryOp(node)
 
         if not is_unk(node.type):
@@ -139,7 +183,7 @@ class TypeInfer(IRVisitor):
         self.update_type(node, node.operand.type)  # type: ignore
 
     def visit_CallParam(self, node: ast.CallParam):
-        if self._forward_push:
+        if self.to_push_forward:
             super().visit_CallParam(node)
 
         if node.value is not None and not is_unk(node.value.type):
@@ -151,7 +195,7 @@ class TypeInfer(IRVisitor):
                 self.update_type(node, node.value.type)  # type: ignore
 
     def visit_Assign(self, node: ast.Assign):
-        if self._forward_push:
+        if self.to_push_forward:
             super().visit_Assign(node)
 
         if not (node.value.type_determined and node.target.type_determined):
@@ -162,7 +206,7 @@ class TypeInfer(IRVisitor):
                               node.value.type} != {node.target.type}')
 
     def visit_Attribute(self, node: ast.Attribute):
-        if self._forward_push:
+        if self.to_push_forward:
             super().visit_Attribute(node)
 
         if not is_unk(node.type):
@@ -177,3 +221,69 @@ class TypeInfer(IRVisitor):
 
 def is_unk(type: _ty.Type | None) -> bool:
     return type in (_ty.Unk, None)
+
+
+@multimethod
+def amend_placeholder_types(node: ast.Node):
+    '''
+    Replace the mistakenly marked type Generic["T"] with PlaceholderType["T"] in Class and Function template params.
+    This should be called before Sema, and after the AST is parsed.
+    '''
+    class Walker(ASTWalker):
+        def __init__(self):
+            self.visited_nodes: Set[ast.Class | ast.Function] = set()
+
+        def walk_to_node_pre(self, node) -> bool:
+            if isinstance(node, (ast.Function, ast.Class)) and node.template_params:
+                print(f"** visit {node}")
+                if node in self.visited_nodes:
+                    return False
+
+                mapping = {}
+                for param in node.template_params:
+                    assert isinstance(param, _ty.PlaceholderType)
+                    mapping[_ty.GenericType(param.name)] = param
+                amend_placeholder_types([node], mapping)
+
+                self.visited_nodes.add(node)  # avoid duplicate visiting
+
+            return True
+
+        def walk_to_node_post(self, node):
+            return node
+
+    Traversal(Walker()).visit(node)
+
+
+@multimethod  # type: ignore
+def amend_placeholder_types(node: ast.Node | List[ast.Node], template_params: Dict[_ty.Type, _ty.Type]):
+    '''
+    Replace the mistakenly marked type Generic["T"] with PlaceholderType["T"].
+    This should be called before Sema.
+
+    Args:
+        node: The root node of the AST, it should be a templated class or function.
+        template_params: The mapping from the template parameter name to the actual type.
+    '''
+    class Walker(ASTWalker):
+        def overwrite_type(self, type) -> _ty.Type | List[_ty.Type]:
+            if isinstance(type, list):
+                return [self.overwrite_type(t) for t in type]
+            if type in template_params:
+                return template_params[type]
+            if isinstance(type, _ty.CompositeType):
+                return type.replace_with(template_params)
+            return type
+
+        def walk_to_node_pre(self, node) -> bool:  # type: ignore
+            print(f"** visit {node}")
+            if hasattr(node, "type"):
+                node.type = self.overwrite_type(node.type)
+            if hasattr(node, "return_type"):
+                node.return_type = self.overwrite_type(node.return_type)
+            return True
+
+        def walk_to_node_post(self, node):  # type: ignore
+            return node
+
+    Traversal(Walker()).visit(node)

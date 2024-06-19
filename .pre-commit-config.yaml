@@ -7,11 +7,6 @@ repos:
     - id: trailing-whitespace
     - id: end-of-file-fixer
 
--   repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: ''
-    hooks:
-    - id: clang-format
-
 -   repo: https://github.com/pycqa/isort
     rev: ''
     hooks:

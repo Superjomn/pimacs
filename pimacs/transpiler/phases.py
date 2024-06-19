@@ -1,9 +1,11 @@
+from pprint import pprint
 from typing import Optional
 
 import pimacs.ast.ast as ast
 from pimacs.ast.parser import get_parser
 from pimacs.sema.context import ModuleContext
 from pimacs.sema.file_sema import FileSema
+from pimacs.sema.type_checker import amend_placeholder_types
 
 
 def parse_ast(
@@ -21,7 +23,9 @@ def parse_ast(
         parser = get_parser(code=None, filename=filename)
 
     stmts = parser.parse(code)
-    return ast.File(stmts=stmts, loc=ast.Location(source, 0, 0))
+    file = ast.File(stmts=stmts, loc=ast.Location(source, 0, 0))
+    amend_placeholder_types(file)
+    return file
 
 
 def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:
@@ -34,5 +38,7 @@ def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:
     the_ir = sema(the_ast)
     if sema.succeed:
         return the_ir
+
+    pprint(the_ir)
 
     return None

@@ -31,7 +31,8 @@ def test_func_symbol():
 
 
 def test_func_sig():
-    func = Function(name="foo", args=[], return_type=None, loc=None, body=[])
+    func = Function(name="foo", args=tuple(),
+                    return_type=None, loc=None, body=[])
     sig = FuncSig.create(func)
     assert sig.symbol.name == "foo"
     assert not sig.input_types
@@ -40,7 +41,7 @@ def test_func_sig():
     # foo(x: Int) -> nil
     func = Function(
         name="foo",
-        args=[ast.Arg(name="x", type=_ty.Int, loc=None)],
+        args=(ast.Arg(name="x", type=_ty.Int, loc=None),),
         return_type=None,
         loc=None,
         body=[],
@@ -58,7 +59,7 @@ def test_func_sig():
     # foo(x: Int, y: Int) -> Int
     func = Function(
         name="foo",
-        args=[ast.Arg(name="x", type=_ty.Int, loc=None)],
+        args=(ast.Arg(name="x", type=_ty.Int, loc=None),),
         return_type=_ty.Int,
         loc=None,
         body=[],
@@ -76,10 +77,10 @@ def test_func_sig():
     # foo(x: Int, y: Int) -> Int
     func = Function(
         name="foo",
-        args=[
+        args=(
             ast.Arg(name="x", type=_ty.Int, loc=None),
             ast.Arg(name="y", type=_ty.Int, loc=None),
-        ],
+        ),
         return_type=_ty.Int,
         loc=None,
         body=[],
@@ -108,35 +109,68 @@ var a = foo(1, 2)
 
 
 def test_func_sig_specialize():
-    T0 = _ty.GenericType(name="T0")
-    T1 = _ty.GenericType(name="T1")
+    T0 = _ty.PlaceholderType(name="T0")
+    T1 = _ty.PlaceholderType(name="T1")
     func = Function(
         name="foo",
-        args=[
+        args=(
             ast.Arg(name="x", type=T0, loc=None),
             ast.Arg(name="y", type=T1, loc=None),
-        ],
+        ),
         return_type=T1,
         loc=None,
         body=[],
     )
     sig = FuncSig.create(func)
 
-    T0_ = _ty.PlaceholderType(name="T0")
-    T1_ = _ty.PlaceholderType(name="T1")
     mapping = {
-        T0: T0_,
-        T1: T1_,
+        T0: _ty.Int,
+        T1: _ty.Float,
     }
 
     new_sig = sig.specialize(mapping)
-    assert not new_sig.all_param_types_concrete()
-    assert new_sig.output_type is T1_
+    assert new_sig.all_param_types_concrete()
+
+
+def test_func_sig_specialize_List_T():
+    T = _ty.PlaceholderType(name="T")
+    List_T = _ty.CompositeType(name="List", params=(T,))
+    func = Function(name="List",
+                    return_type=List_T,
+                    loc=None,
+                    body=[],
+                    )
+
+    sig = FuncSig.create(func)
+    assert not sig.all_param_types_concrete()
 
     mapping = {
-        T0_: _ty.Int,
-        T1_: _ty.Float,
+        T: _ty.Int,
     }
 
-    new_sig = new_sig.specialize(mapping)
+    new_sig = sig.specialize(mapping)
     assert new_sig.all_param_types_concrete()
+
+
+def test_func_sig_specialize_List_T1():
+    T = _ty.PlaceholderType(name="T")
+    List_T = _ty.CompositeType(name="List", params=(T,))
+    func = Function(name="List",
+                    return_type=List_T,
+                    loc=None,
+                    body=[],
+                    )
+
+    sig = FuncSig.create(func)
+    assert not sig.all_param_types_concrete()
+
+    mapping = {
+        T: _ty.Int,
+    }
+
+    new_sig = sig.specialize(mapping)
+    assert new_sig.all_param_types_concrete()
+
+
+if __name__ == "__main__":
+    test_func_sig_specialize()

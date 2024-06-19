@@ -2,7 +2,7 @@ import pytest
 
 import pimacs.ast.type as _ty
 from pimacs.ast import ast
-from pimacs.sema.func import FuncDuplicationError
+from pimacs.sema.func import FuncDuplicationError, FuncSig
 from pimacs.sema.symbol_table import *
 from pimacs.sema.utils import FuncSymbol, Symbol
 
@@ -38,11 +38,11 @@ def test_SymbolTable_func():
     assert not table.lookup(foo_key)
     assert not table.lookup(bar_key)
 
-    foo = ast.Function(name="foo", args=[],
+    foo = ast.Function(name="foo", args=tuple(),
                        return_type=None, loc=None, body=[])
-    bar = ast.Function(name="bar", args=[],
+    bar = ast.Function(name="bar", args=tuple(),
                        return_type=None, loc=None, body=[])
-    goo = ast.Function(name="goo", args=[],
+    goo = ast.Function(name="goo", args=tuple(),
                        return_type=None, loc=None, body=[])
 
     table.insert(foo_key, foo)
@@ -73,11 +73,11 @@ def test_SymbolTable_func_override():
     arg1 = ast.Arg(name="y", type=_ty.Int, loc=None)
     arg2 = ast.Arg(name="z", type=_ty.Int, loc=None)
 
-    foo0 = ast.Function(name="foo", args=[],
+    foo0 = ast.Function(name="foo", args=tuple(),
                         return_type=None, loc=None, body=[])
-    foo1 = ast.Function(name="foo", args=[arg0],
+    foo1 = ast.Function(name="foo", args=(arg0,),
                         return_type=None, loc=None, body=[])
-    foo2 = ast.Function(name="foo", args=[arg0, arg1],
+    foo2 = ast.Function(name="foo", args=(arg0, arg1),
                         return_type=None, loc=None, body=[])
 
     table.insert(foo0)
@@ -90,24 +90,104 @@ def test_SymbolTable_func_override():
     unresolved_func = ast.UFunction(name="foo", loc=None)
 
     param0 = ast.CallParam(
-        name="x", value=ast.make_const(0, loc=None), loc=None)
+        name="x", value=ast.make_literal(0, loc=None), loc=None)
     param1 = ast.CallParam(
-        name="y", value=ast.make_const(0, loc=None), loc=None)
+        name="y", value=ast.make_literal(0, loc=None), loc=None)
     param2 = ast.CallParam(
-        name="z", value=ast.make_const(0, loc=None), loc=None)
+        name="z", value=ast.make_literal(0, loc=None), loc=None)
 
-    call = ast.Call(func=unresolved_func, args=tuple(), loc=None)
+    call = ast.Call(target=unresolved_func, args=tuple(), loc=None)
     target_func_candidates = funcs.lookup(call.args)
     assert len(target_func_candidates) == 1
     assert target_func_candidates[0][0] is foo0
 
-    call = ast.Call(func=unresolved_func, args=(param0,), loc=None)
+    call = ast.Call(target=unresolved_func, args=(param0,), loc=None)
     target_func_candidates = funcs.lookup(call.args)
     assert target_func_candidates[0][0] is foo1
 
-    call = ast.Call(func=unresolved_func, args=(param0, param1), loc=None)
+    call = ast.Call(target=unresolved_func, args=(param0, param1), loc=None)
     target_func_candidates = funcs.lookup(call.args)
     assert target_func_candidates[0][0] is foo2
+
+
+def test_SymbolTable_func_template_spec0():
+    '''
+    The test case:
+    @template[T]
+    def foo() -> T:
+        return
+
+    # call
+    foo[Int]()
+    '''
+    T = _ty.PlaceholderType("T")
+    decorator = ast.Decorator(action=ast.Template(types=(T,)), loc=None)
+    foo = ast.Function(name="foo", args=tuple(),
+                       decorators=(decorator,),
+                       return_type=T, loc=None, body=[])
+    assert foo.template_params == (T,)
+
+    table = SymbolTable()
+    table.insert(FuncSymbol("foo"), foo)
+
+    call = ast.Call(target=ast.UFunction(name="foo", loc=None),
+                    type_spec=(_ty.Int,), loc=None)
+    funcs = table.lookup(FuncSymbol("foo"))
+    assert funcs
+
+    candidates = funcs.lookup(call.args, template_spec=call.type_spec)
+
+    assert candidates
+    assert len(candidates) == 1
+
+    func, sig = candidates[0]
+
+    assert func is foo
+    print('sig', sig)
+    assert sig.all_param_types_concrete()
+
+
+def test_SymbolTable_func_template_spec1():
+    '''
+    The test case:
+    @template[T0, T1]
+    def foo(a: T0, b: T1) -> T0:
+        return a + b
+
+    # call
+    foo[Int, Float](1, 1.0)
+    '''
+    T0 = _ty.PlaceholderType("T0")
+    T1 = _ty.PlaceholderType("T1")
+    decorator = ast.Decorator(action=ast.Template(types=(T0, T1)), loc=None)
+    arg0 = ast.Arg(name="a", type=T0, loc=None)
+    arg1 = ast.Arg(name="b", type=T1, loc=None)
+    foo = ast.Function(name="foo", args=(arg0, arg1),
+                       decorators=(decorator,),
+                       return_type=T0, loc=None, body=[])
+    assert foo.template_params == (T0, T1)
+
+    table = SymbolTable()
+    table.insert(FuncSymbol("foo"), foo)
+
+    call = ast.Call(target=ast.UFunction(name="foo", loc=None),
+                    type_spec=(_ty.Int, _ty.Float),
+                    args=(ast.CallParam(name="a", value=ast.make_literal(1, loc=None), loc=None),
+                          ast.CallParam(name="b", value=ast.make_literal(1.0, loc=None), loc=None)),
+                    loc=None)
+    funcs = table.lookup(FuncSymbol("foo"))
+    assert funcs
+
+    candidates = funcs.lookup(call.args, template_spec=call.type_spec)
+
+    assert candidates
+    assert len(candidates) == 1
+
+    func, sig = candidates[0]
+
+    assert func is foo
+    print('sig', sig)
+    assert sig.all_param_types_concrete()
 
 
 def test_SymbolTable_class_method():
@@ -116,7 +196,7 @@ def test_SymbolTable_class_method():
     self = ast.Arg(name="self", type=_ty.GenericType("App"),
                    loc=None, kind=ast.Arg.Kind.self_placeholder)
 
-    foo0 = ast.Function(name="foo", args=[self],
+    foo0 = ast.Function(name="foo", args=(self,),
                         return_type=None, loc=None, body=[])
     symbol = FuncSymbol("foo", annotation=ast.Function.Annotation.Class_method)
 

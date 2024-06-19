@@ -1,6 +1,6 @@
 import gc
 
-from pimacs.ast.ast import Constant
+from pimacs.ast.ast import Literal
 from pimacs.ast.utils import *
 
 
@@ -48,7 +48,7 @@ def test_WeakSet():
 
 
 def test_WeakSet_same_instance():
-    x = Constant(value=100, loc=None)
+    x = Literal(value=100, loc=None)
     set = WeakSet()
 
     for i in range(10):

@@ -73,10 +73,16 @@ class BasicType(Type):
     def __init__(self, name, parent=None):
         super().__init__(name=name, parent=parent, is_concrete=True)
 
+    def __repr__(self):
+        return self.name
+
 
 class CompositeType(Type):
     def __init__(self, name, parent=None, params: Optional[Tuple[Type, ...]] = None):
         super().__init__(name, parent, params=params)
+
+    def __hash__(self):
+        return super().__hash__()
 
     @property
     def is_concrete(self):
@@ -85,7 +91,34 @@ class CompositeType(Type):
     def clone_with(self, *params):
         return type(self)(self.name, self.parent, params)
 
+    def replace_with(self, mapping: Dict[Type, Type]) -> "CompositeType":
+        '''
+        Replace the type with the mapping and get a new type
+        '''
+        params = tuple(mapping.get(param, param) for param in self.params)
+
+        the_params = []
+        for param in params:
+            if (not param.is_concrete) and not isinstance(param, PlaceholderType):
+                assert isinstance(param, CompositeType)
+                param = param.replace_with(mapping)
+            the_params.append(param)
+
+        return CompositeType(self.name, self.parent, tuple(the_params))
+
+    def collect_placeholders(self) -> List["PlaceholderType"]:
+        placeholders = []
+        for param in self.params:
+            if isinstance(param, PlaceholderType):
+                placeholders.append(param)
+            elif isinstance(param, CompositeType):
+                placeholders.extend(param.collect_placeholders())
+        return placeholders
+
     def __eq__(self, other):
+        if not isinstance(other, Type):
+            return False
+
         if self.name != other.name:
             return False
 
@@ -100,13 +133,16 @@ class CompositeType(Type):
                 return p1 == p2
         return True
 
+    def __repr__(self):
+        return super().__str__()
+
 
 class PlaceholderType(Type):
     def __init__(self, name, parent=None):
         super().__init__(name, parent, is_concrete=False)
 
     def __repr__(self):
-        return self.name
+        return f"<P: {self.name}>"
 
     def compatible_with(self, other):
         return True
@@ -117,7 +153,7 @@ class GenericType(Type):
         super().__init__(name, parent, params=params)
 
     def __repr__(self):
-        return f"GenericType<{self.name}[{', '.join(repr(p) for p in self.params)}]>"
+        return f"<G: {super().__str__()}>"
 
 
 class FunctionType(Type):
