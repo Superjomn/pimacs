@@ -256,7 +256,7 @@ def amend_placeholder_types(node: ast.Node):
     Traversal(Walker()).visit(node)
 
 
-@multimethod
+@multimethod  # type: ignore
 def amend_placeholder_types(node: ast.Node | List[ast.Node], template_params: Dict[_ty.Type, _ty.Type]):
     '''
     Replace the mistakenly marked type Generic["T"] with PlaceholderType["T"].

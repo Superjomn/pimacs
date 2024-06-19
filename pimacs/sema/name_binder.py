@@ -113,7 +113,7 @@ class NameBinder:
     def visit_UCallMethod(self, node: ast.UCallMethod):
         assert node.obj
         if node.obj.type in (None, _ty.Unk):
-            node.obj.scope = node.scope
+            node.obj.scope = node.scope  # type: ignore
             if not self.bind_unresolved(node.obj):
                 logger.debug(f"Cannot resolve {
                     node.obj} for node {node}")
@@ -122,6 +122,7 @@ class NameBinder:
         if node.obj.type in (None, _ty.Unk):
             return False
 
+        assert node.obj.type is not None
         class_symbol = Symbol(
             name=node.obj.type.name, kind=Symbol.Kind.Class)
         class_node = self.sym_tbl.global_scope.get(class_symbol)
