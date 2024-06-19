@@ -11,5 +11,15 @@ class List:
     def __getitem__(self, idx: Int) -> T:
         return %nth(self.list, idx)
 
+    def size(self) -> Int:
+        return %length(self.list)
+
+# CHECK: var a :List[Int] = List[Int]()
 var a = List[Int]()
+# CHECK-NEXT: a.append(1)
 a.append(1)
+
+# CHECK: var a-size :Int = a.size()
+var a-size = a.size()
+# CHECK: var a-item :Int = a.__getitem__(0)
+var a-item = a.__getitem__(0)

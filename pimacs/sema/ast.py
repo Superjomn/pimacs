@@ -3,7 +3,7 @@ This file contains several additional AST nodes dedicated to semantic analysis.
 '''
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import *
+from typing import Optional, Tuple
 
 import pimacs.ast.type as ty
 from pimacs.ast.ast import *
@@ -20,16 +20,12 @@ class AnalyzedClass(Class):
     symbols: Scope = field(default_factory=Scope,
                            init=False, hash=False, repr=False)
 
-    template_params: Tuple[ty.Type, ...] = field(
-        default_factory=tuple, hash=False)
-
     @classmethod
     def create(cls, node: Class) -> "AnalyzedClass":
         return cls(
             name=node.name,
             body=node.body,
             decorators=node.decorators,
-            template_params=AnalyzedClass._extract_template_params(node),
             loc=node.loc,
         )
 
@@ -88,7 +84,7 @@ class UCallMethod(Unresolved, Expr):
       app = App()
       app.time()      # => UCallAttr(app, attr='time')
     '''
-    obj: Optional[CallParam] = None
+    obj: Optional[CallParam] = None  # self
     attr: str = ""
     args: Tuple[CallParam, ...] = field(default_factory=tuple)
 
@@ -136,6 +132,31 @@ class CallMethod(Expr):
     def replace_child(self, old, new):
         if self.obj == old:
             self.obj = new
+        for i, arg in enumerate(self.args):
+            if arg == old:
+                self.args[i] = new
+
+
+@dataclass(slots=True)
+class LispCall(Expr):
+    '''
+    Call a Lisp function.
+
+    e.g.
+      (add 1 2)      # => LispCall(name='add', args=(1, 2))
+    '''
+    name: str
+    args: Tuple[Expr, ...]
+
+    def __post_init__(self):
+        self._refresh_users()
+
+    def _refresh_users(self):
+        self.users.clear()
+        for arg in self.args:
+            arg.add_user(self)
+
+    def replace_child(self, old, new):
         for i, arg in enumerate(self.args):
             if arg == old:
                 self.args[i] = new

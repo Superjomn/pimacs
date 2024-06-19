@@ -58,16 +58,18 @@ class PimacsTransformer(Transformer):
     def func_def(self, items):
         self._force_non_rule(items)
         name: str = items[0].value
-        args: List[ast.Arg] = safe_get(items, 1, [])
+        args: List[ast.Arg] = safe_get(items, 1, tuple())
         type = safe_get(items, 2, None)
         block: ast.Block = safe_get(items, 3, None)
         loc = self._get_loc(items[0])
 
         if block is None:
             raise Exception(f"{loc}:\nFunction {name} must have a block")
+        if isinstance(args, list):
+            args = tuple(args)
 
         return ast.Function(
-            name=name, args=args or [], body=block, return_type=type, loc=loc
+            name=name, args=args or tuple(), body=block, return_type=type, loc=loc
         )
 
     def func_args(self, items):
@@ -197,7 +199,7 @@ class PimacsTransformer(Transformer):
             args = list(filter(lambda x: x is not None, items[1:]))
             if args and isinstance(args[0], list):
                 args = args[0]
-            return ast.Call(func=items[0], args=tuple(args), loc=items[0].loc)
+            return ast.Call(target=items[0], args=tuple(args), loc=items[0].loc)
         else:
             name = items[0].value
             loc = self._get_loc(items[0])
@@ -212,7 +214,7 @@ class PimacsTransformer(Transformer):
         args = args if args else []
 
         the_func = ast.UFunction(name=name, loc=loc)
-        return ast.Call(func=the_func, args=tuple(args), loc=loc, type_spec=tuple(type_spec))
+        return ast.Call(target=the_func, args=tuple(args), loc=loc, type_spec=tuple(type_spec))
 
     def lisp_symbol(self, items):
         self._force_non_rule(items)
@@ -245,7 +247,7 @@ class PimacsTransformer(Transformer):
     def string(self, items: List[Token]):
         self._force_non_rule(items)
         loc = self._get_loc(items[0])
-        return ast.Constant(value=items[0].value, loc=loc)
+        return ast.Literal(value=items[0].value, loc=loc)
 
     def variable(self, items):
         self._force_non_rule(items)
@@ -297,7 +299,7 @@ class PimacsTransformer(Transformer):
         # self._force_non_rule(items)
         return items[0]
 
-    def number(self, items: List[ast.Constant]):
+    def number(self, items: List[ast.Literal]):
         self._force_non_rule(items)
         assert len(items) == 1
         return items[0]
@@ -305,7 +307,7 @@ class PimacsTransformer(Transformer):
     def NUMBER(self, x):
         self._force_non_rule(x)
         value = float(x) if "." in x else int(x)
-        return ast.Constant(value=value, loc=self._get_loc(x))
+        return ast.Literal(value=value, loc=self._get_loc(x))
 
     def atom(self, items):
         self._force_non_rule(items)
@@ -313,15 +315,15 @@ class PimacsTransformer(Transformer):
 
     def true(self, items):
         self._force_non_rule(items)
-        return ast.Constant(value=True, loc=None)
+        return ast.Literal(value=True, loc=None)
 
     def false(self, items):
         self._force_non_rule(items)
-        return ast.Constant(value=False, loc=None)
+        return ast.Literal(value=False, loc=None)
 
     def nil(self, items):
         self._force_non_rule(items)
-        return ast.Constant(value=None, loc=None)
+        return ast.Literal(value=None, loc=None)
 
     def if_stmt(self, items):
         self._force_non_rule(items)
@@ -437,9 +439,10 @@ class PimacsTransformer(Transformer):
     def decorated(self, items):
         self._force_non_rule(items)
         decorators: List[ast.Decorator] = items[:-1]
-        func_def: ast.Function = items[-1]
-        func_def.decorators = decorators
-        return func_def
+        innder: ast.Function | ast.Class | ast.VarDecl = items[-1]
+        innder.decorators = decorators if isinstance(
+            decorators, tuple) else tuple(decorators)
+        return innder
 
     def dotted_name(self, items):
         """ Get attribute. """

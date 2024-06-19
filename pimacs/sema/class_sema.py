@@ -6,6 +6,7 @@ from typing import Any
 
 import pimacs.ast.type as _ty
 from pimacs.ast.type import Type
+from pimacs.logger import logger
 
 from . import ast
 from .ast import AnalyzedClass, MakeObject
@@ -109,6 +110,7 @@ class ClassVisitor(IRMutator):
 
                 # append to the file for sema later
                 self._cur_file.stmts.append(fn)
+                logger.info(f"adding constructor {fn.name} to cur_file")
 
     def class_add_methods(self, node: AnalyzedClass):
         ''' Add method functions to the class. '''

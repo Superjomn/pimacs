@@ -41,13 +41,13 @@ def test_call():
     var_node = parser.parser.parse(code)[0]
     print(var_node)
     assert isinstance(var_node.init, ast.Call)
-    func = var_node.init.func
+    func = var_node.init.target
     assert isinstance(func, ast.UFunction)
 
     code = "var a = %elisp_fn()"
     var_node = parser.parser.parse(code)[0]
     print(var_node)
-    func = var_node.init.func
+    func = var_node.init.target
     assert isinstance(func, ast.UFunction)
     assert func.name == "%elisp_fn"
 
@@ -57,7 +57,7 @@ def test_class_method_call():
     var_node = parser.parser.parse(code)[0]
     print(var_node)
     call = var_node.init
-    attr = call.func
+    attr = call.target
     assert isinstance(attr, ast.UAttr)
 
 
@@ -68,4 +68,5 @@ def test_lisp_var_decl():
 
 
 if __name__ == "__main__":
-    test_class_method_call()
+    # test_class_method_call()
+    test_call()
