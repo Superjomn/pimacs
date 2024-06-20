@@ -52,7 +52,7 @@ class IRPrinter(IRVisitor):
             self.put(f"let {node.name}")
         if node.type is not None:
             self.put(" :")
-            self.visit(node.type)
+            self.put(str(node.type))
         if node.init is not None:
             self.put(" = ")
             self.visit(node.init)
@@ -314,7 +314,10 @@ class IRPrinter(IRVisitor):
         self.put(f"{node.name}")
 
     def visit_Attribute(self, node: ast.Attribute):
-        self.visit(node.value)
+        if isinstance(node.value, ast.VarRef):
+            self.put(node.value.target.name)  # type: ignore
+        else:
+            self.put(node.value.name)
         self.put(f".{node.attr}")
 
     def visit_UFunction(self, node: ast.UFunction):
@@ -327,7 +330,7 @@ class IRPrinter(IRVisitor):
         self.put(f"{node.name}")
 
     def visit_MakeObject(self, node):
-        pass
+        self.put(f"{type}()")
 
     def visit_LispCall(self, node: ast.LispCall):
         self.put("%(")

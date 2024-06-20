@@ -2,6 +2,7 @@
 The semantics analysis for Class.
 '''
 from contextlib import contextmanager
+from pprint import pprint
 from typing import Any
 
 import pimacs.ast.type as _ty
@@ -110,7 +111,7 @@ class ClassVisitor(IRMutator):
 
                 # append to the file for sema later
                 self._cur_file.stmts.append(fn)
-                logger.info(f"adding constructor {fn.name} to cur_file")
+                logger.debug(f"adding constructor {fn.name} to cur_file")
 
     def class_add_methods(self, node: AnalyzedClass):
         ''' Add method functions to the class. '''
@@ -151,7 +152,7 @@ class ClassVisitor(IRMutator):
             return_type = _ty.GenericType(node.name)  # type: ignore
 
         # TODO: create the body of the constructor
-        make_obj_expr = MakeObject(class_name=node.name, loc=node.loc)
+        make_obj_expr = MakeObject(loc=node.loc)
         make_obj_expr.type = return_type
 
         return_stmt = ast.Return(value=make_obj_expr, loc=node.loc)
@@ -171,7 +172,19 @@ class ClassVisitor(IRMutator):
         assert init_fn.args[0].name == "self"
         args = init_fn.args[1:]
         body = init_fn.body
-        return_type = init_fn.args[0].type
+        return_type = _ty.CompositeType(
+            class_node.name, params=class_node.template_params)
+
+        # parepare the body
+        # Insert `self = make_object()`
+        obj = MakeObject(loc=init_fn.loc)
+        obj.type = return_type
+        var = ast.VarDecl(name="self", loc=init_fn.loc, init=obj)
+        return_stmt = ast.Return(value=obj, loc=init_fn.loc)
+        body.stmts = (var,) + body.stmts + (return_stmt,)
+
+        logger.debug(f"create constructor {class_node.name} with self {obj}")
+
         fn = ast.Function(name=class_node.name, args=tuple(args), body=body, loc=init_fn.loc,
                           return_type=return_type)
         fn.annotation = ast.Function.Annotation.Class_constructor

@@ -81,7 +81,6 @@ class NameBinder:
 
     def visit_UVarRef(self, node: ast.UVarRef) -> bool:
         # Ideally, the UVarRef should be bound during the normal file sema. If failed, it will do global binding here.
-        assert not isinstance(node, ast.UAttr)
         symbol = Symbol(name=node.name, kind=Symbol.Kind.Var)
 
         if sym := node.scope.get(symbol):
@@ -92,6 +91,13 @@ class NameBinder:
         return False
 
     def visit_UAttr(self, node: ast.UAttr) -> bool:
+        if not node.value.resolved:
+            if isinstance(node.value, ast.UVarRef):
+                # UVarRef.scope is left None, since it is created in Lark parser.
+                node.value.scope = node.scope
+            if not self.bind_unresolved(node.value):
+                return False
+
         attr_name = node.attr  # type: ignore
         if node.value.get_type() in (None, _ty.Unk):  # type: ignore
             return False
@@ -150,7 +156,7 @@ class NameBinder:
         if isinstance(class_type, _ty.CompositeType):
             if class_node.template_params:
                 assert len(class_node.template_params) == len(
-                    class_type.params)
+                    class_type.params), f"Template params mismatch: {class_node.template_params} vs {class_type.params}"
                 template_spec = dict(
                     zip(class_node.template_params, class_type.params))
 

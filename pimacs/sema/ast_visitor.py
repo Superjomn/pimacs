@@ -35,7 +35,7 @@ class IRPrinter(_IRPrinter):
         self.visit_Class(node)
 
     def visit_MakeObject(self, node):
-        self.put(f"make_{node.class_name}()")
+        self.put(f"make_obj[{node.type}]()")
 
     def visit_UCallMethod(self, node):
         self.put("U<")
@@ -51,7 +51,11 @@ class IRPrinter(_IRPrinter):
         self.put(")")
 
     def visit_CallMethod(self, node):
-        self.put(node.obj.name)
+        if isinstance(node.obj, VarRef):
+            name = node.obj.name or node.obj.target.name
+        else:
+            raise Exception(f"Unexpected obj type {node.obj}")
+        self.put(name)
 
         self.put(".")
         self.put(node.method.name)

@@ -21,7 +21,7 @@ def basic-control-flow(a:Int, b:Int) -> Int:
 
 # CHECK: def basic-emacs-call (name :Str, age :Int) -> Void:
 def basic-emacs-call(name:Str, age:Int) -> Void:
-    # CHECK-NEXT: %message(%format-string("name: %s, age: %s", name, age))
+    # CHECK-NEXT: %(message %(format-string "name: %s, age: %s" name age))
     %message(%format-string("name: %s, age: %s", name, age))
 
 # CHECK: def basic-if-else (v :Int) -> Void:
@@ -33,7 +33,7 @@ def basic-if-else(v: Int):
         %message("0 < v < 10")
     # CHECK: else:
     else:
-        # CHECK-NEXT: %message("v >= 10")
+        # CHECK-NEXT: %(message "v >= 10")
         %message("v >= 10")
 
 # CHECK: class Fruit:
@@ -45,6 +45,7 @@ class Fruit:
 
     # CHECK: def __init__ (self :Fruit, name :Str, size :Int) -> Void:
     def __init__(self, name:Str, size:Int):
+        # CHECK-NEXT: var self :Fruit = make_obj[Fruit]()
         # CHECK-NEXT: self.-name = name
         self.-name = name
         # CHECK-NEXT: self.-size = size

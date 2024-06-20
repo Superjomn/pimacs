@@ -920,6 +920,7 @@ def make_literal(value: int | float | str | bool | None, loc: Location) -> Liter
 
 @dataclass
 class Unresolved:
+    # The corresponding scope of the unresolved node is attached for name binding after the context is traversed.
     scope: Any = field(default=None, init=False, repr=False, hash=False)
 
     @property

@@ -29,7 +29,7 @@ class Pet:
     var age: Int
 
     def hello(self):
-        # CHECK: UF<%message>("%s", self.name)
+        # CHECK: %(message "%s" self.name)
         %message("%s", self.name)
 
     def get-age(self) -> Int:

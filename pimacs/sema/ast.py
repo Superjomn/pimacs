@@ -61,7 +61,6 @@ class MakeObject(Expr):
     e.g.
       App()      # => MakeObject(class_name='App')
     '''
-    class_name: str
 
     def _refresh_users(self):
         pass
@@ -70,7 +69,7 @@ class MakeObject(Expr):
         pass
 
     def __str__(self):
-        return f"{self.class_name}()"
+        return f"{self.type.name}()"
 
 
 @dataclass
