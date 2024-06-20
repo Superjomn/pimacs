@@ -64,11 +64,3 @@ class IRPrinter(ast_visitor.IRPrinter):
                 self.put(", ")
             self.visit(arg)
         self.put(")")
-
-    def visit_LispCall(self, node: LispCall):
-        self.put("%(")
-        self.put(node.name)
-        for no, arg in enumerate(node.args):
-            self.put(" ")
-            self.visit(arg)
-        self.put(")")

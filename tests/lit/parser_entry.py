@@ -24,7 +24,10 @@ def main(filename: str, sema: bool, mark_unresolved: bool, enable_exception: boo
     if sema:
         ctx = ModuleContext(enable_exception=enable_exception)
         file = perform_sema(ctx, file)  # type: ignore
-        pprint(file)
+
+        if display_ast:
+            print("SEMA:\n")
+            pprint(file)
 
     if file:
         printer = IRPrinter(StringIO(), mark_unresolved=mark_unresolved)

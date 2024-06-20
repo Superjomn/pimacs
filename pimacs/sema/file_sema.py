@@ -137,15 +137,13 @@ class FileSema(IRMutator):
     def visit_UVarRef(self, node: ast.UVarRef):
         node = super().visit_UVarRef(node)
 
-        if node.name == "other":
-            assert False, node
-
         # case 0: self.attr within a class
-        if node.name.startswith("self."):
+        if node.name == "self":
             # deal with members
-            var_name = node.name[5:]
+            var_name = node.name
 
             obj = self.sym_tbl.lookup(name="self", kind=Symbol.Kind.Arg)
+            logger.debug(f"visit_UVarRef: obj: {obj}")
             if not obj:
                 obj = ast.UVarRef(
                     # TODO: fix the type
@@ -356,13 +354,6 @@ class FileSema(IRMutator):
         func = node.target
         match type(func):
             case ast.UFunction:
-                if func.name.startswith('%'):  # lisp function call
-                    new_node = ast.LispCall(
-                        name=func.name[1:], args=node.args, loc=func.loc)
-                    new_node.type = _ty.LispType
-                    node.replace_all_uses_with(new_node)
-                    return new_node
-
                 self.collect_unresolved(node.target)  # type: ignore
 
             case ast.UAttr:

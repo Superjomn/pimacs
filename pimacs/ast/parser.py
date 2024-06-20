@@ -215,6 +215,9 @@ class PimacsTransformer(Transformer):
 
         args = args if args else []
 
+        if name.startswith('%'):
+            return ast.LispCall(name=name[1:], args=tuple(args), loc=loc)
+
         the_func = ast.UFunction(name=name, loc=loc)
         return ast.Call(target=the_func, args=tuple(args), loc=loc, type_spec=tuple(type_spec))
 

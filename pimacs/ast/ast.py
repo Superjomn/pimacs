@@ -1011,7 +1011,7 @@ def _setup_template_params(node: Function | Class):
         node._template_params = tuple()
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, unsafe_hash=True)
 class LispCall(Expr):
     '''
     Call a Lisp function.

@@ -235,7 +235,6 @@ def amend_placeholder_types(node: ast.Node):
 
         def walk_to_node_pre(self, node) -> bool:
             if isinstance(node, (ast.Function, ast.Class)) and node.template_params:
-                print(f"** visit {node}")
                 if node in self.visited_nodes:
                     return False
 

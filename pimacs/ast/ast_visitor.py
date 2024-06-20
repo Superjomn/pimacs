@@ -630,6 +630,14 @@ class IRPrinter(IRVisitor):
     def visit_MakeObject(self, node):
         pass
 
+    def visit_LispCall(self, node: ast.LispCall):
+        self.put("%(")
+        self.put(node.name)
+        for no, arg in enumerate(node.args):
+            self.put(" ")
+            self.visit(arg)
+        self.put(")")
+
     @contextmanager
     def indent_guard(self):
         self.indent()
