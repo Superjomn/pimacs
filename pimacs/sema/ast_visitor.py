@@ -1,7 +1,7 @@
 import pimacs.ast.ast_visitor as ast_visitor
 from pimacs.ast.ast import UAttr, VarDecl, VarRef
 
-from .ast import AnalyzedClass, LispCall, MakeObject, UCallMethod
+from .ast import AnalyzedClass, MakeObject, UCallMethod
 
 
 class IRVisitor(ast_visitor.IRVisitor):
@@ -14,9 +14,6 @@ class IRVisitor(ast_visitor.IRVisitor):
     def visit_UCallMethod(self, node: UCallMethod):
         pass
 
-    def visit_LispCall(self, node: LispCall):
-        pass
-
 
 class IRMutator(ast_visitor.IRMutator):
     def visit_AnalyzedClass(self, node):
@@ -26,11 +23,9 @@ class IRMutator(ast_visitor.IRMutator):
         return node
 
     def visit_UCallMethod(self, node: UCallMethod):
-        node = self.visit(node.obj)
-        node.args = self.visit(node.args)
-        return node
-
-    def visit_LispCall(self, node):
+        with node.write_guard():
+            node.obj = self.visit(node.obj)
+            node.args = self.visit(node.args)
         return node
 
 

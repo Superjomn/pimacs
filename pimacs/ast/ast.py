@@ -341,7 +341,8 @@ class Function(Stmt, VisiableSymbol):
     # @template[T0, T1]
     # def foo(a: T0, b: T1) -> T0: ...
     # The `template_params` is (T0, T1)
-    _template_params: Optional[Tuple[Type, ...]] = None
+    _template_params: Optional[Tuple[Type, ...]] = field(
+        default=None, init=False, repr=False, compare=False)
 
     class Kind(Enum):
         Unknown = -1
@@ -804,7 +805,8 @@ class Class(Stmt, VisiableSymbol):
     # @template[T0, T1]
     # class App: ...
     # The `template_params` is (T0, T1)
-    _template_params: Optional[Tuple[Type, ...]] = None
+    _template_params: Optional[Tuple[Type, ...]] = field(
+        default=None, init=False, repr=False, compare=False)
 
     @property
     def template_params(self) -> Tuple[Type, ...]:
@@ -1007,3 +1009,28 @@ def _setup_template_params(node: Function | Class):
             break
     if node._template_params is None:  # mark as inited
         node._template_params = tuple()
+
+
+@dataclass(slots=True)
+class LispCall(Expr):
+    '''
+    Call a Lisp function.
+
+    e.g.
+      (add 1 2)      # => LispCall(name='add', args=(1, 2))
+    '''
+    name: str
+    args: Tuple[Expr, ...]
+
+    def __post_init__(self):
+        self._refresh_users()
+
+    def _refresh_users(self):
+        self.users.clear()
+        for arg in self.args:
+            arg.add_user(self)
+
+    def replace_child(self, old, new):
+        for i, arg in enumerate(self.args):
+            if arg == old:
+                self.args[i] = new

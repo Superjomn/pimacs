@@ -158,6 +158,10 @@ class IRVisitor:
         for param in node.params:
             self.visit(param)
 
+    def visit_LispCall(self, node: ast.LispCall):
+        for arg in node.args:
+            self.visit(arg)
+
 
 class IRMutator:
     def visit(self, node: ast.Node | ty.Type | str | None | list | tuple):
@@ -295,6 +299,11 @@ class IRMutator:
         with node.write_guard():
             node.header = self.visit(node.header)
             node.body = self.visit(node.body)
+        return node
+
+    def visit_LispCall(self, node: ast.LispCall):
+        with node.write_guard():
+            node.args = self.visit(node.args)
         return node
 
 
