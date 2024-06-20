@@ -163,12 +163,11 @@ class IRMutator:
     def visit(self, node: ast.Node | ty.Type | str | None | list | tuple):
         if node is None:
             return
-        logging.debug(f"Visiting {node.__class__.__name__}: {node}")
         method_name = f"visit_{node.__class__.__name__}"
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
-    def generic_visit(self, node: ast.Node | ty.Type | str):
+    def generic_visit(self, node: ast.Node | ty.Type | str | list | tuple):
         raise Exception(f"No visit_{node.__class__.__name__} method")
 
     def visit_tuple(self, node: tuple):
@@ -181,7 +180,6 @@ class IRMutator:
         return node
 
     def visit_UVarRef(self, node: ast.UVarRef):
-        node.target_type = self.visit(node.target_type)
         return node
 
     def visit_Attribute(self, node: ast.Attribute):
@@ -203,13 +201,11 @@ class IRMutator:
         return node
 
     def visit_VarDecl(self, node: ast.VarDecl):
-        node.type = self.visit(node.type)
         node.init = self.visit(node.init)
         node.decorators = tuple([self.visit(_) for _ in node.decorators])
         return node
 
     def visit_Arg(self, node: ast.Arg):
-        node.type = self.visit(node.type)
         node.default = self.visit(node.default)
         return node
 
@@ -227,30 +223,6 @@ class IRMutator:
     def visit_float(self, node: float):
         return node
 
-    def visit_Type(self, node: ast.Type):
-        return node
-
-    def visit_IntType(self, node: ty.IntType):
-        return node
-
-    def visit_FloatType(self, node: ty.FloatType):
-        return node
-
-    def visit_BoolType(self, node: ty.BoolType):
-        return node
-
-    def visit_StrType(self, node: ty.StrType):
-        return node
-
-    def visit_UnkType(self, node: ty.UnkType):
-        return node
-
-    def visit_GenericType(self, node: ty.GenericType):
-        return node
-
-    def visit_PlaceholderType(self, node: ty.PlaceholderType):
-        return node
-
     def visit_Function(self, node: ast.Function):
         with node.write_guard():
             node.decorators = self.visit(node.decorators)
@@ -262,11 +234,9 @@ class IRMutator:
         with node.write_guard():
             node.target = self.visit(node.target)
             node.args = self.visit(node.args)
-            node.type_spec = self.visit(node.type_spec)
         return node
 
     def visit_UFunction(self, node: ast.UFunction):
-        node.return_type = self.visit(node.return_type)
         return node
 
     def visit_Decorator(self, node: ast.Decorator):
@@ -325,10 +295,6 @@ class IRMutator:
         with node.write_guard():
             node.header = self.visit(node.header)
             node.body = self.visit(node.body)
-        return node
-
-    def visit_CompositeType(self, node: ty.CompositeType):
-        # TODO: remove all the visitor for types
         return node
 
 
@@ -449,6 +415,8 @@ class IRPrinter(IRVisitor):
                     self.put(f"UF<{node.target.name}>")  # type: ignore
                 else:
                     self.put(f"{node.target.name}")  # type: ignore
+            case ast.UAttr:
+                self.visit(node.target)
             case _:
                 if isinstance(node.target, str):
                     self.put(f"{node.target}")
