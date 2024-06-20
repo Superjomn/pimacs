@@ -251,7 +251,7 @@ class IRPrinter(IRVisitor):
 
     def visit_UAttr(self, node: ast.UAttr):
         self.visit(node.value)
-        self.put(f".{node.attr}")
+        self.put(f".U<{node.attr}>")
 
     def visit_DocString(self, node: ast.DocString):
         self.put(f'"{node.content}"')

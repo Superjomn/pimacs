@@ -63,8 +63,9 @@ class Node(ABC):
     sema_failed: bool = field(
         default=False, init=False, hash=False, repr=False, compare=False)
 
-    # Whether the symbol is resolved
-    resolved: bool = field(default=True, repr=False, init=False, hash=False)
+    @property
+    def resolved(self) -> bool:
+        return True
 
     def add_user(self, user: "Node"):
         if user not in self.users:
@@ -920,10 +921,10 @@ def make_literal(value: int | float | str | bool | None, loc: Location) -> Liter
 @dataclass
 class Unresolved:
     scope: Any = field(default=None, init=False, repr=False, hash=False)
-    resolved: bool = field(default=False, init=False, repr=False, hash=False)
 
-    def __post_init__(self):
-        self.resolved = False
+    @property
+    def resolved(self) -> bool:
+        return False
 
 
 @dataclass(slots=True, unsafe_hash=True)

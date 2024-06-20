@@ -142,7 +142,9 @@ class FileSema(IRMutator):
             # deal with members
             var_name = node.name
 
-            obj = self.sym_tbl.lookup(name="self", kind=Symbol.Kind.Arg)
+            self.sym_tbl.print_summary()
+            obj = self.sym_tbl.lookup(
+                Symbol(name="self", kind=Symbol.Kind.Arg))
             logger.debug(f"visit_UVarRef: obj: {obj}")
             if not obj:
                 obj = ast.UVarRef(
@@ -348,8 +350,8 @@ class FileSema(IRMutator):
         return self._class_visitor.visit_Class(the_node)
 
     def visit_Call(self, node: ast.Call):
-        node.args = tuple([self.visit(_) for _ in node.args])
-        node.type_spec = tuple([self.visit(_) for _ in node.type_spec])
+        node.args = self.visit(node.args)
+        # node.type_spec = tuple([self.visit(_) for _ in node.type_spec])
 
         func = node.target
         match type(func):
@@ -553,7 +555,6 @@ class FileSema(IRMutator):
         return node
 
     def visit_UAttr(self, node: ast.UAttr):
-        node = super().visit_UAttr(node)
         self.collect_unresolved(node)
         return node
 
@@ -587,4 +588,6 @@ class FileSema(IRMutator):
     utypes = ast.UVarRef | ast.UAttr | ast.UFunction | ast.UClass
 
     def bind_unresolved(self, node: ast.Node) -> bool:
+        if node.resolved:
+            return True
         return self.name_binder(node)

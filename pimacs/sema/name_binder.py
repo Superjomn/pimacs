@@ -29,6 +29,9 @@ class NameBinder:
         return self.bind_unresolved(node)
 
     def bind_unresolved(self, node: ast.Node) -> bool:
+        if node.resolved:
+            return True
+
         method_name = f'visit_{type(node).__name__}'
         if method := self.__dict__.get(method_name):
             return getattr(self, method_name)(node)

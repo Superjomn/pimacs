@@ -51,10 +51,7 @@ class IRPrinter(_IRPrinter):
         self.put(")")
 
     def visit_CallMethod(self, node):
-        if isinstance(node.obj, VarDecl):
-            self.put(node.obj.name)
-        else:
-            raise NotImplementedError(f"Unknown obj type: {type(node.obj)}")
+        self.put(node.obj.name)
 
         self.put(".")
         self.put(node.method.name)
