@@ -25,7 +25,9 @@ class IRMutator(ast_visitor.IRMutator):
     def visit_MakeObject(self, node):
         return node
 
-    def visit_UCallMethod(self, node):
+    def visit_UCallMethod(self, node: UCallMethod):
+        node = self.visit(node.obj)
+        node.args = self.visit(node.args)
         return node
 
     def visit_LispCall(self, node):
@@ -68,11 +70,10 @@ class IRPrinter(ast_visitor.IRPrinter):
             self.visit(arg)
         self.put(")")
 
-    def visit_LispCall(self, node):
+    def visit_LispCall(self, node: LispCall):
         self.put("%(")
-        self.put(node.func)
+        self.put(node.name)
         for no, arg in enumerate(node.args):
-            if no > 0:
-                self.put(" ")
+            self.put(" ")
             self.visit(arg)
         self.put(")")

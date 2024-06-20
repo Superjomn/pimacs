@@ -136,6 +136,10 @@ class FileSema(IRMutator):
 
     def visit_UVarRef(self, node: ast.UVarRef):
         node = super().visit_UVarRef(node)
+
+        if node.name == "other":
+            assert False, node
+
         # case 0: self.attr within a class
         if node.name.startswith("self."):
             # deal with members
@@ -352,6 +356,13 @@ class FileSema(IRMutator):
         func = node.target
         match type(func):
             case ast.UFunction:
+                if func.name.startswith('%'):  # lisp function call
+                    new_node = ast.LispCall(
+                        name=func.name[1:], args=node.args, loc=func.loc)
+                    new_node.type = _ty.LispType
+                    node.replace_all_uses_with(new_node)
+                    return new_node
+
                 self.collect_unresolved(node.target)  # type: ignore
 
             case ast.UAttr:
@@ -361,6 +372,7 @@ class FileSema(IRMutator):
                     type_spec=node.type_spec)
                 logger.debug(f"ast.UAttr users: {node.users}")
                 node.replace_all_uses_with(new_node)
+                self.visit(new_node)
                 self.collect_unresolved(new_node)
                 return new_node
 

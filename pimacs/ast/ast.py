@@ -850,7 +850,7 @@ class Class(Stmt, VisiableSymbol):
         return ty.GenericType(self.name)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, unsafe_hash=True)
 class DocString(Node):
     content: str
 

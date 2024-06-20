@@ -37,6 +37,7 @@ class NameBinder:
     def visit_UFunction(self, node) -> bool:
         assert isinstance(node, ast.UFunction)  # pass the typing
         logger.debug(f"Bind unresolved function {node}")
+
         func_overloads = node.scope.get(
             FuncSymbol(node.name))  # type: ignore
         logger.debug(f"resolving UFunction {node} found overloads: {

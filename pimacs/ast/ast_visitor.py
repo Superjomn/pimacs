@@ -160,7 +160,7 @@ class IRVisitor:
 
 
 class IRMutator:
-    def visit(self, node: ast.Node | ty.Type | str | None):
+    def visit(self, node: ast.Node | ty.Type | str | None | list | tuple):
         if node is None:
             return
         logging.debug(f"Visiting {node.__class__.__name__}: {node}")
@@ -170,6 +170,12 @@ class IRMutator:
 
     def generic_visit(self, node: ast.Node | ty.Type | str):
         raise Exception(f"No visit_{node.__class__.__name__} method")
+
+    def visit_tuple(self, node: tuple):
+        return tuple([self.visit(_) for _ in node])
+
+    def visit_list(self, node: list):
+        return [_ for _ in node]
 
     def visit_FileName(self, node: ast.FileName):
         return node
@@ -246,23 +252,17 @@ class IRMutator:
         return node
 
     def visit_Function(self, node: ast.Function):
-        decorators = []
-        for i, decorator in enumerate(node.decorators):
-            decorators.append(self.visit(decorator))
-        node.decorators = tuple(decorators)
-
-        args = []
-        for i, arg in enumerate(node.args):
-            args.append(self.visit(arg))
-        node.args = tuple(args)
-
-        node.body = self.visit(node.body)
+        with node.write_guard():
+            node.decorators = self.visit(node.decorators)
+            node.args = self.visit(node.args)
+            node.body = self.visit(node.body)
         return node
 
     def visit_Call(self, node: ast.Call):
-        node.target = self.visit(node.target)
-        node.args = tuple([self.visit(_) for _ in node.args])
-        node.type_spec = tuple([self.visit(_) for _ in node.type_spec])
+        with node.write_guard():
+            node.target = self.visit(node.target)
+            node.args = self.visit(node.args)
+            node.type_spec = self.visit(node.type_spec)
         return node
 
     def visit_UFunction(self, node: ast.UFunction):
@@ -278,8 +278,9 @@ class IRMutator:
         return node
 
     def visit_BinaryOp(self, node: ast.BinaryOp):
-        node.left = self.visit(node.left)
-        node.right = self.visit(node.right)
+        with node.write_guard():
+            node.left = self.visit(node.left)
+            node.right = self.visit(node.right)
         return node
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
@@ -290,13 +291,11 @@ class IRMutator:
         return node
 
     def visit_If(self, node: ast.If):
-        node.cond = self.visit(node.cond)
-        node.then_branch = self.visit(node.then_branch)
-        elif_branches = []
-        for cond, block in node.elif_branches:
-            elif_branches.append((self.visit(cond), self.visit(block)))
-
-        node.else_branch = self.visit(node.else_branch)
+        with node.write_guard():
+            node.cond = self.visit(node.cond)
+            node.then_branch = self.visit(node.then_branch)
+            node.elif_branches = self.visit(node.elif_branches)
+            node.else_branch = self.visit(node.else_branch)
         return node
 
     def visit_Return(self, node: ast.Return):
@@ -304,36 +303,32 @@ class IRMutator:
         return node
 
     def visit_File(self, node: ast.File):
-        stmts = []
-        for i, stmt in enumerate(node.stmts):
-            stmts.append(self.visit(stmt))
-        node.stmts = stmts
-
+        node.stmts = self.visit(node.stmts)
         return node
 
     def visit_Assign(self, node: ast.Assign):
-        node.target = self.visit(node.target)
-        node.value = self.visit(node.value)
+        with node.write_guard():
+            node.target = self.visit(node.target)
+            node.value = self.visit(node.value)
         return node
 
     def visit_Class(self, node: ast.Class):
-        node.decorators = tuple([self.visit(_) for _ in node.decorators])
-        node.body = tuple([self.visit(_) for _ in node.body])
+        with node.write_guard():
+            node.decorators = self.visit(node.decorators)
+            node.body = self.visit(node.body)
         return node
 
     def visit_DocString(self, node: ast.DocString):
         return node
 
     def visit_Guard(self, node: ast.Guard):
-        node.header = self.visit(node.header)
-        node.body = self.visit(node.body)
+        with node.write_guard():
+            node.header = self.visit(node.header)
+            node.body = self.visit(node.body)
         return node
 
     def visit_CompositeType(self, node: ty.CompositeType):
-        params = []
-        for param in node.params:
-            params.append(self.visit(param))
-        node.params = tuple(params)
+        # TODO: remove all the visitor for types
         return node
 
 

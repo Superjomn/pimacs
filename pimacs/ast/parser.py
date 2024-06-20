@@ -183,6 +183,8 @@ class PimacsTransformer(Transformer):
 
         if len(spec_types) == 1 and spec_types[0].is_List():
             spec_types = spec_types[0].inner_types
+        if isinstance(spec_types, list):
+            spec_types = tuple(spec_types)
 
         # TODO: Unify the types in ModuleContext
         return ty.CompositeType(name=type.value, params=spec_types)
