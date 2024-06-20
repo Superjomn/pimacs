@@ -275,7 +275,6 @@ def amend_placeholder_types(node: ast.Node | List[ast.Node], template_params: Di
             return type
 
         def walk_to_node_pre(self, node) -> bool:  # type: ignore
-            print(f"** visit {node}")
             if hasattr(node, "type"):
                 node.type = self.overwrite_type(node.type)
             if hasattr(node, "return_type"):

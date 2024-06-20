@@ -815,7 +815,6 @@ class Class(Stmt, VisiableSymbol):
         return self._template_params
 
     def _refresh_users(self):
-        self.body.add_user(self)
         for stmt in self.body:
             stmt.add_user(self)
         for decorator in self.decorators:
@@ -1019,7 +1018,7 @@ class LispCall(Expr):
     e.g.
       (add 1 2)      # => LispCall(name='add', args=(1, 2))
     '''
-    name: str
+    target: str
     args: Tuple[Expr, ...]
 
     def __post_init__(self):

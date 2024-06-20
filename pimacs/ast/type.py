@@ -9,7 +9,6 @@ class Type:
     def __new__(cls, *args, **kwargs):
         if not cls is PlaceholderType:
             key = (cls, args, tuple(kwargs.items()))
-            print(f"key: {key}")
             if key not in cls._instances:
                 cls._instances[key] = super().__new__(cls)
             return cls._instances[key]

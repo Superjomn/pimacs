@@ -47,9 +47,10 @@ def test_call():
     code = "var a = %elisp_fn()"
     var_node = parser.parser.parse(code)[0]
     print(var_node)
-    func = var_node.init.target
-    assert isinstance(func, ast.UFunction)
-    assert func.name == "%elisp_fn"
+    lisp_call = var_node.init
+    assert isinstance(lisp_call, ast.LispCall)
+    assert isinstance(lisp_call.target, str)
+    assert lisp_call.target == "elisp_fn"
 
 
 def test_class_method_call():
