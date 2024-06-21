@@ -29,6 +29,9 @@ class NameBinder:
         return self.bind_unresolved(node)
 
     def bind_unresolved(self, node: ast.Node) -> bool:
+        if node.resolved:
+            return True
+
         method_name = f'visit_{type(node).__name__}'
         if method := self.__dict__.get(method_name):
             return getattr(self, method_name)(node)
@@ -37,6 +40,7 @@ class NameBinder:
     def visit_UFunction(self, node) -> bool:
         assert isinstance(node, ast.UFunction)  # pass the typing
         logger.debug(f"Bind unresolved function {node}")
+
         func_overloads = node.scope.get(
             FuncSymbol(node.name))  # type: ignore
         logger.debug(f"resolving UFunction {node} found overloads: {
@@ -48,6 +52,10 @@ class NameBinder:
         assert len(node.users) == 1  # only one caller
         call = list(node.users)[0]
         assert isinstance(call, ast.Call)
+
+        if _ty.Unk in call.type_spec:
+            # The call's type spec is not resolved yet
+            return False
 
         if func_candidates := func_overloads.lookup(call.args, template_spec=call.type_spec):
             logger.debug(f"UCall found function: {func_candidates}")
@@ -77,7 +85,6 @@ class NameBinder:
 
     def visit_UVarRef(self, node: ast.UVarRef) -> bool:
         # Ideally, the UVarRef should be bound during the normal file sema. If failed, it will do global binding here.
-        assert not isinstance(node, ast.UAttr)
         symbol = Symbol(name=node.name, kind=Symbol.Kind.Var)
 
         if sym := node.scope.get(symbol):
@@ -88,6 +95,13 @@ class NameBinder:
         return False
 
     def visit_UAttr(self, node: ast.UAttr) -> bool:
+        if not node.value.resolved:
+            if isinstance(node.value, ast.UVarRef):
+                # UVarRef.scope is left None, since it is created in Lark parser.
+                node.value.scope = node.scope
+            if not self.bind_unresolved(node.value):
+                return False
+
         attr_name = node.attr  # type: ignore
         if node.value.get_type() in (None, _ty.Unk):  # type: ignore
             return False
@@ -146,7 +160,7 @@ class NameBinder:
         if isinstance(class_type, _ty.CompositeType):
             if class_node.template_params:
                 assert len(class_node.template_params) == len(
-                    class_type.params)
+                    class_type.params), f"Template params mismatch: {class_node.template_params} vs {class_type.params}"
                 template_spec = dict(
                     zip(class_node.template_params, class_type.params))
 

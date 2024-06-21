@@ -11,8 +11,17 @@ class List:
     def __getitem__(self, idx: Int) -> T:
         return %nth(self.list, idx)
 
+    # This tests operation with two templated objects
+    # CHECK: def __add__ (self :List[T], other :List[T]) -> List[T]:
+    # CHECK-NEXT: return %(append self.list other.__aslisp__())
+    def __add__(self, other: List[T]) -> List[T]:
+        return %append(self.list, other.__aslisp__())
+
     def size(self) -> Int:
         return %length(self.list)
+
+    def __aslisp__(self) -> Lisp:
+        return self.list
 
 # CHECK: var a :List[Int] = List[Int]()
 var a = List[Int]()
@@ -23,3 +32,10 @@ a.append(1)
 var a-size = a.size()
 # CHECK: var a-item :Int = a.__getitem__(0)
 var a-item = a.__getitem__(0)
+
+# The Sema will create default constructors for classes
+# CHECK: @template[T]
+# CHECK-NEXT: def List () -> List[T]:
+# CHECK-NEXT:     var self :List[T] = make_obj[List[T]]()
+# CHECK-NEXT:     self.list = %(list)
+# CHECK-NEXT:     return self

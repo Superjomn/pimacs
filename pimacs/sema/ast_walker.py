@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Callable, TypeVar
 
 import pimacs.ast.ast as ast
-from pimacs.ast.ast_visitor import IRMutator
+from pimacs.sema.ast_visitor import IRMutator
 
 from .ast_visitor import IRVisitor
 
@@ -25,6 +25,9 @@ class ASTWalker(ABC):
 class Traversal(IRMutator):
     def __init__(self, walker: ASTWalker) -> None:
         self.walker = walker
+
+    def __call__(self, node):
+        return self.visit(node)
 
     def do_it[T](self, node: T | None) -> T | None:  # type: ignore
         if node is None:

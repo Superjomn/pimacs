@@ -27,7 +27,7 @@ class TypeChecker(IRVisitor):
     @multimethod
     def convert_type(self, source: _ty.Type | None, target: _ty.Type) -> _ty.Type | None:
         '''
-        Convert \p source to \p target. If the conversion is not possible, return None.
+        Convert source to target. If the conversion is not possible, return None.
 
         This method could be used to verify if a value could be pass to a argument.
         '''
@@ -47,7 +47,18 @@ class TypeChecker(IRVisitor):
         if source == _ty.Bool and target == _ty.Int:
             return target
 
+        # Currently, the LispType works as an Any type
+        # TODO: Add an dedicated Any type
+        if source == _ty.LispType:
+            return True
+
         # TODO: Any class types could be converted to bool if the method __bool__ is defined.
+        if source.get_nosugar_type() == target.get_nosugar_type():
+            # Convert Value to Value?
+            if target.is_optional:
+                return True
+        if target.is_optional and source == _ty.Nil:
+            return True
 
         return None
 
@@ -124,7 +135,7 @@ class TypeChecker(IRVisitor):
 
         if node.init is not None:
             if not (is_unk(node.init.type) or is_unk(node.type)):
-                if node.init.type != node.type:
+                if not self.convert_type(node.init.type, node.type):
                     self.report_error(node, f'Type mismatch, declared as {
                                       node.type}, but got value of {node.init.type}')
                 else:
@@ -136,7 +147,7 @@ class TypeChecker(IRVisitor):
         if self.to_push_forward:
             super().visit_VarRef(node)
 
-        if node.target and not is_unk(node.target.type):
+        if node.target and not is_unk(node.target.type):  # type: ignore
             self.update_type(node, node.target.type)  # type: ignore
 
     def visit_Arg(self, node: ast.Arg):
@@ -145,7 +156,7 @@ class TypeChecker(IRVisitor):
 
         if not is_unk(node.type):
             if node.default and not is_unk(node.default.type):
-                if node.default.type != node.type:
+                if not self.convert_type(node.default.type, node.type):
                     self.report_error(node, f'Type mismatch, declared as {
                                       node.type}, but got value of {node.default.type}')
                 else:
@@ -164,11 +175,13 @@ class TypeChecker(IRVisitor):
         if not (node.left.type_determined and node.right.type_determined):
             return
 
-        if node.left.type != node.right.type:
+        op_type = self.convert_type(node.left.type, node.right.type) or self.convert_type(
+            node.right.type, node.left.type)
+        if not op_type:
             self.report_error(node, f'Type mismatch: {
                               node.left.type} != {node.right.type}')
         else:
-            self.update_type(node, node.left.type)  # type: ignore
+            self.update_type(node, op_type)  # type: ignore
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
         if self.to_push_forward:
@@ -235,7 +248,6 @@ def amend_placeholder_types(node: ast.Node):
 
         def walk_to_node_pre(self, node) -> bool:
             if isinstance(node, (ast.Function, ast.Class)) and node.template_params:
-                print(f"** visit {node}")
                 if node in self.visited_nodes:
                     return False
 
@@ -269,14 +281,16 @@ def amend_placeholder_types(node: ast.Node | List[ast.Node], template_params: Di
         def overwrite_type(self, type) -> _ty.Type | List[_ty.Type]:
             if isinstance(type, list):
                 return [self.overwrite_type(t) for t in type]
-            if type in template_params:
-                return template_params[type]
+            # deal with optional, such as T?
+            if type and type.get_nosugar_type() in template_params:
+                # template_params should be nosugar, so it is safe to map
+                type_param = template_params[type.get_nosugar_type()]
+                return type_param.get_optional_type() if type.is_optional else type_param
             if isinstance(type, _ty.CompositeType):
                 return type.replace_with(template_params)
             return type
 
         def walk_to_node_pre(self, node) -> bool:  # type: ignore
-            print(f"** visit {node}")
             if hasattr(node, "type"):
                 node.type = self.overwrite_type(node.type)
             if hasattr(node, "return_type"):

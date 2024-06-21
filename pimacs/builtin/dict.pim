@@ -1,0 +1,66 @@
+@template[K, V]
+class Dict:
+    var -dict: Lisp
+
+    def __init__(self):
+        "Initialize an empty dictionary."
+        self.-dict = %make-hash-table()
+
+    def __init__(self, dict: Lisp):
+        "Initialize an external hash-table."
+        # TODO: add type assert here
+        self.-dict = dict
+
+    def __getitem__(self, key: K) -> V:
+        "Get the value associated with the key."
+        return %gethash(key, self.-dict)
+
+    def __setitem__(self, key: K, value: V):
+        "Set the value for the key in the dictionary."
+        %pushhash(key, value, self.-dict)
+
+    def __contains__(self, key: K) -> bool:
+        "Check if the dictionary contains the key."
+        return %not(%eq(%gethash(key, self.-dict, %'no-value), %'no-value))
+
+    def clear(self):
+        "Clear all items from the dictionary."
+        %clrhash(self.-dict)
+
+    def copy(self) -> Dict[K, V]:
+        "Clear all items from the dictionary."
+        return Dict[K,V](%copy-hash-table(self.-dict))
+
+    def get(self, key: K, default: Value?=nil) -> V:
+        "Get the value for key if key is in the dictionary, else default."
+        return %gethash(key, self.-dict, default)
+
+    def keys(self) -> List[K]:
+        "Return a list of all keys in the dictionary."
+        return %hash-table-keys(self.-dict)
+
+    #def items(self) -> List[Tuple[K, V]]:
+    #    pass
+
+    def pop(self, key: K, default: V?=nil) -> V?:
+        "If key in the dictionary, remove it and return its value, else return default."
+        var value = %gethash(key, self.-dict, %'no-value)
+        if not %eq(value, %'no-value):
+            %remhash(key, self.-dict)
+            return value
+        else:
+            return default
+
+    def setdefault(self, key: K, default: V?=nil) -> V?:
+        "If key is in the dictionary, return its value. If not, insert key with a value of default and return default."
+        var value = %gethash(key, self.-dict, %'no-value)
+        # TODO: Support a unified ==
+        if %eq(value, %'no-value):
+            %puthash(key, default, self.-dict)
+            return default
+        return value
+
+    def update(self, other: Dict[K, V]):
+        "Update the dictionary with the key/value pairs from other, overwriting existing keys."
+        # TODO support lambda, map
+        return

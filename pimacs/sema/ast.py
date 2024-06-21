@@ -61,7 +61,6 @@ class MakeObject(Expr):
     e.g.
       App()      # => MakeObject(class_name='App')
     '''
-    class_name: str
 
     def _refresh_users(self):
         pass
@@ -70,7 +69,7 @@ class MakeObject(Expr):
         pass
 
     def __str__(self):
-        return f"{self.class_name}()"
+        return f"{self.type.name}()"
 
 
 @dataclass
@@ -132,31 +131,6 @@ class CallMethod(Expr):
     def replace_child(self, old, new):
         if self.obj == old:
             self.obj = new
-        for i, arg in enumerate(self.args):
-            if arg == old:
-                self.args[i] = new
-
-
-@dataclass(slots=True)
-class LispCall(Expr):
-    '''
-    Call a Lisp function.
-
-    e.g.
-      (add 1 2)      # => LispCall(name='add', args=(1, 2))
-    '''
-    name: str
-    args: Tuple[Expr, ...]
-
-    def __post_init__(self):
-        self._refresh_users()
-
-    def _refresh_users(self):
-        self.users.clear()
-        for arg in self.args:
-            arg.add_user(self)
-
-    def replace_child(self, old, new):
         for i, arg in enumerate(self.args):
             if arg == old:
                 self.args[i] = new

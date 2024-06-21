@@ -1,11 +1,53 @@
 from io import StringIO
+from pathlib import Path
+from typing import Set
 
 import pytest
 
-from pimacs.sema.ast_visitor import IRPrinter
+import pimacs.ast.type as _ty
+from pimacs.sema.ast_visitor import print_ast
+from pimacs.sema.ast_walker import ASTWalker, Traversal
 from pimacs.sema.context import ModuleContext
 from pimacs.sema.file_sema import *
 from pimacs.transpiler.phases import parse_ast, perform_sema
+
+
+def find_unresolved_symbols(node) -> Set[ast.Node]:
+    class Walker(ASTWalker):
+        def __init__(self):
+            self.unresolved_symbols = set()
+
+        def walk_to_node_post(self, node):
+            return node
+
+        def walk_to_node_pre(self, node) -> bool:
+            if isinstance(node, ast.Node) and not node.resolved:
+                self.unresolved_symbols.add(node)
+            return True
+
+    walker = Walker()
+    Traversal(walker)(node)
+
+    return walker.unresolved_symbols
+
+
+def find_unk_symbols(node) -> Set[ast.Node]:
+    ''' Find the symbols those types are not determined. '''
+    class Walker(ASTWalker):
+        def __init__(self):
+            self.symbols = set()
+
+        def walk_to_node_post(self, node):
+            return node
+
+        def walk_to_node_pre(self, node) -> bool:
+            if hasattr(node, "type") and node.type in (_ty.Unk, None):
+                self.symbols.add(node)
+            return True
+
+    walker = Walker()
+    Traversal(walker)(node)
+    return walker.symbols
 
 
 def test_UVarRef():
@@ -68,15 +110,69 @@ class App:
     class_def = file.stmts[0]
     assert isinstance(class_def, AnalyzedClass)
 
-    printer = IRPrinter(StringIO())
-    printer(class_def)
-    print("printer", printer.os.getvalue())
+    print_ast(file)
+
     assert class_def.name == "App"
     assert len(class_def.symbols) == 2  # a, b declared in class
+
+
+def test_template_class():
+    code = '''
+@template[T0, T1]
+class App:
+    var a: T0
+    var b: T1
+
+    def __init__(self, a: T0, b: T1):
+        self.a = a
+        self.b = b
+
+var app = App(1, 2)
+var app1 = App(1, 2.0)
+'''
+    ctx = ModuleContext(enable_exception=True)
+    file = parse_ast(code.rstrip())
+    file = perform_sema(ctx, file)
+    pprint(file)
+
+    unresolved = find_unresolved_symbols(file)
+    assert not unresolved
+
+    class_def = file.stmts[0]
+    assert isinstance(class_def, AnalyzedClass)
+
+    print("code:")
+    print_ast(file)
+
+
+def test_load_builtins():
+    ''' Test the builtin modules, and keep them pass the Sema.'''
+    builtin_root = Path(os.path.join(
+        os.path.dirname(__file__), "../../pimacs/builtin"))
+
+    def load(path):
+        ctx = ModuleContext(enable_exception=True)
+        file = parse_ast(filename=path)
+        file = perform_sema(ctx, file)
+        return file
+
+    def load_and_check(path):
+        file = load(path)
+
+        unresolved = find_unresolved_symbols(file)
+        assert not unresolved
+
+        unks = find_unk_symbols(file)
+        assert not unks
+
+    load_and_check(builtin_root / "list.pim")
+    load_and_check(builtin_root / "dict.pim")
 
 
 if __name__ == '__main__':
     # test_UVarRefScope()
     # test_func_binding()
     # test_func_binding()
-    test_class()
+    # test_class()
+    # test_template_class()
+    test_template_class()

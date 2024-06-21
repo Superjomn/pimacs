@@ -19,7 +19,7 @@ let nothing = nil
 #+END_SRC
 
 *** Variable declaration
-#+BEGIN_SRC pimacs
+#+BEGIN_SRC python
 var a = 1
 var b: Int = 1
 var c = b + 1

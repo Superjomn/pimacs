@@ -108,7 +108,7 @@ class PimacsTransformer(Transformer):
         elif len(items) == 2:
             if items[1]:
                 if items[1].value == "?":
-                    items[0].is_optional = True
+                    items[0] = items[0].get_optional_type()
             return items[0]
         else:
             raise ValueError(f"Unknown type {items}")
@@ -183,11 +183,13 @@ class PimacsTransformer(Transformer):
 
         if len(spec_types) == 1 and spec_types[0].is_List():
             spec_types = spec_types[0].inner_types
+        if isinstance(spec_types, list):
+            spec_types = tuple(spec_types)
 
         # TODO: Unify the types in ModuleContext
         return ty.CompositeType(name=type.value, params=spec_types)
 
-    def func_call(self, items) -> ast.Call:
+    def func_call(self, items) -> ast.Call | ast.LispCall:
         self._force_non_rule(items)
         if isinstance(items[0], ast.VarRef):
             name = items[0].name
@@ -212,6 +214,9 @@ class PimacsTransformer(Transformer):
             args = items[2]
 
         args = args if args else []
+
+        if name.startswith('%'):
+            return ast.LispCall(target=name[1:], args=tuple(args), loc=loc)
 
         the_func = ast.UFunction(name=name, loc=loc)
         return ast.Call(target=the_func, args=tuple(args), loc=loc, type_spec=tuple(type_spec))

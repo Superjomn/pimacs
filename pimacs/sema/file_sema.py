@@ -135,28 +135,26 @@ class FileSema(IRMutator):
         return node
 
     def visit_UVarRef(self, node: ast.UVarRef):
-        node = super().visit_UVarRef(node)
         # case 0: self.attr within a class
-        if node.name.startswith("self."):
-            # deal with members
-            var_name = node.name[5:]
+        if node.name == "self":
+            obj = self.sym_tbl.lookup(
+                [Symbol(name="self", kind=Symbol.Kind.Arg),
+                 Symbol(name="self", kind=Symbol.Kind.Var)])
 
-            obj = self.sym_tbl.lookup(name="self", kind=Symbol.Kind.Arg)
             if not obj:
+                self.sym_tbl.print_summary()
                 obj = ast.UVarRef(
                     # TODO: fix the type
                     name="self", loc=node.loc, target_type=_ty.Unk)  # type: ignore
-                obj.sema_failed = True
                 self.report_error(node, f"`self` is not declared")
             else:
-                assert self._cur_class
-                # TODO: deal with the templated class
-                obj.type = _ty.GenericType(self._cur_class.name)
+                if is_unk(obj.type):
+                    assert self._cur_class
+                    # TODO: deal with the templated class
+                    obj.type = _ty.GenericType(self._cur_class.name)
 
-            # The Attr cannot be resolved now, it can only be resolved in bulk when a class is fully analyzed.
-            attr = ast.UAttr(value=obj, attr=var_name, loc=node.loc)
-            self.collect_unresolved(attr)
-            return attr
+            node.replace_all_uses_with(obj)
+            return obj
 
         # case 1: Lisp symbol
         elif node.name.startswith('%'):
@@ -313,17 +311,17 @@ class FileSema(IRMutator):
                     arg, f"Argument {arg.name} should have a type")
         # check if return type is valid
         if not node.return_type or node.return_type is _ty.Unk:
-            node.return_type = _ty.Void
+            node.return_type = _ty.Nil
             return_nil = (not node.body.return_type) or (
                 len(
-                    node.body.return_type) == 1 and node.body.return_type[0] is _ty.Void
+                    node.body.return_type) == 1 and node.body.return_type[0] is _ty.Nil
             )
             if not return_nil:
                 self.report_error(
                     node,
                     f"Function which returns non-nil values should set return type",
                 )
-        elif node.body.return_type and node.body.return_type is not _ty.Void:
+        elif node.body.return_type and node.body.return_type is not _ty.Nil:
             if not self.type_checker.convert_type(node.body.return_type, node.return_type):
                 self.report_error(
                     node,
@@ -346,8 +344,8 @@ class FileSema(IRMutator):
         return self._class_visitor.visit_Class(the_node)
 
     def visit_Call(self, node: ast.Call):
-        node.args = tuple([self.visit(_) for _ in node.args])
-        node.type_spec = tuple([self.visit(_) for _ in node.type_spec])
+        node.args = self.visit(node.args)
+        # node.type_spec = tuple([self.visit(_) for _ in node.type_spec])
 
         func = node.target
         match type(func):
@@ -359,8 +357,8 @@ class FileSema(IRMutator):
                     obj=func.value, attr=func.attr,  # type: ignore
                     args=node.args, loc=func.loc,  # type: ignore
                     type_spec=node.type_spec)
-                logger.debug(f"ast.UAttr users: {node.users}")
                 node.replace_all_uses_with(new_node)
+                self.visit(new_node)
                 self.collect_unresolved(new_node)
                 return new_node
 
@@ -402,7 +400,7 @@ class FileSema(IRMutator):
             if isinstance(return_stmt, ast.Return):
                 if return_stmt.value:
                     return_types.add(return_stmt.value.get_type())
-        node.return_type = list(return_types) if return_types else [_ty.Void]
+        node.return_type = list(return_types) if return_types else [_ty.Nil]
         return node
 
     def visit_Arg(self, node: ast.Arg):
@@ -550,7 +548,24 @@ class FileSema(IRMutator):
         return node
 
     def visit_UAttr(self, node: ast.UAttr):
-        node = super().visit_UAttr(node)
+        if isinstance(node.value, ast.UVarRef):
+            node.value = self.visit_UVarRef(node.value)
+            if node.value is None:
+                self.sym_tbl.print_summary()
+                self.report_error(node, f"Cannot resolve {node.value}")
+        elif isinstance(node.value, (ast.VarRef, ast.VarDecl, ast.Arg)):
+            pass
+        else:
+            raise NotImplementedError(
+                f"UAttr: {node}, type: {type(node.value)}")
+
+        if not node.value.resolved:
+            self.sym_tbl.print_summary()
+            self_arg = self.sym_tbl.lookup(
+                Symbol(name=node.value.name, kind=Symbol.Kind.Arg))
+            self.report_error(
+                node, f"UAttr: {node} value is not resolved, got {self_arg}")
+
         self.collect_unresolved(node)
         return node
 
@@ -562,7 +577,7 @@ class FileSema(IRMutator):
             return node.init
         if isinstance(node, ast.VarRef):
             assert node.target
-            return node.target
+            return node.target  # type: ignore
 
         return node
 
@@ -584,4 +599,6 @@ class FileSema(IRMutator):
     utypes = ast.UVarRef | ast.UAttr | ast.UFunction | ast.UClass
 
     def bind_unresolved(self, node: ast.Node) -> bool:
+        if node.resolved:
+            return True
         return self.name_binder(node)

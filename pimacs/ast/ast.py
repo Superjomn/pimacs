@@ -63,8 +63,9 @@ class Node(ABC):
     sema_failed: bool = field(
         default=False, init=False, hash=False, repr=False, compare=False)
 
-    # Whether the symbol is resolved
-    resolved: bool = field(default=True, repr=False, init=False, hash=False)
+    @property
+    def resolved(self) -> bool:
+        return True
 
     def add_user(self, user: "Node"):
         if user not in self.users:
@@ -204,7 +205,7 @@ class VarRef(Expr):
     """A placeholder for a variable.
     """
 
-    target: Optional[Union[VarDecl, "Arg"]] = None
+    target: Optional[Node] = None
     type: Optional[Type] = None
     name: str = ""
 
@@ -341,7 +342,8 @@ class Function(Stmt, VisiableSymbol):
     # @template[T0, T1]
     # def foo(a: T0, b: T1) -> T0: ...
     # The `template_params` is (T0, T1)
-    _template_params: Optional[Tuple[Type, ...]] = None
+    _template_params: Optional[Tuple[Type, ...]] = field(
+        default=None, init=False, repr=False, compare=False)
 
     class Kind(Enum):
         Unknown = -1
@@ -518,7 +520,7 @@ class Literal(Expr):
         if isinstance(self.value, bool):
             return ty.Bool
         if self.value is None:
-            return ty.Void
+            return ty.Nil
         raise Exception(f"Unknown constant type: {self.value}")
 
     def __post_init__(self):
@@ -752,7 +754,8 @@ class Assign(Expr):
     def __post_init__(self):
         self._refresh_users()
 
-        self.type = self.value.get_type()
+        # Assign is a statement, so the type is None
+        self.type = ty.Nil
 
     def __repr__(self):
         return f"{self.target} = {self.value}"
@@ -804,7 +807,8 @@ class Class(Stmt, VisiableSymbol):
     # @template[T0, T1]
     # class App: ...
     # The `template_params` is (T0, T1)
-    _template_params: Optional[Tuple[Type, ...]] = None
+    _template_params: Optional[Tuple[Type, ...]] = field(
+        default=None, init=False, repr=False, compare=False)
 
     @property
     def template_params(self) -> Tuple[Type, ...]:
@@ -813,7 +817,6 @@ class Class(Stmt, VisiableSymbol):
         return self._template_params
 
     def _refresh_users(self):
-        self.body.add_user(self)
         for stmt in self.body:
             stmt.add_user(self)
         for decorator in self.decorators:
@@ -850,7 +853,7 @@ class Class(Stmt, VisiableSymbol):
         return ty.GenericType(self.name)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, unsafe_hash=True)
 class DocString(Node):
     content: str
 
@@ -918,11 +921,12 @@ def make_literal(value: int | float | str | bool | None, loc: Location) -> Liter
 
 @dataclass
 class Unresolved:
+    # The corresponding scope of the unresolved node is attached for name binding after the context is traversed.
     scope: Any = field(default=None, init=False, repr=False, hash=False)
-    resolved: bool = field(default=False, init=False, repr=False, hash=False)
 
-    def __post_init__(self):
-        self.resolved = False
+    @property
+    def resolved(self) -> bool:
+        return False
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -1007,3 +1011,29 @@ def _setup_template_params(node: Function | Class):
             break
     if node._template_params is None:  # mark as inited
         node._template_params = tuple()
+
+
+@dataclass(slots=True, unsafe_hash=True)
+class LispCall(Expr):
+    '''
+    Call a Lisp function.
+
+    e.g.
+      (add 1 2)      # => LispCall(name='add', args=(1, 2))
+    '''
+    target: str
+    args: Tuple[Expr, ...]
+
+    def __post_init__(self):
+        self.type = ty.LispType
+        self._refresh_users()
+
+    def _refresh_users(self):
+        self.users.clear()
+        for arg in self.args:
+            arg.add_user(self)
+
+    def replace_child(self, old, new):
+        for i, arg in enumerate(self.args):
+            if arg == old:
+                self.args[i] = new

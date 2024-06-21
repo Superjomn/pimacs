@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple
 
 
 class Type:
+    # NOTE: Type should not be modified, any variant should clone a new type.
     _instances: Dict[tuple, "Type"] = {}
 
     def __new__(cls, *args, **kwargs):
@@ -15,16 +16,35 @@ class Type:
         else:
             return super().__new__(cls)
 
-    def __init__(self, name, parent=None, params: Optional[Tuple["Type", ...]] = None, is_concrete=True):
+    def __init__(self, name, parent=None, params: Optional[Tuple["Type", ...]] = None,
+                 is_concrete=True, is_optional: bool = False):
         self.name = name
         self.params = params or tuple()
         self.parent = parent
         self._is_concrete = is_concrete
         self._initialized = True
+        self._is_optional = is_optional
 
     @property
     def is_concrete(self) -> bool:
         return self._is_concrete
+
+    @property
+    def is_optional(self) -> bool:
+        return self._is_optional
+
+    def get_nosugar_type(self):
+        '''
+        Get the type without sugar, such as optional.
+        '''
+        return Type(self.name, self.parent, self.params)
+
+    def get_optional_type(self):
+        if self.is_optional:
+            return self
+        return Type(self.name, self.parent, self.params,
+                    is_concrete=self.is_concrete,
+                    is_optional=True)
 
     def can_accept(self, other: "Type") -> bool:
         if self == other:
@@ -55,7 +75,8 @@ class Type:
         return self.name == "Dict"
 
     def __str__(self):
-        return self.name + (f"[{', '.join(str(p) for p in self.params)}]" if self.params else "")
+        optional_repr = "?" if self.is_optional else ""
+        return self.name + (f"[{', '.join(str(p) for p in self.params)}]" if self.params else "") + optional_repr
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, Type):
@@ -74,7 +95,7 @@ class BasicType(Type):
         super().__init__(name=name, parent=parent, is_concrete=True)
 
     def __repr__(self):
-        return self.name
+        return self.name + ("?" if self._is_optional else "")
 
 
 class CompositeType(Type):
@@ -142,7 +163,7 @@ class PlaceholderType(Type):
         super().__init__(name, parent, is_concrete=False)
 
     def __repr__(self):
-        return f"<P: {self.name}>"
+        return f"<P: {self.name}>" + ("?" if self._is_optional else "")
 
     def compatible_with(self, other):
         return True
@@ -153,7 +174,7 @@ class GenericType(Type):
         super().__init__(name, parent, params=params)
 
     def __repr__(self):
-        return f"<G: {super().__str__()}>"
+        return f"<G: {super().__str__()}>" + ("?" if self._is_optional else "")
 
 
 class FunctionType(Type):
@@ -195,9 +216,9 @@ class StrType(BasicType):
         super().__init__("Str")
 
 
-class VoidType(BasicType):
+class NilType(BasicType):
     def __init__(self):
-        super().__init__("Void")
+        super().__init__("Nil")
 
 
 class UnkType(BasicType):
@@ -216,7 +237,7 @@ Int = IntType()
 Float = FloatType()
 Bool = BoolType()
 Str = StrType()
-Void = VoidType()
+Nil = NilType()
 Unk = UnkType()
 LispType = LispType_()
 

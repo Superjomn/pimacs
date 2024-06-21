@@ -1,0 +1,8 @@
+# Placeholders for builtin special methods
+def pub(tolisp:Str?=nil):
+    "A decorator to mark a variable, function or class to be exported as public."
+    return
+
+def inline():
+    "A decorator to mark a function to expand inline when called."
+    return

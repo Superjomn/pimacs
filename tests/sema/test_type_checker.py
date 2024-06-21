@@ -60,7 +60,7 @@ def foo() -> Int:
 def test_call_conflict():
     ctx = ModuleContext(enable_exception=True)
     code = '''
-var a: Float = foo()
+var a: Bool = foo()
 def foo() -> Int:
     return 1
 '''

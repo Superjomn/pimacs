@@ -1,7 +1,10 @@
+from io import StringIO
+
 import pimacs.ast.ast_visitor as ast_visitor
 from pimacs.ast.ast import UAttr, VarDecl, VarRef
+from pimacs.ast.ast_printer import IRPrinter as _IRPrinter
 
-from .ast import AnalyzedClass, LispCall, MakeObject, UCallMethod
+from .ast import AnalyzedClass, MakeObject, UCallMethod
 
 
 class IRVisitor(ast_visitor.IRVisitor):
@@ -14,9 +17,6 @@ class IRVisitor(ast_visitor.IRVisitor):
     def visit_UCallMethod(self, node: UCallMethod):
         pass
 
-    def visit_LispCall(self, node: LispCall):
-        pass
-
 
 class IRMutator(ast_visitor.IRMutator):
     def visit_AnalyzedClass(self, node):
@@ -25,26 +25,38 @@ class IRMutator(ast_visitor.IRMutator):
     def visit_MakeObject(self, node):
         return node
 
-    def visit_UCallMethod(self, node):
+    def visit_UCallMethod(self, node: UCallMethod):
+        with node.write_guard():
+            node.obj = self.visit(node.obj)
+            node.args = self.visit(node.args)
         return node
 
-    def visit_LispCall(self, node):
+    def visit_CallMethod(self, node):
+        with node.write_guard():
+            node.obj = self.visit(node.obj)
+            node.args = self.visit(node.args)
         return node
 
 
-class IRPrinter(ast_visitor.IRPrinter):
+class IRPrinter(_IRPrinter):
+
+    def __init__(self, os, mark_unresolved=False) -> None:
+        super().__init__(os, mark_unresolved=mark_unresolved)
+
     def visit_AnalyzedClass(self, node: AnalyzedClass):
         self.visit_Class(node)
 
     def visit_MakeObject(self, node):
-        self.put(f"make_{node.class_name}()")
+        self.put(f"make_obj[{node.type}]()")
 
     def visit_UCallMethod(self, node):
-        self.put("U<")
+        if self._mark_unresolved:
+            self.put("U<")
         self.visit(node.obj)
         self.put(".")
         self.put(f"{node.attr}")
-        self.put(">")
+        if self._mark_unresolved:
+            self.put(">")
         self.put("(")
         for i, arg in enumerate(node.args):
             if i > 0:
@@ -53,10 +65,11 @@ class IRPrinter(ast_visitor.IRPrinter):
         self.put(")")
 
     def visit_CallMethod(self, node):
-        if isinstance(node.obj, VarDecl):
-            self.put(node.obj.name)
+        if isinstance(node.obj, VarRef):
+            name = node.obj.name or node.obj.target.name
         else:
-            raise NotImplementedError(f"Unknown obj type: {type(node.obj)}")
+            raise Exception(f"Unexpected obj type {node.obj}")
+        self.put(name)
 
         self.put(".")
         self.put(node.method.name)
@@ -68,11 +81,10 @@ class IRPrinter(ast_visitor.IRPrinter):
             self.visit(arg)
         self.put(")")
 
-    def visit_LispCall(self, node):
-        self.put("%(")
-        self.put(node.func)
-        for no, arg in enumerate(node.args):
-            if no > 0:
-                self.put(" ")
-            self.visit(arg)
-        self.put(")")
+
+def print_ast(node, mark_unresolved=True):
+    printer = IRPrinter(StringIO(), mark_unresolved=mark_unresolved)
+    printer(node)
+
+    output = printer.os.getvalue()
+    print(output)

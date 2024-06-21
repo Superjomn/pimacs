@@ -4,7 +4,7 @@ from pprint import pprint
 
 import click
 
-from pimacs.sema.ast_visitor import IRPrinter
+from pimacs.sema.ast_visitor import IRPrinter, print_ast
 from pimacs.sema.context import ModuleContext
 from pimacs.transpiler.phases import parse_ast, perform_sema
 
@@ -24,14 +24,13 @@ def main(filename: str, sema: bool, mark_unresolved: bool, enable_exception: boo
     if sema:
         ctx = ModuleContext(enable_exception=enable_exception)
         file = perform_sema(ctx, file)  # type: ignore
-        pprint(file)
+
+        if display_ast:
+            print("SEMA:\n")
+            pprint(file)
 
     if file:
-        printer = IRPrinter(StringIO(), mark_unresolved=mark_unresolved)
-        printer(file)
-
-        output = printer.os.getvalue()
-        print(output)
+        print_ast(file)
 
 
 if __name__ == "__main__":
