@@ -180,7 +180,8 @@ class ClassVisitor(IRMutator):
         obj = MakeObject(loc=init_fn.loc)
         obj.type = return_type
         var = ast.VarDecl(name="self", loc=init_fn.loc, init=obj)
-        return_stmt = ast.Return(value=obj, loc=init_fn.loc)
+        var_ref = ast.VarRef(target=var, loc=init_fn.loc)
+        return_stmt = ast.Return(value=var_ref, loc=init_fn.loc)
         body.stmts = (var,) + body.stmts + (return_stmt,)
 
         logger.debug(f"create constructor {class_node.name} with self {obj}")

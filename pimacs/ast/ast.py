@@ -205,7 +205,7 @@ class VarRef(Expr):
     """A placeholder for a variable.
     """
 
-    target: Optional[Union[VarDecl, "Arg"]] = None
+    target: Optional[Node] = None
     type: Optional[Type] = None
     name: str = ""
 

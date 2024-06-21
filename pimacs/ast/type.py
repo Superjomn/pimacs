@@ -55,7 +55,7 @@ class Type:
         return self.name == "Dict"
 
     def __str__(self):
-        return self.name + (f"[{', '.join(repr(p) for p in self.params)}]" if self.params else "")
+        return self.name + (f"[{', '.join(str(p) for p in self.params)}]" if self.params else "")
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, Type):

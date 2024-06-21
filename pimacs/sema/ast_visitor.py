@@ -1,3 +1,5 @@
+from io import StringIO
+
 import pimacs.ast.ast_visitor as ast_visitor
 from pimacs.ast.ast import UAttr, VarDecl, VarRef
 from pimacs.ast.ast_printer import IRPrinter as _IRPrinter
@@ -66,3 +68,11 @@ class IRPrinter(_IRPrinter):
                 self.put(", ")
             self.visit(arg)
         self.put(")")
+
+
+def print_ast(node, mark_unresolved=True):
+    printer = IRPrinter(StringIO(), mark_unresolved=mark_unresolved)
+    printer(node)
+
+    output = printer.os.getvalue()
+    print(output)
