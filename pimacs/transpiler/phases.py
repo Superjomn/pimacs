@@ -1,7 +1,6 @@
 from pprint import pprint
-from typing import Optional
 
-from lark import Lark, UnexpectedToken
+from lark import UnexpectedToken
 
 import pimacs.ast.ast as ast
 from pimacs.ast.parser import get_parser

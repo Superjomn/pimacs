@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List as Li
-from typing import Optional, Union
+from typing import Optional
 
 import pimacs.ast.ast as ast
 

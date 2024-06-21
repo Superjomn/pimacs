@@ -41,12 +41,11 @@ __all__ = ['Node',
            ]
 
 import os
-import weakref
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, ClassVar, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pimacs.ast.type as ty
 from pimacs.ast.type import Type
@@ -844,7 +843,7 @@ class Class(Stmt, VisiableSymbol):
 
     def as_type(self) -> Type:
         '''
-        Normally, without tempalte decorator, the class is a generic type.
+        Normally, without template decorator, the class is a generic type.
         With template decorator, the class is a CompositeType with the template types.
         '''
         for decorator in self.decorators:

@@ -2,17 +2,14 @@
 The semantics analysis for Class.
 '''
 from contextlib import contextmanager
-from pprint import pprint
 from typing import Any
 
 import pimacs.ast.type as _ty
-from pimacs.ast.type import Type
 from pimacs.logger import logger
 
 from . import ast
 from .ast import AnalyzedClass, MakeObject
 from .ast_visitor import IRMutator
-from .context import ModuleContext
 from .func import FuncSig
 from .symbol_table import FuncSymbol, ScopeKind, Symbol, SymbolTable
 

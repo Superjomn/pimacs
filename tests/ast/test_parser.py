@@ -1,5 +1,5 @@
 import pimacs.ast.ast as ast
-from pimacs.ast.parser import get_lark_parser, get_parser
+from pimacs.ast.parser import get_parser
 
 parser = get_parser()
 

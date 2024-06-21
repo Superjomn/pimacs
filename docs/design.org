@@ -10,7 +10,7 @@ A DSL with modern features:
 
 * Syntax
 ** Basic Examples
-*** Bultin constants
+*** Builtin constants
 
 #+BEGIN_SRC pimacs
 let bool_t = true
@@ -326,7 +326,7 @@ def hello(name :Str):
 ** Insert date
 
 #+BEGIN_SRC python
-@interative
+@interactive
 def chun/insert-current-date ():
     var date = %shell-command-to-string("echo -n $(date +%Y-%m-%d)")
     insert(" " + date)

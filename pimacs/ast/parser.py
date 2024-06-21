@@ -1,9 +1,4 @@
-import logging
 import os
-from contextlib import contextmanager
-from dataclasses import dataclass, field
-from enum import Enum
-from pprint import pprint
 from typing import *
 
 import lark
@@ -13,7 +8,6 @@ from lark.lexer import Token
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as ty
-from pimacs.ast.ast_visitor import IRMutator, IRVisitor
 
 
 def get_lark_parser():

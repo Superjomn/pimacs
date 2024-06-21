@@ -1,7 +1,5 @@
-import pytest
 
 from pimacs.ast.parser import get_lark_parser, get_parser
-from pimacs.transpiler.phases import parse_ast, perform_sema
 
 lark_parser = get_lark_parser()
 parser = get_parser()

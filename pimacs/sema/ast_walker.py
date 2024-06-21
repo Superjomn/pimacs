@@ -1,11 +1,7 @@
 from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Callable, TypeVar
 
 import pimacs.ast.ast as ast
 from pimacs.sema.ast_visitor import IRMutator
-
-from .ast_visitor import IRVisitor
 
 
 class ASTWalker(ABC):

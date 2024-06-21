@@ -2,7 +2,7 @@ import pytest
 
 import pimacs.ast.type as _ty
 from pimacs.ast import ast
-from pimacs.sema.func import FuncDuplicationError, FuncSig
+from pimacs.sema.func import FuncDuplicationError
 from pimacs.sema.symbol_table import *
 from pimacs.sema.utils import FuncSymbol, Symbol
 

@@ -1,8 +1,5 @@
-from io import StringIO
 from pathlib import Path
 from typing import Set
-
-import pytest
 
 import pimacs.ast.type as _ty
 from pimacs.sema.ast_visitor import print_ast

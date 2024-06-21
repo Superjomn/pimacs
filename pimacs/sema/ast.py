@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 import pimacs.ast.type as ty
 from pimacs.ast.ast import *
 
-from .func import FuncOverloads, FuncSymbol
+from .func import FuncSymbol
 from .symbol_table import Scope
 from .utils import Symbol
 

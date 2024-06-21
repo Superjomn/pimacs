@@ -6,17 +6,6 @@ from . import ast
 from .ast_visitor import IRVisitor
 
 
-class StringStream:
-    def __init__(self) -> None:
-        self.s = ""
-
-    def write(self, s: str) -> None:
-        self.s += s
-
-    def getvalue(self) -> str:
-        return self.s
-
-
 class IRPrinter(IRVisitor):
     indent_width = 4
 
