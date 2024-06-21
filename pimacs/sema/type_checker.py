@@ -27,7 +27,7 @@ class TypeChecker(IRVisitor):
     @multimethod
     def convert_type(self, source: _ty.Type | None, target: _ty.Type) -> _ty.Type | None:
         '''
-        Convert \p source to \p target. If the conversion is not possible, return None.
+        Convert source to target. If the conversion is not possible, return None.
 
         This method could be used to verify if a value could be pass to a argument.
         '''
@@ -46,6 +46,11 @@ class TypeChecker(IRVisitor):
 
         if source == _ty.Bool and target == _ty.Int:
             return target
+
+        # Currently, the LispType works as an Any type
+        # TODO: Add an dedicated Any type
+        if source == _ty.LispType:
+            return True
 
         # TODO: Any class types could be converted to bool if the method __bool__ is defined.
         if source.get_nosugar_type() == target.get_nosugar_type():
@@ -130,7 +135,7 @@ class TypeChecker(IRVisitor):
 
         if node.init is not None:
             if not (is_unk(node.init.type) or is_unk(node.type)):
-                if node.init.type != node.type:
+                if not self.convert_type(node.init.type, node.type):
                     self.report_error(node, f'Type mismatch, declared as {
                                       node.type}, but got value of {node.init.type}')
                 else:

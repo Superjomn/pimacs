@@ -1,11 +1,11 @@
-# CHECK: def foo () -> Void:
+# CHECK: def foo () -> Nil:
 def foo():
     # CHECK-NEXT: var a0 :Int = 0
     var a0: Int = 0
     var a1 = 0
     var a2: Int
 
-# CHECK: def basic-types () -> Void:
+# CHECK: def basic-types () -> Nil:
 # CHECK-NEXT: var a :List[Int]
 # CHECK-NEXT: var b :Set[Int]
 # CHECK-NEXT: var c :Dict[Str, Int]
@@ -19,12 +19,12 @@ def basic-control-flow(a:Int, b:Int) -> Int:
     # CHECK-NEXT: return a if a > b else b
     return a if a > b else b
 
-# CHECK: def basic-emacs-call (name :Str, age :Int) -> Void:
-def basic-emacs-call(name:Str, age:Int) -> Void:
+# CHECK: def basic-emacs-call (name :Str, age :Int) -> Nil:
+def basic-emacs-call(name:Str, age:Int) -> Nil:
     # CHECK-NEXT: %(message %(format-string "name: %s, age: %s" name age))
     %message(%format-string("name: %s, age: %s", name, age))
 
-# CHECK: def basic-if-else (v :Int) -> Void:
+# CHECK: def basic-if-else (v :Int) -> Nil:
 def basic-if-else(v: Int):
     if v < 0:
         %message("v < 0")
@@ -43,7 +43,7 @@ class Fruit:
     var -weight: Int
     var -name: Str
 
-    # CHECK: def __init__ (self :Fruit, name :Str, size :Int) -> Void:
+    # CHECK: def __init__ (self :Fruit, name :Str, size :Int) -> Nil:
     def __init__(self, name:Str, size:Int):
         # CHECK-NEXT: var self :Fruit = make_obj[Fruit]()
         # CHECK-NEXT: self.-name = name
@@ -67,7 +67,7 @@ def pub-foo():
 
 # CHECK: @pub(tolisp = "basic-module-foo")
 @pub(tolisp = "basic-module-foo")
-# CHECK-NEXT: def pub-foo-renamed () -> Void:
+# CHECK-NEXT: def pub-foo-renamed () -> Nil:
 def pub-foo-renamed():
     return
 

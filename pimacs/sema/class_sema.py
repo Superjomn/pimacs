@@ -195,8 +195,6 @@ class ClassVisitor(IRMutator):
             decorator = ast.Decorator(action=ast.Template(
                 types=class_node.template_params), loc=fn.loc)
             fn.decorators = (decorator,)
-        logger.debug(f"create constructor:")
-        pprint(fn)
 
         return fn
 

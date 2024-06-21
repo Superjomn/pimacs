@@ -440,10 +440,6 @@ class FileSema(IRMutator):
                         logger.warning(
                             f"assigning {node.default.get_type()} to {node.type}")
                     else:
-                        print(f"** source type: {node.default.get_type()}, optional: {
-                              node.default.get_type().is_optional}, type: {type(node.default.get_type())}")
-                        print(f"** target type: {node.type}, optional: {
-                              node.type.is_optional}, type: {type(node.type)}")
                         self.report_error(
                             node,
                             f"Cannot assign {node.default.get_type()} to {

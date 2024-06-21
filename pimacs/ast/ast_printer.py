@@ -251,7 +251,12 @@ class IRPrinter(IRVisitor):
 
     def visit_UAttr(self, node: ast.UAttr):
         self.visit(node.value)
-        self.put(f".U<{node.attr}>")
+        self.put(".")
+        if self._mark_unresolved:
+            self.put("U<")
+        self.put(node.attr)
+        if self._mark_unresolved:
+            self.put(">")
 
     def visit_DocString(self, node: ast.DocString):
         self.put(f'"{node.content}"')
@@ -318,7 +323,10 @@ class IRPrinter(IRVisitor):
             self.put(f"{node.name}")
 
     def visit_UClass(self, node: ast.UClass):
-        self.put(f"{node.name}")
+        if self._mark_unresolved:
+            self.put(f"UClass<{node.name}>")
+        else:
+            self.put(f"{node.name}")
 
     def visit_MakeObject(self, node):
         self.put(f"{type}()")

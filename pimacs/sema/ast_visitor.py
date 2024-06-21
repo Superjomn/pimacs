@@ -39,6 +39,10 @@ class IRMutator(ast_visitor.IRMutator):
 
 
 class IRPrinter(_IRPrinter):
+
+    def __init__(self, os, mark_unresolved=False) -> None:
+        super().__init__(os, mark_unresolved=mark_unresolved)
+
     def visit_AnalyzedClass(self, node: AnalyzedClass):
         self.visit_Class(node)
 
@@ -46,11 +50,13 @@ class IRPrinter(_IRPrinter):
         self.put(f"make_obj[{node.type}]()")
 
     def visit_UCallMethod(self, node):
-        self.put("U<")
+        if self._mark_unresolved:
+            self.put("U<")
         self.visit(node.obj)
         self.put(".")
         self.put(f"{node.attr}")
-        self.put(">")
+        if self._mark_unresolved:
+            self.put(">")
         self.put("(")
         for i, arg in enumerate(node.args):
             if i > 0:
