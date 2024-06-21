@@ -31,6 +31,12 @@ class IRMutator(ast_visitor.IRMutator):
             node.args = self.visit(node.args)
         return node
 
+    def visit_CallMethod(self, node):
+        with node.write_guard():
+            node.obj = self.visit(node.obj)
+            node.args = self.visit(node.args)
+        return node
+
 
 class IRPrinter(_IRPrinter):
     def visit_AnalyzedClass(self, node: AnalyzedClass):

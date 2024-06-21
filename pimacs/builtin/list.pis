@@ -11,29 +11,46 @@ class List:
     var -li: Lisp
 
     def __init__(self):
+        "Create an empty List instance."
         self.-li = %list()
 
-    @pub
-    @property
+    def __init__(self, li: Lisp):
+        "Create a List instance with list assigned."
+        self.-li = li
+
     def size(self) -> Int:
+        "Get the number of elements in the List."
         return %len(self.-li)
 
-    @pub
     def append(self, v: T):
+        "Append a new element."
         %push(v, self.-li)
 
-    @pub
     def insert(self, pos: Int, v: T):
         %cl-insert(self.-li, pos, v)
 
-    @pub
+    def count(self, value: T) -> Int:
+        "Return the number of times x appears in the list."
+        return %cl-count(value, self.-li)
+
+    def remove(self, value: T) -> bool:
+        "Remove the first item from the list whose value is equal to x.
+        Returns:
+          - true if removed successfully
+          - false if no value encountered."
+        return %cl-delete(value, self.-li, %:count, 1)
+
+    def reverse(self):
+        self.-li = %nreverse(self.-li)
+
+    def copy(self) -> List[T]:
+        return List[T](%copy-sequence(self.-li))
+
+    def __setitem__(self, idx: Int, value: T):
+        %setf(%nth(idx, self.-li), value)
+
     def __getitem__(self, idx: Int) -> T:
         return %nth(self.-li, idx)
-
-    @pub
-    def __setitem__(self, idx: Int, value: T):
-        # TODO
-        return
 
     @pub
     def __add__(self, other: List[T]) -> List[T]:

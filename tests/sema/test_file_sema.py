@@ -1,4 +1,5 @@
 from io import StringIO
+from pathlib import Path
 from typing import Set
 
 import pytest
@@ -124,6 +125,22 @@ var app1 = App(1, 2.0)
 
     print("code:")
     print_ast(file)
+
+
+def test_load_builtins():
+    ''' Test the builtin modules, and keep them pass the Sema.'''
+    builtin_root = Path(os.path.join(
+        os.path.dirname(__file__), "../../pimacs/builtin"))
+
+    def load(path):
+        ctx = ModuleContext(enable_exception=True)
+        file = parse_ast(filename=path)
+        file = perform_sema(ctx, file)
+        return file
+
+    file = load(builtin_root / "list.pis")
+    unresolved = find_unresolved_symbols(file)
+    assert not unresolved
 
 
 if __name__ == '__main__':
