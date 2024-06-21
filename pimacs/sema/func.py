@@ -142,8 +142,9 @@ class FuncSig:
                      self} get template_param_spec: {template_param_spec}")
 
         def set_tpl_param(param: _ty.Type, actual: _ty.Type):
-            assert actual.is_concrete
+            # assert actual.is_concrete, f"param is {param}, but actual type {actual} is not concrete"
             if param in template_specs:
+                # TODO: replace this with a more convert_type?
                 if template_specs[param] != actual:
                     return False
             template_specs[param] = actual
@@ -251,6 +252,7 @@ class FuncOverloads:
             if ret := sig.get_full_arg_list(args, template_spec):
                 _, template_specs = ret
                 concrete_sig = sig.specialize(template_specs)
+                assert concrete_sig
                 candidates.append((func, concrete_sig))
         return candidates
 

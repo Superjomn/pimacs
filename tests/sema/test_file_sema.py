@@ -31,6 +31,25 @@ def find_unresolved_symbols(node) -> Set[ast.Node]:
     return walker.unresolved_symbols
 
 
+def find_unk_symbols(node) -> Set[ast.Node]:
+    ''' Find the symbols those types are not determined. '''
+    class Walker(ASTWalker):
+        def __init__(self):
+            self.symbols = set()
+
+        def walk_to_node_post(self, node):
+            return node
+
+        def walk_to_node_pre(self, node) -> bool:
+            if hasattr(node, "type") and node.type in (_ty.Unk, None):
+                self.symbols.add(node)
+            return True
+
+    walker = Walker()
+    Traversal(walker)(node)
+    return walker.symbols
+
+
 def test_UVarRef():
     code = '''
 var a = 1
@@ -91,9 +110,8 @@ class App:
     class_def = file.stmts[0]
     assert isinstance(class_def, AnalyzedClass)
 
-    printer = IRPrinter(StringIO())
-    printer(class_def)
-    print("printer", printer.os.getvalue())
+    print_ast(file)
+
     assert class_def.name == "App"
     assert len(class_def.symbols) == 2  # a, b declared in class
 
@@ -138,9 +156,17 @@ def test_load_builtins():
         file = perform_sema(ctx, file)
         return file
 
-    file = load(builtin_root / "list.pis")
-    unresolved = find_unresolved_symbols(file)
-    assert not unresolved
+    def load_and_check(path):
+        file = load(path)
+
+        unresolved = find_unresolved_symbols(file)
+        assert not unresolved
+
+        unks = find_unk_symbols(file)
+        assert not unks
+
+    load_and_check(builtin_root / "list.pim")
+    load_and_check(builtin_root / "dict.pim")
 
 
 if __name__ == '__main__':
@@ -148,4 +174,5 @@ if __name__ == '__main__':
     # test_func_binding()
     # test_func_binding()
     # test_class()
+    # test_template_class()
     test_template_class()

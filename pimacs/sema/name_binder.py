@@ -53,6 +53,10 @@ class NameBinder:
         call = list(node.users)[0]
         assert isinstance(call, ast.Call)
 
+        if _ty.Unk in call.type_spec:
+            # The call's type spec is not resolved yet
+            return False
+
         if func_candidates := func_overloads.lookup(call.args, template_spec=call.type_spec):
             logger.debug(f"UCall found function: {func_candidates}")
             if len(func_candidates) > 1:

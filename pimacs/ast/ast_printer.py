@@ -275,43 +275,34 @@ class IRPrinter(IRVisitor):
         self.visit(node.value)
 
     def visit_GenericType(self, node: ty.GenericType):
-        self.put(f"{node.name}")
-        if node.params:
-            self.put('[')
-            for i, param in enumerate(node.params):
-                if i > 0:
-                    self.put(", ")
-                self.visit(param)
-            self.put("]")
+        self.put(str(node))
 
     def visit_CompositeType(self, node: ty.CompositeType):
-        self.put(f"{node.name}[")
-        for i, param in enumerate(node.params):
-            if i > 0:
-                self.put(", ")
-            self.visit(param)
-        self.put("]")
+        self.put(str(node))
 
     def visit_IntType(self, node: ty.IntType):
-        self.put("Int")
+        self.put(str(node))
 
     def visit_FloatType(self, node: ty.FloatType):
-        self.put("Float")
+        self.put(str(node))
 
     def visit_BoolType(self, node: ty.BoolType):
-        self.put("Bool")
+        self.put(str(node))
 
     def visit_StrType(self, node: ty.StrType):
-        self.put("Str")
+        self.put(str(node))
 
     def visit_UnkType(self, node: ty.UnkType):
-        self.put("Unk")
+        self.put(str(node))
 
-    def visit_VoidType(self, node: ty.NilType):
-        self.put("Void")
+    def visit_NilType(self, node: ty.NilType):
+        self.put(str(node))
+
+    def visit_LispType_(self, node: ty.LispType_):
+        self.put(str(node))
 
     def visit_PlaceholderType(self, node: ty.PlaceholderType):
-        self.put(f"{node.name}")
+        self.put(str(node))
 
     def visit_Attribute(self, node: ast.Attribute):
         if isinstance(node.value, ast.VarRef):

@@ -754,7 +754,8 @@ class Assign(Expr):
     def __post_init__(self):
         self._refresh_users()
 
-        self.type = self.value.get_type()
+        # Assign is a statement, so the type is None
+        self.type = ty.Nil
 
     def __repr__(self):
         return f"{self.target} = {self.value}"
@@ -1024,6 +1025,7 @@ class LispCall(Expr):
     args: Tuple[Expr, ...]
 
     def __post_init__(self):
+        self.type = ty.LispType
         self._refresh_users()
 
     def _refresh_users(self):

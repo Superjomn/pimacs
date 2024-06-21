@@ -151,7 +151,7 @@ class TypeChecker(IRVisitor):
 
         if not is_unk(node.type):
             if node.default and not is_unk(node.default.type):
-                if node.default.type != node.type:
+                if not self.convert_type(node.default.type, node.type):
                     self.report_error(node, f'Type mismatch, declared as {
                                       node.type}, but got value of {node.default.type}')
                 else:
@@ -170,11 +170,13 @@ class TypeChecker(IRVisitor):
         if not (node.left.type_determined and node.right.type_determined):
             return
 
-        if node.left.type != node.right.type:
+        op_type = self.convert_type(node.left.type, node.right.type) or self.convert_type(
+            node.right.type, node.left.type)
+        if not op_type:
             self.report_error(node, f'Type mismatch: {
                               node.left.type} != {node.right.type}')
         else:
-            self.update_type(node, node.left.type)  # type: ignore
+            self.update_type(node, op_type)  # type: ignore
 
     def visit_UnaryOp(self, node: ast.UnaryOp):
         if self.to_push_forward:

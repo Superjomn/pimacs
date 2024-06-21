@@ -141,14 +141,11 @@ class FileSema(IRMutator):
                 [Symbol(name="self", kind=Symbol.Kind.Arg),
                  Symbol(name="self", kind=Symbol.Kind.Var)])
 
-            assert obj, f"visit_UVarRef: obj: {obj}"
-            logger.debug(f"visit_UVarRef: obj: {obj}")
             if not obj:
                 self.sym_tbl.print_summary()
                 obj = ast.UVarRef(
                     # TODO: fix the type
                     name="self", loc=node.loc, target_type=_ty.Unk)  # type: ignore
-                obj.sema_failed = True
                 self.report_error(node, f"`self` is not declared")
             else:
                 if is_unk(obj.type):
