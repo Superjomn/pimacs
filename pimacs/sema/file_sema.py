@@ -577,7 +577,7 @@ class FileSema(IRMutator):
             return node.init
         if isinstance(node, ast.VarRef):
             assert node.target
-            return node.target
+            return node.target  # type: ignore
 
         return node
 

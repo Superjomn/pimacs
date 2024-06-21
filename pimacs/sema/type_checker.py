@@ -147,7 +147,7 @@ class TypeChecker(IRVisitor):
         if self.to_push_forward:
             super().visit_VarRef(node)
 
-        if node.target and not is_unk(node.target.type):
+        if node.target and not is_unk(node.target.type):  # type: ignore
             self.update_type(node, node.target.type)  # type: ignore
 
     def visit_Arg(self, node: ast.Arg):

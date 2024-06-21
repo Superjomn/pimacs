@@ -189,7 +189,7 @@ class PimacsTransformer(Transformer):
         # TODO: Unify the types in ModuleContext
         return ty.CompositeType(name=type.value, params=spec_types)
 
-    def func_call(self, items) -> ast.Call:
+    def func_call(self, items) -> ast.Call | ast.LispCall:
         self._force_non_rule(items)
         if isinstance(items[0], ast.VarRef):
             name = items[0].name

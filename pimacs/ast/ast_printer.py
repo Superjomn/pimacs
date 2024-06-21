@@ -173,7 +173,7 @@ class IRPrinter(IRVisitor):
         if node.name:
             self.put(node.name)
         elif node.target is not None:
-            self.put(node.target.name)
+            self.put(node.target.name)  # type: ignore
 
     def visit_If(self, node: ast.If):
         self.put("if ")

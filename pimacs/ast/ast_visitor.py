@@ -166,7 +166,7 @@ class IRVisitor:
     def visit_NilType(self, node: ty.NilType):
         pass
 
-    def visit_LispType_(self, node: ty.LispType):
+    def visit_LispType_(self, node: ty.LispType_):
         pass
 
 
