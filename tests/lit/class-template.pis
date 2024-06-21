@@ -11,8 +11,17 @@ class List:
     def __getitem__(self, idx: Int) -> T:
         return %nth(self.list, idx)
 
+    # This tests operation with two templated objects
+    # CHECK: def __add__ (self :List[T], other :List[T]) -> List[T]:
+    # CHECK-NEXT: return %(append self.list other.__aslisp__())
+    def __add__(self, other: List[T]) -> List[T]:
+        return %append(self.list, other.__aslisp__())
+
     def size(self) -> Int:
         return %length(self.list)
+
+    def __aslisp__(self) -> Lisp:
+        return self.list
 
 # CHECK: var a :List[Int] = List[Int]()
 var a = List[Int]()
