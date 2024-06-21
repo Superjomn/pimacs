@@ -1,8 +1,11 @@
 from pprint import pprint
 from typing import Optional
 
+from lark import Lark, UnexpectedToken
+
 import pimacs.ast.ast as ast
 from pimacs.ast.parser import get_parser
+from pimacs.logger import logger
 from pimacs.sema.context import ModuleContext
 from pimacs.sema.file_sema import FileSema
 from pimacs.sema.type_checker import amend_placeholder_types
@@ -22,7 +25,16 @@ def parse_ast(
         source = ast.FileName(filename)  # type: ignore
         parser = get_parser(code=None, filename=filename)
 
-    stmts = parser.parse(code)
+    try:
+        stmts = parser.parse(code)
+    except UnexpectedToken as e:
+        logger.error(f"Unexpected token: {e.token}")
+        logger.error(f"Line: {e.line}, Column: {e.column}")
+        logger.error(f"Expected token: {e.expected}")
+        logger.error(f"Context: {e.get_context(code)}")
+
+        raise e
+
     file = ast.File(stmts=stmts, loc=ast.Location(source, 0, 0))
     amend_placeholder_types(file)
     return file

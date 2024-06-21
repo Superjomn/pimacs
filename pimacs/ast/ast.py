@@ -520,7 +520,7 @@ class Literal(Expr):
         if isinstance(self.value, bool):
             return ty.Bool
         if self.value is None:
-            return ty.Void
+            return ty.Nil
         raise Exception(f"Unknown constant type: {self.value}")
 
     def __post_init__(self):

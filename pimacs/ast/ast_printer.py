@@ -307,7 +307,7 @@ class IRPrinter(IRVisitor):
     def visit_UnkType(self, node: ty.UnkType):
         self.put("Unk")
 
-    def visit_VoidType(self, node: ty.VoidType):
+    def visit_VoidType(self, node: ty.NilType):
         self.put("Void")
 
     def visit_PlaceholderType(self, node: ty.PlaceholderType):

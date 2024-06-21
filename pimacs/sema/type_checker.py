@@ -48,6 +48,12 @@ class TypeChecker(IRVisitor):
             return target
 
         # TODO: Any class types could be converted to bool if the method __bool__ is defined.
+        if source.get_nosugar_type() == target.get_nosugar_type():
+            # Convert Value to Value?
+            if target.is_optional:
+                return True
+        if target.is_optional and source == _ty.Nil:
+            return True
 
         return None
 
@@ -268,8 +274,11 @@ def amend_placeholder_types(node: ast.Node | List[ast.Node], template_params: Di
         def overwrite_type(self, type) -> _ty.Type | List[_ty.Type]:
             if isinstance(type, list):
                 return [self.overwrite_type(t) for t in type]
-            if type in template_params:
-                return template_params[type]
+            # deal with optional, such as T?
+            if type and type.get_nosugar_type() in template_params:
+                # template_params should be nosugar, so it is safe to map
+                type_param = template_params[type.get_nosugar_type()]
+                return type_param.get_optional_type() if type.is_optional else type_param
             if isinstance(type, _ty.CompositeType):
                 return type.replace_with(template_params)
             return type

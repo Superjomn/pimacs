@@ -314,17 +314,17 @@ class FileSema(IRMutator):
                     arg, f"Argument {arg.name} should have a type")
         # check if return type is valid
         if not node.return_type or node.return_type is _ty.Unk:
-            node.return_type = _ty.Void
+            node.return_type = _ty.Nil
             return_nil = (not node.body.return_type) or (
                 len(
-                    node.body.return_type) == 1 and node.body.return_type[0] is _ty.Void
+                    node.body.return_type) == 1 and node.body.return_type[0] is _ty.Nil
             )
             if not return_nil:
                 self.report_error(
                     node,
                     f"Function which returns non-nil values should set return type",
                 )
-        elif node.body.return_type and node.body.return_type is not _ty.Void:
+        elif node.body.return_type and node.body.return_type is not _ty.Nil:
             if not self.type_checker.convert_type(node.body.return_type, node.return_type):
                 self.report_error(
                     node,
@@ -403,7 +403,7 @@ class FileSema(IRMutator):
             if isinstance(return_stmt, ast.Return):
                 if return_stmt.value:
                     return_types.add(return_stmt.value.get_type())
-        node.return_type = list(return_types) if return_types else [_ty.Void]
+        node.return_type = list(return_types) if return_types else [_ty.Nil]
         return node
 
     def visit_Arg(self, node: ast.Arg):
@@ -443,6 +443,10 @@ class FileSema(IRMutator):
                         logger.warning(
                             f"assigning {node.default.get_type()} to {node.type}")
                     else:
+                        print(f"** source type: {node.default.get_type()}, optional: {
+                              node.default.get_type().is_optional}, type: {type(node.default.get_type())}")
+                        print(f"** target type: {node.type}, optional: {
+                              node.type.is_optional}, type: {type(node.type)}")
                         self.report_error(
                             node,
                             f"Cannot assign {node.default.get_type()} to {

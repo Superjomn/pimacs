@@ -68,7 +68,7 @@ class IRVisitor:
     def visit_UnkType(self, node: ty.UnkType):
         pass
 
-    def visit_VoidType(self, node: ty.VoidType):
+    def visit_VoidType(self, node: ty.NilType):
         pass
 
     def visit_GenericType(self, node: ty.GenericType):

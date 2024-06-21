@@ -34,7 +34,7 @@ class FuncSig:
 
     @classmethod
     def create(cls, func: "Function"):
-        return_type = func.return_type if func.return_type else _ty.Void
+        return_type = func.return_type if func.return_type else _ty.Nil
         symbol = FuncSymbol(func.name)
         # TODO: Support the context
         return FuncSig(

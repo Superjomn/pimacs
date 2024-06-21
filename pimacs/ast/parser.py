@@ -108,7 +108,7 @@ class PimacsTransformer(Transformer):
         elif len(items) == 2:
             if items[1]:
                 if items[1].value == "?":
-                    items[0].is_optional = True
+                    items[0] = items[0].get_optional_type()
             return items[0]
         else:
             raise ValueError(f"Unknown type {items}")
