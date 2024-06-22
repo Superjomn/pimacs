@@ -24,6 +24,7 @@ __all__ = ['Node',
            'UnaryOp',
            'CallParam',
            'Call',
+           'LispCall',
            'Return',
            'Decorator',
            'Assign',
@@ -455,19 +456,19 @@ class If(Stmt):
 
 @dataclass(slots=True)
 class While(Stmt):
-    condition: Expr
+    cond: Expr
     body: Block
 
     def _refresh_users(self):
-        self.condition.add_user(self)
+        self.cond.add_user(self)
 
     def __post_init__(self):
         self._refresh_users()
 
     def replace_child(self, old, new):
         with self.write_guard():
-            if self.condition == old:
-                self.condition = new
+            if self.cond == old:
+                self.cond = new
             if self.body == old:
                 self.body = new
 

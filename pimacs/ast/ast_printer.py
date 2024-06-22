@@ -6,16 +6,11 @@ from . import ast
 from .ast_visitor import IRVisitor
 
 
-class IRPrinter(IRVisitor):
-    indent_width = 4
-
-    def __init__(self, os, mark_unresolved=False) -> None:
-        self.os = os
+class PrinterBase:
+    def __init__(self, os, indent_width=4) -> None:
         self._indent: int = 0
-        self._mark_unresolved = mark_unresolved
-
-    def __call__(self, node: ast.Node) -> None:
-        self.visit(node)
+        self.os = os
+        self.indent_width = indent_width
 
     def put_indent(self) -> None:
         self.os.write(" " * self._indent * self.indent_width)
@@ -23,11 +18,29 @@ class IRPrinter(IRVisitor):
     def put(self, s: str) -> None:
         self.os.write(s)
 
+    @contextmanager
+    def indent_guard(self):
+        self.indent()
+        yield
+        self.deindent()
+
     def indent(self) -> None:
         self._indent += 1
 
     def deindent(self) -> None:
         self._indent -= 1
+
+
+class IRPrinter(IRVisitor, PrinterBase):
+
+    def __init__(self, os, mark_unresolved=False) -> None:
+        PrinterBase.__init__(self, os)
+        self.os = os
+        self._indent: int = 0
+        self._mark_unresolved = mark_unresolved
+
+    def __call__(self, node: ast.Node) -> None:
+        self.visit(node)
 
     def visit_VarDecl(self, node: ast.VarDecl):
         for no, decorator in enumerate(node.decorators):
@@ -342,9 +355,3 @@ class IRPrinter(IRVisitor):
             self.put(" ")
             self.visit(arg)
         self.put(")")
-
-    @contextmanager
-    def indent_guard(self):
-        self.indent()
-        yield
-        self.deindent()
