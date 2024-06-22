@@ -7,15 +7,22 @@ from .ast_visitor import IRVisitor
 
 
 class PrinterBase:
-    def __init__(self, os) -> None:
+    def __init__(self, os, indent_width=4) -> None:
         self._indent: int = 0
         self.os = os
+        self.indent_width = indent_width
 
     def put_indent(self) -> None:
         self.os.write(" " * self._indent * self.indent_width)
 
     def put(self, s: str) -> None:
         self.os.write(s)
+
+    @contextmanager
+    def indent_guard(self):
+        self.indent()
+        yield
+        self.deindent()
 
     def indent(self) -> None:
         self._indent += 1
@@ -25,7 +32,6 @@ class PrinterBase:
 
 
 class IRPrinter(IRVisitor, PrinterBase):
-    indent_width = 4
 
     def __init__(self, os, mark_unresolved=False) -> None:
         PrinterBase.__init__(self, os)
@@ -349,9 +355,3 @@ class IRPrinter(IRVisitor, PrinterBase):
             self.put(" ")
             self.visit(arg)
         self.put(")")
-
-    @contextmanager
-    def indent_guard(self):
-        self.indent()
-        yield
-        self.deindent()

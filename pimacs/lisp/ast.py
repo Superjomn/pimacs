@@ -119,4 +119,4 @@ class While(Expr):
 class Struct(Node):
     ''' Struct is a cl-struct. '''
     name: str
-    members: _List[VarDecl]
+    fields: _List[VarDecl]

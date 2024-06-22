@@ -1,13 +1,18 @@
+from io import StringIO
 from pprint import pprint
 
 from lark import UnexpectedToken
 
 import pimacs.ast.ast as ast
+import pimacs.lisp.ast as lisp_ast
 from pimacs.ast.parser import get_parser
+from pimacs.lisp.translator import LispTranslator
 from pimacs.logger import logger
 from pimacs.sema.context import ModuleContext
 from pimacs.sema.file_sema import FileSema
 from pimacs.sema.type_checker import amend_placeholder_types
+
+from .codegen import Codegen
 
 
 def parse_ast(
@@ -53,3 +58,20 @@ def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:
     pprint(the_ir)
 
     return None
+
+
+def translate_to_lisp(the_ast: ast.File) -> lisp_ast.Module:
+    """
+    Translate the AST to Lisp AST.
+    """
+    translator = LispTranslator()
+    return translator(the_ast)  # type: ignore
+
+
+def gen_lisp_code(node: lisp_ast.Node) -> str:
+    """
+    Generate Lisp code from the Lisp AST.
+    """
+    os = StringIO()
+    codegen = Codegen(os)
+    return codegen(node)

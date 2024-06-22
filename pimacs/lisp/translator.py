@@ -10,12 +10,25 @@ import pimacs.sema.ast_visitor as ast_visitor
 
 
 class LispTranslator(ast_visitor.IRMutator):
-    def visit_File(self, node: ast.File) -> lisp_ast.File:
+    def __call__(self, node) -> lisp_ast.Node:
+        return self.visit(node)
+
+    def visit_File(self, node: ast.File) -> lisp_ast.Module:
         ret = lisp_ast.Module(
             name="<unk-file-name>",
-            stmts=[self.visit(stmt) for stmt in node.stmts]
+            stmts=[],
         )
+        for stmt in node.stmts:
+            if isinstance(stmt, ast.VarDecl):
+                ret.stmts.append(
+                    lisp_ast.Assign(lisp_ast.VarRef(stmt.name),
+                                    self.visit(stmt.init))
+                )
+            else:
+                ret.stmts.append(self.visit(stmt))
+
         ret.loc = node.loc
+        return ret
 
     def visit_VarDecl(self, node: ast.VarDecl) -> lisp_ast.Assign | None:
         if node.init:
@@ -101,9 +114,8 @@ class LispTranslator(ast_visitor.IRMutator):
         return ret
 
     def visit_VarRef(self, node: ast.VarRef) -> lisp_ast.VarRef:
-        ret = lisp_ast.VarRef(
-            name=node.name
-        )
+        name = node.name if node.name else node.target.name  # type: ignore
+        ret = lisp_ast.VarRef(name=name)
         ret.loc = node.loc
         return ret
 
@@ -205,13 +217,13 @@ class LispTranslator(ast_visitor.IRMutator):
 
     def visit_Attribute(self, node: ast.Attribute) -> lisp_ast.Attribute:
         ret = lisp_ast.Attribute(
-            target=self.visit(node.target),
+            target=self.visit(node.target),  # type: ignore
             attr=node.attr
         )
         ret.loc = node.loc
         return ret
 
-    def visit_AnalyzedClass(self, node: ast.AnalyzedClass) -> lisp_ast.Class:
+    def visit_AnalyzedClass(self, node: ast.AnalyzedClass):
         members = node.symbols.get_local(ast.Symbol.Kind.Member)
         var_decls = []
         for member in members:
@@ -220,10 +232,10 @@ class LispTranslator(ast_visitor.IRMutator):
                                               ))
         ret = lisp_ast.Struct(
             name=node.name,
-            members=var_decls
+            fields=var_decls
         )
 
-    def visit_Select(self, node: ast.Select) -> lisp_ast.Select:
+    def visit_Select(self, node: ast.Select):
         ret = lisp_ast.List(elements=[
             lisp_ast.VarRef("if"),
             self.visit(node.cond),
@@ -233,7 +245,7 @@ class LispTranslator(ast_visitor.IRMutator):
         ret.loc = node.loc
         return ret
 
-    def visit_Guard(self, node: ast.Guard) -> lisp_ast.Guard:
+    def visit_Guard(self, node: ast.Guard):
         ret = lisp_ast.Guard(
             header=self.visit(node.header),
             body=self.visit(node.body)
