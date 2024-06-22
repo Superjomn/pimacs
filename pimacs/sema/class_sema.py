@@ -2,17 +2,14 @@
 The semantics analysis for Class.
 '''
 from contextlib import contextmanager
-from pprint import pprint
 from typing import Any
 
 import pimacs.ast.type as _ty
-from pimacs.ast.type import Type
 from pimacs.logger import logger
 
 from . import ast
 from .ast import AnalyzedClass, MakeObject
 from .ast_visitor import IRMutator
-from .context import ModuleContext
 from .func import FuncSig
 from .symbol_table import FuncSymbol, ScopeKind, Symbol, SymbolTable
 
@@ -160,6 +157,7 @@ class ClassVisitor(IRMutator):
         body = ast.Block(stmts=(return_stmt,
                                 ), loc=node.loc)
         fn = ast.Function(name=node.name, args=tuple(args),
+                          template_params=node.template_params,
                           body=body, loc=node.loc, return_type=return_type)
 
         fn.annotation = ast.Function.Annotation.Class_constructor
@@ -187,14 +185,9 @@ class ClassVisitor(IRMutator):
         logger.debug(f"create constructor {class_node.name} with self {obj}")
 
         fn = ast.Function(name=class_node.name, args=tuple(args), body=body, loc=init_fn.loc,
+                          template_params=class_node.template_params,
                           return_type=return_type)
         fn.annotation = ast.Function.Annotation.Class_constructor
-
-        if class_node.template_params:
-            # create a template decorator
-            decorator = ast.Decorator(action=ast.Template(
-                types=class_node.template_params), loc=fn.loc)
-            fn.decorators = (decorator,)
 
         return fn
 

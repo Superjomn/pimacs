@@ -1,9 +1,9 @@
 import sys
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
 from tabulate import tabulate  # type: ignore
 
@@ -70,7 +70,7 @@ def print_colored(msg: str, color: bcolors = bcolors.NONE):
 @dataclass(unsafe_hash=True, slots=True)
 class Symbol:
     """
-    Reprsent any kind of symbol and is comparable.
+    Represent any kind of symbol and is comparable.
     """
 
     class Kind(Enum):

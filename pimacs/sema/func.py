@@ -1,20 +1,18 @@
 import copy
 import weakref
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple
 
 from multimethod import multimethod
 
 import pimacs.ast.type as _ty
-from pimacs.ast.ast import Arg, Call, CallParam, Expr, Function
-from pimacs.ast.type import Type as _type
+from pimacs.ast.ast import Arg, CallParam, Expr, Function
 from pimacs.logger import logger
 
-from .utils import (FuncSymbol, Scoped, ScopeKind, Symbol, SymbolItem,
-                    print_colored)
+from .utils import FuncSymbol, Symbol
 
 
-# TODO: Make FuncDuplicationError accept the candiates, and make FuncOverloads.lookup return a single candidate
+# TODO: Make FuncDuplicationError accept the candidates, and make FuncOverloads.lookup return a single candidate
 class FuncDuplicationError(Exception):
     pass
 

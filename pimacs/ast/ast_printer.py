@@ -6,17 +6,6 @@ from . import ast
 from .ast_visitor import IRVisitor
 
 
-class StringStream:
-    def __init__(self) -> None:
-        self.s = ""
-
-    def write(self, s: str) -> None:
-        self.s += s
-
-    def getvalue(self) -> str:
-        return self.s
-
-
 class IRPrinter(IRVisitor):
     indent_width = 4
 
@@ -72,10 +61,12 @@ class IRPrinter(IRVisitor):
                 self.put_indent()
             self.visit(decorator)
             self.put("\n")
-
         if node.decorators:
             self.put_indent()
-        self.put(f"def {node.name} (")
+
+        self.put(f"def {node.name}")
+        self.print_template_params(node.template_params)
+        self.put(" (")
         if node.args:
             for i, arg in enumerate(node.args):
                 if i > 0:
@@ -231,13 +222,26 @@ class IRPrinter(IRVisitor):
         self.put(" = ")
         self.visit(node.value)
 
+    def print_template_params(self, params):
+        if not params:
+            return
+        self.put("[")
+        for i, p in enumerate(params):
+            if i > 0:
+                self.put(", ")
+            self.visit(p)
+        self.put("]")
+
     def visit_Class(self, node: ast.Class):
         for no, decorator in enumerate(node.decorators):
             if no >= 1:
                 self.put_indent()
             self.visit(decorator)
             self.put("\n")
-        self.put(f"class {node.name}:\n")
+        self.put(f"class {node.name}")
+        self.print_template_params(node.template_params)
+        self.put(":\n")
+
         with self.indent_guard():
             for stmt in node.body:
                 if isinstance(stmt, ast.Function):

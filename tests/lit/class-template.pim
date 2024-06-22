@@ -1,9 +1,11 @@
-@template[T]
-class List:
+class List[T]:
     var list: Lisp
 
     def __init__(self):
         self.list = %list()
+
+    def __init__(self, list:Lisp):
+        self.list = list
 
     def append(self, v: T):
         %push(v, self.list)
@@ -13,9 +15,9 @@ class List:
 
     # This tests operation with two templated objects
     # CHECK: def __add__ (self :List[T], other :List[T]) -> List[T]:
-    # CHECK-NEXT: return %(append self.list other.__aslisp__())
+    # CHECK-NEXT: return List[T](%(append self.list other.__aslisp__()))
     def __add__(self, other: List[T]) -> List[T]:
-        return %append(self.list, other.__aslisp__())
+        return List[T](%append(self.list, other.__aslisp__()))
 
     def size(self) -> Int:
         return %length(self.list)
@@ -34,8 +36,7 @@ var a-size = a.size()
 var a-item = a.__getitem__(0)
 
 # The Sema will create default constructors for classes
-# CHECK: @template[T]
-# CHECK-NEXT: def List () -> List[T]:
+# CHECK: def List[T] () -> List[T]:
 # CHECK-NEXT:     var self :List[T] = make_obj[List[T]]()
 # CHECK-NEXT:     self.list = %(list)
 # CHECK-NEXT:     return self

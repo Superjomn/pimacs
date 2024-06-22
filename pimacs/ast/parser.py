@@ -1,9 +1,4 @@
-import logging
 import os
-from contextlib import contextmanager
-from dataclasses import dataclass, field
-from enum import Enum
-from pprint import pprint
 from typing import *
 
 import lark
@@ -13,7 +8,6 @@ from lark.lexer import Token
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as ty
-from pimacs.ast.ast_visitor import IRMutator, IRVisitor
 
 
 def get_lark_parser():
@@ -57,10 +51,21 @@ class PimacsTransformer(Transformer):
 
     def func_def(self, items):
         self._force_non_rule(items)
-        name: str = items[0].value
-        args: List[ast.Arg] = safe_get(items, 1, tuple())
-        type = safe_get(items, 2, None)
-        block: ast.Block = safe_get(items, 3, None)
+        template_params = tuple()
+        if len(items) == 4:
+            name: str = items[0].value
+            args: List[ast.Arg] = safe_get(items, 1, tuple())
+            type = safe_get(items, 2, None)
+            block: ast.Block = safe_get(items, 3, None)
+        elif len(items) == 5:
+            name: str = items[0].value
+            template_params = items[1]
+            args: List[ast.Arg] = safe_get(items, 2, tuple())
+            type = safe_get(items, 3, None)
+            block: ast.Block = safe_get(items, 4, None)
+        else:
+            raise ValueError(f"Unknown function def {items}")
+
         loc = self._get_loc(items[0])
 
         if block is None:
@@ -69,7 +74,8 @@ class PimacsTransformer(Transformer):
             args = tuple(args)
 
         return ast.Function(
-            name=name, args=args or tuple(), body=block, return_type=type, loc=loc
+            name=name, args=args or tuple(), body=block, return_type=type, loc=loc,
+            template_params=template_params,
         )
 
     def func_args(self, items):
@@ -475,10 +481,21 @@ class PimacsTransformer(Transformer):
 
     def class_def(self, items):
         self._force_non_rule(items)
-        name = items[0].value
-        body = items[1]
+        template_params = tuple()
+        if len(items) == 2:
+            name = items[0].value
+            body = items[1]
+        elif len(items) == 3:
+            name = items[0].value
+            template_params = items[1]
+            body = items[2]
+        else:
+            raise ValueError(f"Unknown class def {items}")
+
         loc = self._get_loc(items[0])
-        return ast.Class(name=name, body=body, loc=loc)
+        return ast.Class(name=name, body=body,
+                         template_params=template_params,
+                         loc=loc)
 
     def class_body(self, items):
         self._force_non_rule(items)
@@ -527,7 +544,7 @@ class PimacsTransformer(Transformer):
 
     def type_placeholders(self, items):
         self._force_non_rule(items)
-        return [ty.GenericType(name=item.value) for item in items]
+        return tuple([ty.PlaceholderType(name=item.value) for item in items])
 
     def type_placeholder_list(self, items):
         self._force_non_rule(items)

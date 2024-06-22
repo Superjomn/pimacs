@@ -1,7 +1,4 @@
-from contextlib import contextmanager
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional
 
 # from multidispatch import dispatch
 from multimethod import multimethod
@@ -10,8 +7,8 @@ from tabulate import tabulate  # type: ignore
 from pimacs.ast import ast
 
 from .func import FuncOverloads
-from .utils import (ClassId, FuncSymbol, ModuleId, Scoped, ScopeKind, Symbol,
-                    SymbolItem, bcolors, print_colored)
+from .utils import (FuncSymbol, Scoped, ScopeKind, Symbol, SymbolItem, bcolors,
+                    print_colored)
 
 
 class Scope:

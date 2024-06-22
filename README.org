@@ -24,7 +24,7 @@
 1. Need to register classes to ModouleContext, and once an object.method is triggered, retrieve the function from ModuleContext
 
 **** TODO templated function and call support
-1. Special need to function mangling, and insert to Scope, one func-name could map to multiple overrided functions or templated-functions
+1. Special need to function mangling, and insert to Scope, one func-name could map to multiple overrode functions or templated-functions
 2. FuncCall should have a UnresolvedFunc as a target function signature? And this could retrieve FuncDecls by name and then match one by one
 
 *** Lisp

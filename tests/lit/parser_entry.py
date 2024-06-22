@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-from io import StringIO
 from pprint import pprint
 
 import click
 
-from pimacs.sema.ast_visitor import IRPrinter, print_ast
+from pimacs.sema.ast_visitor import print_ast
 from pimacs.sema.context import ModuleContext
 from pimacs.transpiler.phases import parse_ast, perform_sema
 

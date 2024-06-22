@@ -1,5 +1,4 @@
 import logging
-from contextlib import contextmanager
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as ty

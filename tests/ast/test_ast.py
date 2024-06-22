@@ -1,6 +1,4 @@
-from pprint import pprint
 
-import pimacs.ast.type as _ty
 from pimacs.ast.ast import *
 from pimacs.ast.utils import WeakSet
 

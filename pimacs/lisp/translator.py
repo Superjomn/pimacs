@@ -1,8 +1,7 @@
-from typing import *
 
 import pimacs.ast.ast as ast
 import pimacs.lisp.ir as lir
-from pimacs.ast.ast_visitor import IRMutator, IRVisitor
+from pimacs.ast.ast_visitor import IRVisitor
 from pimacs.sema.context import SymbolTable
 
 """

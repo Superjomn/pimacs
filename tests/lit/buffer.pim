@@ -48,7 +48,7 @@ class Buffer:
             return %point()
 
     def point-min(self) -> Int:
-        "Mininum accessible value of point in this buffer."
+        "Minimum accessible value of point in this buffer."
         guard with-current-buffer(self.buf):
             return %point-min()
 
@@ -81,7 +81,7 @@ class Buffer:
             %backward-word(count)
 
     def goto-beginning(self):
-        "Goto the begining of the buffer."
+        "Goto the beginning of the buffer."
         guard with-current-buffer(self.buf):
             %goto-char(%point-min())
 

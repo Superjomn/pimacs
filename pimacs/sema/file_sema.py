@@ -1,27 +1,20 @@
 """
 The FileSema module will scan the whole file and resolve the symbols in the file.
 """
-import logging
-import os
-from contextlib import contextmanager
-from dataclasses import dataclass, field
-from pprint import pprint
-from typing import Dict, List, Optional, Tuple
+from typing import Tuple
 
 import pimacs.ast.type as _ty
 from pimacs.ast.utils import WeakSet
 from pimacs.logger import logger
-from pimacs.sema.func import FuncOverloads
 
 from . import ast
-from .ast import AnalyzedClass, CallMethod, MakeObject, Template, UCallMethod
-from .ast_visitor import IRMutator, IRVisitor
+from .ast import MakeObject, UCallMethod
+from .ast_visitor import IRMutator
 from .class_sema import ClassVisitor
-from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
-from .func import FuncSig
+from .context import ModuleContext, Symbol, SymbolTable
 from .name_binder import NameBinder
 from .type_checker import TypeChecker, is_unk
-from .utils import ClassId, FuncSymbol, ModuleId, bcolors, print_colored
+from .utils import FuncSymbol, ScopeKind
 
 
 def any_failed(*nodes: ast.Node) -> bool:
@@ -151,7 +144,7 @@ class FileSema(IRMutator):
                 if is_unk(obj.type):
                     assert self._cur_class
                     # TODO: deal with the templated class
-                    obj.type = _ty.GenericType(self._cur_class.name)
+                    obj.type = self._cur_class.as_type()
 
             node.replace_all_uses_with(obj)
             return obj

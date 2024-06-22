@@ -3,7 +3,7 @@ from pprint import pprint
 import pytest
 
 import pimacs.ast.type as _ty
-from pimacs.sema import SemaError
+from pimacs.sema.context import SemaError
 from pimacs.sema.type_checker import *
 from pimacs.transpiler.phases import *
 

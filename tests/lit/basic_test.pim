@@ -95,14 +95,6 @@ let call-foo0-2 = foo0(1, 2)
 @pub(tolisp = "basic-module-pub-var")
 let pub-var-1 = 0
 
-# CHECK: @template[T0, T1]
-# CHECK-NEXT: def ty_foo (a :T0, b :T1) -> T0:
-@template[T0, T1]
-def ty_foo(a: T0, b: T1) -> T0:
+# CHECK: def ty_foo[T0, T1] (a :T0, b :T1) -> T0:
+def ty_foo[T0, T1](a: T0, b: T1) -> T0:
     return
-
-# TODO: refine template support
-# let v-of-foo = ty_foo[Int, Float]()
-
-# def ty_foo1() -> T:
-#     return

@@ -2,7 +2,7 @@ import pytest
 
 import pimacs.ast.type as _ty
 from pimacs.ast import ast
-from pimacs.sema.func import FuncDuplicationError, FuncSig
+from pimacs.sema.func import FuncDuplicationError
 from pimacs.sema.symbol_table import *
 from pimacs.sema.utils import FuncSymbol, Symbol
 
@@ -121,11 +121,9 @@ def test_SymbolTable_func_template_spec0():
     foo[Int]()
     '''
     T = _ty.PlaceholderType("T")
-    decorator = ast.Decorator(action=ast.Template(types=(T,)), loc=None)
     foo = ast.Function(name="foo", args=tuple(),
-                       decorators=(decorator,),
+                       template_params=(T,),
                        return_type=T, loc=None, body=[])
-    assert foo.template_params == (T,)
 
     table = SymbolTable()
     table.insert(FuncSymbol("foo"), foo)
@@ -159,13 +157,11 @@ def test_SymbolTable_func_template_spec1():
     '''
     T0 = _ty.PlaceholderType("T0")
     T1 = _ty.PlaceholderType("T1")
-    decorator = ast.Decorator(action=ast.Template(types=(T0, T1)), loc=None)
     arg0 = ast.Arg(name="a", type=T0, loc=None)
     arg1 = ast.Arg(name="b", type=T1, loc=None)
     foo = ast.Function(name="foo", args=(arg0, arg1),
-                       decorators=(decorator,),
+                       template_params=(T0, T1),
                        return_type=T0, loc=None, body=[])
-    assert foo.template_params == (T0, T1)
 
     table = SymbolTable()
     table.insert(FuncSymbol("foo"), foo)

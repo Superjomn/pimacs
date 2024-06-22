@@ -3,12 +3,10 @@ from io import StringIO
 import pytest
 from code_snippets import snippets
 
-import pimacs.ast.ast as ir
-from pimacs import BUILTIN_SOURCE_ROOT, SOURCE_ROOT
 from pimacs.ast.ast_printer import IRPrinter
 from pimacs.ast.ast_visitor import IRVisitor
-from pimacs.ast.parser import get_lark_parser, get_parser
-from pimacs.transpiler.phases import parse_ast, perform_sema
+from pimacs.ast.parser import get_parser
+from pimacs.transpiler.phases import parse_ast
 
 
 class MyIRVisitor(IRVisitor):
