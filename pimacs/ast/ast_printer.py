@@ -6,16 +6,10 @@ from . import ast
 from .ast_visitor import IRVisitor
 
 
-class IRPrinter(IRVisitor):
-    indent_width = 4
-
-    def __init__(self, os, mark_unresolved=False) -> None:
-        self.os = os
+class PrinterBase:
+    def __init__(self, os) -> None:
         self._indent: int = 0
-        self._mark_unresolved = mark_unresolved
-
-    def __call__(self, node: ast.Node) -> None:
-        self.visit(node)
+        self.os = os
 
     def put_indent(self) -> None:
         self.os.write(" " * self._indent * self.indent_width)
@@ -28,6 +22,19 @@ class IRPrinter(IRVisitor):
 
     def deindent(self) -> None:
         self._indent -= 1
+
+
+class IRPrinter(IRVisitor, PrinterBase):
+    indent_width = 4
+
+    def __init__(self, os, mark_unresolved=False) -> None:
+        PrinterBase.__init__(self, os)
+        self.os = os
+        self._indent: int = 0
+        self._mark_unresolved = mark_unresolved
+
+    def __call__(self, node: ast.Node) -> None:
+        self.visit(node)
 
     def visit_VarDecl(self, node: ast.VarDecl):
         for no, decorator in enumerate(node.decorators):
