@@ -55,7 +55,7 @@ class Codegen(PrinterBase):
         assert NotImplementedError("No VarDecl is allowed")
 
     def visit_VarRef(self, node: ast.VarRef):
-        name = node.name or node.target.name
+        name = node.name or node.target.name  # type: ignore
         self.put(name)
 
     def visit_Symbol(self, node):
