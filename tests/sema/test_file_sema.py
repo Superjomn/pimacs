@@ -4,12 +4,12 @@ from pprint import pprint
 from typing import Set
 
 import pimacs.ast.type as _ty
+from pimacs.codegen.phases import parse_ast, perform_sema
 from pimacs.sema.ast import AnalyzedClass
 from pimacs.sema.ast_visitor import print_ast
 from pimacs.sema.ast_walker import ASTWalker, Traversal
 from pimacs.sema.context import ModuleContext
 from pimacs.sema.file_sema import *
-from pimacs.transpiler.phases import parse_ast, perform_sema
 
 
 def find_unresolved_symbols(node) -> Set[ast.Node]:
