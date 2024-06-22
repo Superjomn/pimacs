@@ -26,6 +26,7 @@ class AnalyzedClass(Class):
             name=node.name,
             body=node.body,
             decorators=node.decorators,
+            template_params=node.template_params,
             loc=node.loc,
         )
 

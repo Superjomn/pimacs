@@ -45,15 +45,13 @@ var age-2 = a-pet.get-age()
 # CHECK-NEXT: a-pet.hello()
 a-pet.hello()
 
-@template[T0, T1]
-def foo-2 (a:T0, b:T1) -> T0:
+def foo-2[T0, T1](a:T0, b:T1) -> T0:
     return a + b + 1
 
 # CHECK: var call-foo-2 :Int = foo-2(1, 2)
 var call-foo-2 = foo-2(1, 2)
 
-@template[T]
-def min(a: T, b: T) -> T:
+def min[T](a: T, b: T) -> T:
     return a if a < b else b
 
 var ab = min(1, 2)

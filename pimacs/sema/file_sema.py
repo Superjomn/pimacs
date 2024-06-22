@@ -11,10 +11,10 @@ from . import ast
 from .ast import MakeObject, UCallMethod
 from .ast_visitor import IRMutator
 from .class_sema import ClassVisitor
-from .context import ModuleContext, ScopeKind, Symbol, SymbolTable
+from .context import ModuleContext, Symbol, SymbolTable
 from .name_binder import NameBinder
 from .type_checker import TypeChecker, is_unk
-from .utils import FuncSymbol
+from .utils import FuncSymbol, ScopeKind
 
 
 def any_failed(*nodes: ast.Node) -> bool:
@@ -144,7 +144,7 @@ class FileSema(IRMutator):
                 if is_unk(obj.type):
                     assert self._cur_class
                     # TODO: deal with the templated class
-                    obj.type = _ty.GenericType(self._cur_class.name)
+                    obj.type = self._cur_class.as_type()
 
             node.replace_all_uses_with(obj)
             return obj

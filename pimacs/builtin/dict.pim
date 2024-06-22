@@ -1,5 +1,4 @@
-@template[K, V]
-class Dict:
+class Dict[K, V]:
     var -dict: Lisp
 
     def __init__(self):

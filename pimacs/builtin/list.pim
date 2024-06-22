@@ -1,5 +1,4 @@
-@template[T]
-class List:
+class List[T]:
     "List container.
     Usage:
         var a: List[Int]

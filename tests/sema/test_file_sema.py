@@ -1,7 +1,10 @@
+import os
 from pathlib import Path
+from pprint import pprint
 from typing import Set
 
 import pimacs.ast.type as _ty
+from pimacs.sema.ast import AnalyzedClass
 from pimacs.sema.ast_visitor import print_ast
 from pimacs.sema.ast_walker import ASTWalker, Traversal
 from pimacs.sema.context import ModuleContext
@@ -157,10 +160,10 @@ def test_load_builtins():
         file = load(path)
 
         unresolved = find_unresolved_symbols(file)
-        assert not unresolved
+        assert not unresolved, f"loading {path} failed: {unresolved}"
 
         unks = find_unk_symbols(file)
-        assert not unks
+        assert not unks, f"loading {path} failed: {unks}"
 
     load_and_check(builtin_root / "list.pim")
     load_and_check(builtin_root / "dict.pim")

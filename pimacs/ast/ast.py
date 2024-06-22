@@ -341,8 +341,8 @@ class Function(Stmt, VisiableSymbol):
     # @template[T0, T1]
     # def foo(a: T0, b: T1) -> T0: ...
     # The `template_params` is (T0, T1)
-    _template_params: Optional[Tuple[Type, ...]] = field(
-        default=None, init=False, repr=False, compare=False)
+    template_params: Optional[Tuple[Type, ...]] = field(
+        default=None)
 
     class Kind(Enum):
         Unknown = -1
@@ -384,12 +384,6 @@ class Function(Stmt, VisiableSymbol):
             if decorator.action == "classmethod":
                 return True
         return False
-
-    @property
-    def template_params(self) -> Tuple[Type, ...]:
-        _setup_template_params(self)
-        assert self._template_params is not None
-        return self._template_params
 
     def replace_child(self, old, new):
         with self.write_guard():
@@ -806,14 +800,8 @@ class Class(Stmt, VisiableSymbol):
     # @template[T0, T1]
     # class App: ...
     # The `template_params` is (T0, T1)
-    _template_params: Optional[Tuple[Type, ...]] = field(
-        default=None, init=False, repr=False, compare=False)
-
-    @property
-    def template_params(self) -> Tuple[Type, ...]:
-        _setup_template_params(self)
-        assert self._template_params is not None
-        return self._template_params
+    template_params: Optional[Tuple[Type, ...]] = field(
+        default=None)
 
     def _refresh_users(self):
         for stmt in self.body:
@@ -836,20 +824,17 @@ class Class(Stmt, VisiableSymbol):
             self.decorators = tuple(decorators)
 
     def is_templated(self) -> bool:
-        for decorator in self.decorators:
-            if isinstance(decorator.action, Template):
-                return True
-        return False
+        return bool(self.template_params)
 
     def as_type(self) -> Type:
         '''
         Normally, without template decorator, the class is a generic type.
         With template decorator, the class is a CompositeType with the template types.
         '''
-        for decorator in self.decorators:
-            if isinstance(decorator.action, Template):
-                return ty.CompositeType(self.name, params=decorator.action.types)
-        return ty.GenericType(self.name)
+        if self.is_templated():
+            return ty.CompositeType(self.name, params=self.template_params)
+        else:
+            return ty.GenericType(self.name)
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -991,25 +976,6 @@ class UFunction(Unresolved, Stmt):
 
 def is_unk(type: Type) -> bool:
     return type == ty.Unk or type is None
-
-
-def _setup_template_params(node: Function | Class):
-    '''
-    Parse the template from decorators.
-    '''
-    if node._template_params is not None:
-        return
-
-    for no, decorator in enumerate(node.decorators):
-        if isinstance(decorator.action, Template):
-            tpl: Template = decorator.action
-            # assert all the arg from call.args are Type
-            assert all(isinstance(type, ty.PlaceholderType)
-                       for type in tpl.types)
-            node._template_params = tpl.types
-            break
-    if node._template_params is None:  # mark as inited
-        node._template_params = tuple()
 
 
 @dataclass(slots=True, unsafe_hash=True)

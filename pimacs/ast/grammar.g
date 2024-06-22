@@ -41,12 +41,12 @@ type_placeholder_list: "[" type_placeholders "]"
 type_placeholders: NAME ("," NAME)*
 
 // function related
-func_def: "def" NAME "(" [func_args] ")" ["->" type] ":" block
+func_def: "def" NAME type_placeholder_list? "(" [func_args] ")" ["->" type] ":" block
 func_args: func_arg ("," func_arg)*
 func_arg: NAME [":" type] ["=" expr]
 
 // class related
-class_def: "class" NAME ":" class_body
+class_def: "class" NAME type_placeholder_list? ":" class_body
 class_body: _NEWLINE _INDENT [doc_string] (_NEWLINE | statement)+ _DEDENT
 
 // guard
