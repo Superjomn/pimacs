@@ -60,11 +60,11 @@ def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:
     return None
 
 
-def translate_to_lisp(the_ast: ast.File) -> lisp_ast.Module:
+def translate_to_lisp(ctx: ModuleContext, the_ast: ast.File) -> lisp_ast.Module:
     """
     Translate the AST to Lisp AST.
     """
-    translator = LispTranslator()
+    translator = LispTranslator(ctx)
     return translator(the_ast)  # type: ignore
 
 

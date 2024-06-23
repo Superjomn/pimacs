@@ -37,7 +37,15 @@ class Scope:
 
     @multimethod  # type: ignore
     def get_local(self, kind: Symbol.Kind) -> List[SymbolItem]:
-        return [item for symbol, item in self.data.items() if symbol.kind == kind]
+        if kind == Symbol.Kind.Func:
+            func_overloads = [item for symbol,
+                              item in self.data.items() if symbol.kind == kind]
+            funcs = []
+            for overloads in func_overloads:
+                funcs.extend(overloads.funcs.values())
+            return funcs
+        else:
+            return [item for symbol, item in self.data.items() if symbol.kind == kind]
 
     def _add_symbol(self, symbol: Symbol, item: SymbolItem):
         ''' Add non-func record. '''

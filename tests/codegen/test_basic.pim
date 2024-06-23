@@ -23,3 +23,32 @@ var aa = a-select-template(1, 2)
 def a-select-template-called() -> Int:
     # CHECK:     (cl-return (a-select-template--T_T 1 2))))
     return a-select-template(1, 2)
+
+# These functions offers default values to builtin types
+def Str() -> Str:
+    return ""
+
+def Int() -> Int:
+    return 0
+
+# CHECK: (cl-defstruct App name version)
+class App:
+    var name: Str
+    var version: Int
+
+    # The __init__ will be converted to constructor function
+    def __init__(self, name: Str, version: Int):
+        self.name = name
+        self.version = version
+
+    # CHECK: (defun App--run--App (self)
+    # CHECK:     (message "App [%s] on v-%d is running" (App-name self) (App-version self))))
+    def run(self):
+        %message("App [%s] on v-%d is running", self.name, self.version)
+
+    # The generated constructor for App
+    # CHECK: (defun App--Str_Int (name version)
+    # CHECK-NEXT:   (let (self)
+    # CHECK-NEXT:     (setq self (make-App :name nil :version nil))
+    # CHECK-NEXT:     (setf (App-name self) name)
+    # CHECK-NEXT:     (setf (App-version self) version)

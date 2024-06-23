@@ -85,6 +85,7 @@ class Assign(Expr):
 @dataclass(slots=True)
 class Attribute(Expr):
     ''' Attribute access expression. '''
+    class_name: str
     target: VarRef
     attr: str
 
@@ -120,3 +121,6 @@ class Struct(Node):
     ''' Struct is a cl-struct. '''
     name: str
     fields: _List[VarDecl]
+
+    # These are global functions.
+    methods: _List[Function] = field(default_factory=list)
