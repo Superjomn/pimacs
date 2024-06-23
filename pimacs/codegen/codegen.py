@@ -86,17 +86,22 @@ class Codegen(PrinterBase):
         self.visit(node.value)
         self.put(")")
 
-    def visit_Assign(self, node):
-        self.put("(setq ")
+    def visit_Assign(self, node: Assign):
+        self.put("(")
+        if isinstance(node.target, Attribute):
+            self.put("setf ")
+        else:
+            self.put("setq ")
         self.visit(node.target)
         self.put(" ")
         self.visit(node.value)
         self.put(")")
 
-    def visit_Attribute(self, node):
-        self.visit(node.target)
-        self.put(".")
-        self.visit(node.attr)
+    def visit_Attribute(self, node: Attribute):
+        self.put("(")
+        self.put(f"{node.class_name}-{node.attr} ")
+        self.put(f"{node.target.name}")
+        self.put(")")
 
     def visit_Function(self, node: Function):
         self.put("(defun ")

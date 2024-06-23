@@ -2,16 +2,30 @@
 This file defines a translator that translates the AST to Lisp AST.
 """
 
-from typing import List, Tuple
+from contextlib import contextmanager
+from typing import List, Optional, Tuple
+
+from multimethod import multimethod
 
 import pimacs.lisp.ast as lisp_ast
 import pimacs.sema.ast as ast
 import pimacs.sema.ast_visitor as ast_visitor
+from pimacs.sema.context import ModuleContext
 
 
 class LispTranslator(ast_visitor.IRMutator):
-    def __call__(self, node) -> lisp_ast.Node:
+    def __init__(self, ctx: ModuleContext):
+        self.ctx = ctx
+        self._cur_class: Optional[ast.AnalyzedClass] = None
+
+    def __call__(self,  node) -> lisp_ast.Node:
         return self.visit(node)
+
+    @contextmanager
+    def class_scope_guard(self, class_node: ast.AnalyzedClass):
+        self._cur_class = class_node
+        yield
+        self._cur_class = None
 
     def visit_File(self, node: ast.File) -> lisp_ast.Module:
         ret = lisp_ast.Module(
@@ -60,8 +74,11 @@ class LispTranslator(ast_visitor.IRMutator):
         return ret
 
     def visit_Function(self, node: ast.Function) -> lisp_ast.Function:
+        name = self.get_mangled_name(
+            node) if not self._cur_class else self.get_mangled_name(node, self._cur_class)
+
         ret = lisp_ast.Function(
-            name=self.get_mangled_name(node),
+            name=name,
             args=[self.visit(arg) for arg in node.args],
             body=self.visit(node.body),
         )
@@ -193,6 +210,19 @@ class LispTranslator(ast_visitor.IRMutator):
         ret.loc = node.loc
         return ret
 
+    def visit_CallMethod(self, node: ast.CallMethod) -> lisp_ast.List:
+        obj = node.obj
+        class_name = obj.type.name
+        class_node = self.ctx.get_symbol(
+            ast.Symbol(ast.Symbol.Kind.Class, class_name))
+        assert class_node, f"Class {class_name} not found"
+        func_name = self.get_mangled_name(node.target, class_node)
+        ret = lisp_ast.List(
+            elements=[
+                func_name] + self.visit_list(node.args))
+        ret.loc = node.loc
+        return ret
+
     def visit_LispCall(self, node: ast.LispCall) -> lisp_ast.List:
         ret = lisp_ast.List(
             elements=[node.target] + [self.visit(arg) for arg in node.args]
@@ -216,8 +246,10 @@ class LispTranslator(ast_visitor.IRMutator):
         return ret
 
     def visit_Attribute(self, node: ast.Attribute) -> lisp_ast.Attribute:
+        assert node.value.type
         ret = lisp_ast.Attribute(
-            target=self.visit(node.target),  # type: ignore
+            class_name=node.value.type.name,
+            target=self.visit(node.value),  # type: ignore
             attr=node.attr
         )
         ret.loc = node.loc
@@ -234,6 +266,24 @@ class LispTranslator(ast_visitor.IRMutator):
             name=node.name,
             fields=var_decls
         )
+
+        with self.class_scope_guard(node):
+            methods = self.visit_class_methods(node)
+            ret.methods = methods
+
+        ret.loc = node.loc
+
+        return ret
+
+    def visit_class_methods(self, node: ast.AnalyzedClass):
+        methods = node.symbols.get_local(ast.Symbol.Kind.Func)
+        with self.class_scope_guard(node):
+            func_decls = []
+            for method in methods:
+                if method.name != '__init__':
+                    # The __init__ is converted to constructor functions in the global scope during Sema
+                    func_decls.append(self.visit(method))
+            return func_decls
 
     def visit_Select(self, node: ast.Select):
         ret = lisp_ast.List(elements=[
@@ -253,6 +303,40 @@ class LispTranslator(ast_visitor.IRMutator):
         ret.loc = node.loc
         return ret
 
+    def visit_MakeObject(self, node: ast.MakeObject):
+        assert node.type
+        class_name = node.type.name
+        list_elements = [lisp_ast.VarRef(f"make-{class_name}")]
+
+        class_node = self.get_class(class_name)
+        for member in class_node.symbols.get_local(ast.Symbol.Kind.Member):
+            member_name = member.name
+            member_value = self.visit(
+                member.init) if member.init else lisp_ast.VarRef("nil")
+            list_elements.append(lisp_ast.VarRef(f":{member_name}"))
+            list_elements.append(member_value)
+
+        ret = lisp_ast.List(elements=list_elements)
+        ret.loc = node.loc
+        return ret
+
+    def get_class(self, name: str) -> ast.AnalyzedClass:
+        class_node = self.ctx.get_symbol(
+            ast.Symbol(name, ast.Symbol.Kind.Class))
+        assert class_node, f"Class {name} not found"
+        return class_node
+
+    @multimethod
+    def get_mangled_name(self, class_node: ast.AnalyzedClass) -> str:
+        # TODO: Consider module scope later
+        return class_node.name
+
+    @multimethod
     def get_mangled_name(self, func: ast.Function) -> str:
         arg_type_list = '_'.join([str(arg.type) for arg in func.args])
         return f"{func.name}--{arg_type_list}"
+
+    @multimethod  # type: ignore
+    def get_mangled_name(self, func: ast.Function, class_node: ast.AnalyzedClass) -> str:
+        arg_type_list = '_'.join([str(arg.type) for arg in func.args])
+        return f"{class_node.name}--{func.name}--{arg_type_list}"

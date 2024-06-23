@@ -23,3 +23,21 @@ var aa = a-select-template(1, 2)
 def a-select-template-called() -> Int:
     # CHECK:     (cl-return (a-select-template--T_T 1 2))))
     return a-select-template(1, 2)
+
+# These functions offers default values to builtin types
+def Str() -> Str:
+    return ""
+
+def Int() -> Int:
+    return 0
+
+class App:
+    var name: Str
+    var version: Int
+
+    def __init__(self, name: Str, version: Int):
+        self.name = name
+        self.version = version
+
+    def run(self):
+        %message("App [%s] on v-%d is running", self.name, self.version)
