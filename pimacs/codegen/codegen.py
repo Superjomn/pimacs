@@ -6,6 +6,8 @@ from pimacs.lisp.ast import *
 
 
 class Codegen(PrinterBase):
+    module_statment_newlines = 2
+
     def __init__(self, os):
         super().__init__(os, indent_width=2)
 
@@ -33,26 +35,25 @@ class Codegen(PrinterBase):
     def visit_str(self, node: str):
         self.put(node)
 
-    def visit_stmts(self, nodes: _List[Node] | Tuple[Node]):
+    def visit_stmts(self, nodes: _List[Node] | Tuple[Node], newlines: int = 1):
         if not nodes:
             return
         for node in nodes[:-1]:
             self.put_indent()
             self.visit(node)
-            self.put("\n\n")
+            self.put("\n" * newlines)
 
         self.put_indent()
         self.visit(nodes[-1])
 
     def visit_Module(self, node: Module):
-        self.visit_stmts(node.stmts)
+        self.visit_stmts(node.stmts, newlines=self.module_statment_newlines)
 
     def visit_Literal(self, node):
         self.put(str(node.value))
 
     def visit_VarDecl(self, node):
-        # The VarDecl should be handled in the Let node for local scope or the Assign node in global scope
-        assert NotImplementedError("No VarDecl is allowed")
+        self.put(node.name)
 
     def visit_VarRef(self, node: ast.VarRef):
         name = node.name or node.target.name  # type: ignore
@@ -146,3 +147,9 @@ class Codegen(PrinterBase):
         self.put(" ")
         self.visit(node.fields)
         self.put(")")
+
+        if node.methods:
+            self.put("\n" * self.module_statment_newlines)
+
+        self.visit_stmts(node.methods,  # type: ignore
+                         newlines=self.module_statment_newlines)

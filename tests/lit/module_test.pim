@@ -1,9 +1,0 @@
-@pub
-def public_foo():
-    pass
-
-
-export_module(
-    name = "pimacs-basic-test",
-    version = "0.1"
-)

@@ -12,7 +12,7 @@ def get_lisp(code: str) -> Module:
     assert the_ast
     print('ast after Sema:')
     pprint(the_ast)
-    module = translate_to_lisp(the_ast)
+    module = translate_to_lisp(ctx, the_ast)
     return module
 
 

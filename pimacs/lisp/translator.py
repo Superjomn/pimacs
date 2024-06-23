@@ -212,14 +212,15 @@ class LispTranslator(ast_visitor.IRMutator):
 
     def visit_CallMethod(self, node: ast.CallMethod) -> lisp_ast.List:
         obj = node.obj
-        class_name = obj.type.name
+        class_name = obj.type.name  # type: ignore
         class_node = self.ctx.get_symbol(
-            ast.Symbol(ast.Symbol.Kind.Class, class_name))
+            ast.Symbol(ast.Symbol.Kind.Class, class_name))  # type: ignore
         assert class_node, f"Class {class_name} not found"
-        func_name = self.get_mangled_name(node.target, class_node)
+        func_name = self.get_mangled_name(
+            node.target, class_node)  # type: ignore
         ret = lisp_ast.List(
             elements=[
-                func_name] + self.visit_list(node.args))
+                func_name] + self.visit_list(node.args))  # type: ignore
         ret.loc = node.loc
         return ret
 
@@ -316,7 +317,7 @@ class LispTranslator(ast_visitor.IRMutator):
             list_elements.append(lisp_ast.VarRef(f":{member_name}"))
             list_elements.append(member_value)
 
-        ret = lisp_ast.List(elements=list_elements)
+        ret = lisp_ast.List(elements=list_elements)  # type: ignore
         ret.loc = node.loc
         return ret
 
@@ -331,7 +332,7 @@ class LispTranslator(ast_visitor.IRMutator):
         # TODO: Consider module scope later
         return class_node.name
 
-    @multimethod
+    @multimethod  # type: ignore
     def get_mangled_name(self, func: ast.Function) -> str:
         arg_type_list = '_'.join([str(arg.type) for arg in func.args])
         return f"{func.name}--{arg_type_list}"
