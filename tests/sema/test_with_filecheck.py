@@ -7,16 +7,16 @@ workspace = Path(os.path.dirname(os.path.abspath(__file__)))
 
 
 def test_basic():
-    filecheck(workspace=workspace, file="./test_basic.pim")
+    filecheck(workspace=workspace, file="./test-basic.pim")
 
 
 def test_name_binding():
-    filecheck(workspace=workspace, file="./test_name_binding.pim")
+    filecheck(workspace=workspace, file="./test-name-binding.pim")
 
 
 def test_class_template():
-    filecheck(workspace=workspace, file="./test_class_template.pim")
+    filecheck(workspace=workspace, file="./test-class-template.pim")
 
 
 def test_org_element():
-    filecheck(workspace=workspace, file="./test_org_element.pim")
+    filecheck(workspace=workspace, file="./test-org-element.pim")
