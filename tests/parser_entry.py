@@ -18,12 +18,15 @@ from pimacs.sema.context import ModuleContext
 @click.option("--target", type=click.Choice(["ast", "lisp_ast", "lisp_code"]), default="ast")
 def main(filename: str, sema: bool, mark_unresolved: bool, enable_exception: bool, display_ast: bool, target: str):
     the_ast = parse_ast(filename=filename)
+    ctx = ModuleContext(enable_exception=enable_exception)
+    if target in ("lisp_ast", "lisp_code"):
+        sema = True
+
     if display_ast:
         print("AST:\n")
         pprint(the_ast)
 
     if sema:
-        ctx = ModuleContext(enable_exception=enable_exception)
         the_ast = perform_sema(ctx, the_ast)  # type: ignore
 
         if display_ast:
@@ -36,7 +39,7 @@ def main(filename: str, sema: bool, mark_unresolved: bool, enable_exception: boo
         return
 
     if target in ("lisp_ast", "lisp_code"):
-        the_ast = translate_to_lisp(the_ast)  # type: ignore
+        the_ast = translate_to_lisp(ctx, the_ast)  # type: ignore
         print("LISP AST:\n")
         pprint(the_ast)
 
