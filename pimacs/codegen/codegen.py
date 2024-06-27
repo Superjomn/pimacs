@@ -124,14 +124,18 @@ class Codegen(PrinterBase):
         self.visit_list(node.args)
         self.put(")")
 
-    def visit_If(self, node: If):
+    def visit_If(self, node: If) -> None:
+        """Visit an If node and generate code"""
         self.put("(if ")
         self.visit(node.cond)
         self.put(" ")
 
-        self.visit(node.then_block)
-        self.put(" ")
-        self.visit(node.else_block)
+        with self.indent_guard():
+            self.visit(node.then_block)
+            if node.else_block:
+                self.put(" else ")
+                self.visit(node.else_block)
+
         self.put(")")
 
     def visit_While(self, node: While):
@@ -142,14 +146,11 @@ class Codegen(PrinterBase):
         self.put(")")
 
     def visit_Struct(self, node: Struct):
-        self.put("(cl-defstruct ")
-        self.put(node.name)
-        self.put(" ")
+        self.put(f"(cl-defstruct {node.name} ")
         self.visit(node.fields)
         self.put(")")
-
         if node.methods:
             self.put("\n" * self.module_statment_newlines)
-
-        self.visit_stmts(node.methods,  # type: ignore
-                         newlines=self.module_statment_newlines)
+            # type: ignore
+            self.visit_stmts(
+                node.methods, newlines=self.module_statment_newlines)
