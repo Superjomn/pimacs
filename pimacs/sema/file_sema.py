@@ -107,7 +107,7 @@ class FileSema(IRMutator):
     def collect_newly_resolved(self, node: ast.Node):
         # Since the IRMutator cannot get parent in a single visit method, we need to collect the newly resolved symbols
         # and type-infer them in the next turn.
-        if not node.sema_failed:
+        if (not node.sema_failed) and node.resolved:
             self._newly_resolved_symbols.add(node)
 
     def check_type(self):
@@ -203,13 +203,18 @@ class FileSema(IRMutator):
         # case 2: a local variable or argument
         elif sym := self.sym_tbl.lookup(
             [Symbol(name=node.name, kind=Symbol.Kind.Var),
-             Symbol(name=node.name, kind=Symbol.Kind.Arg)]
+             Symbol(name=node.name, kind=Symbol.Kind.Arg),
+             Symbol(name=node.name, kind=Symbol.Kind.Module),  # for import
+             Symbol(name=node.name, kind=Symbol.Kind.Unk),  # for import alias
+             ]
         ):
             if isinstance(sym, ast.VarDecl):
                 var = ast.VarRef(target=sym, loc=node.loc)  # type: ignore
             elif isinstance(sym, ast.Arg):
                 var = ast.VarRef(target=sym, loc=node.loc)
             elif isinstance(sym, ast.VarRef):
+                var = sym
+            elif isinstance(sym, ast.UModule):
                 var = sym
             else:
                 raise ValueError(f"{node.loc}\nUnknown symbol type {sym}")
@@ -391,8 +396,9 @@ class FileSema(IRMutator):
                 self.collect_unresolved(node.target)  # type: ignore
 
             case ast.UAttr:
+                base = self.visit(func.value)
                 new_node = UCallMethod(
-                    obj=func.value, attr=func.attr,  # type: ignore
+                    obj=base, attr=func.attr,  # type: ignore
                     args=node.args, loc=func.loc,  # type: ignore
                     type_spec=node.type_spec)
                 node.replace_all_uses_with(new_node)

@@ -266,6 +266,12 @@ class IRPrinter(IRVisitor, PrinterBase):
     def visit_UVarRef(self, node: ast.UVarRef):
         self.put(f"{node.name}")
 
+    def visit_UModule(self, node: ast.UModule):
+        if self._mark_unresolved:
+            self.put(f"UModule<{node.name}>")
+        else:
+            self.put(f"{node.name}")
+
     def visit_UAttr(self, node: ast.UAttr):
         self.visit(node.value)
         self.put(".")

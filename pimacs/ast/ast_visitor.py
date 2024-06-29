@@ -171,6 +171,9 @@ class IRVisitor:
     def visit_ImportDecl(self, node: ast.ImportDecl):
         pass
 
+    def visit_UModule(self, node: ast.UModule):
+        pass
+
 
 class IRMutator:
     def visit(self, node: ast.Node | ty.Type | str | None | list | tuple):
@@ -317,4 +320,7 @@ class IRMutator:
         return node
 
     def visit_ImportDecl(self, node: ast.ImportDecl):
+        return node
+
+    def visit_UModule(self, node: ast.UModule):
         return node

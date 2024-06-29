@@ -1027,9 +1027,11 @@ class ImportDecl(Stmt):
 
 
 @dataclass
-class UModule(Unresolved, Stmt):
+class UModule(Unresolved, Expr):
     ''' Unresolved module.
     This is used for the module that is not resolved in the current context.
+
+    UModule is an Expr since it can be used as a module reference in the code.
     '''
     name: str
 
