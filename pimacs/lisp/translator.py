@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple
 
 from multimethod import multimethod
 
+import pimacs.ast.type as ty
 import pimacs.lisp.ast as lisp_ast
 import pimacs.sema.ast as ast
 import pimacs.sema.ast_visitor as ast_visitor
@@ -17,6 +18,7 @@ class LispTranslator(ast_visitor.IRMutator):
     def __init__(self, ctx: ModuleContext):
         self.ctx = ctx
         self._cur_class: Optional[ast.AnalyzedClass] = None
+        self._cur_func: Optional[ast.Function] = None
 
     def __call__(self,  node) -> lisp_ast.Node:
         return self.visit(node)
@@ -55,7 +57,7 @@ class LispTranslator(ast_visitor.IRMutator):
 
         return None
 
-    def visit_block(self, node: List[ast.Node] | Tuple[ast.Node]):
+    def visit_block(self, node: List[ast.Node] | Tuple[ast.Node]) -> lisp_ast.Let | List[lisp_ast.Node]:
         ''' Visit stmts as a block '''
         # collect the VarDecls in the block
         var_decls = set()
@@ -63,27 +65,42 @@ class LispTranslator(ast_visitor.IRMutator):
             if isinstance(stmt, ast.VarDecl):
                 var_decls.add(stmt.name)
 
-        let = lisp_ast.Let(vars=[lisp_ast.VarDecl(name=var) for var in var_decls],
-                           body=[self.visit(stmt) for stmt in node])
-        let.loc = node[0].loc
-        return let
+        if var_decls:
+            let = lisp_ast.Let(vars=[lisp_ast.VarDecl(name=var) for var in var_decls],
+                               body=[self.visit(stmt) for stmt in node])
+            let.loc = node[0].loc
+            return let
+        else:
+            stmts = [self.visit(stmt) for stmt in node]
+            return stmts
 
-    def visit_Block(self, node: ast.Block) -> lisp_ast.Let:
-        ret = self.visit_block(list(node.stmts))
-        ret.loc = node.loc
-        return ret
+    def visit_Block(self, node: ast.Block) -> lisp_ast.Block:
+        assert self._cur_func
+        content = self.visit_block(list(node.stmts))
+        stmts = content if isinstance(content, list) else [content]
+        block = lisp_ast.Block(name=self._cur_func.name,
+                               stmts=stmts)  # type: ignore
+        block.loc = node.loc
+        return block
+
+    @contextmanager
+    def func_guard(self, func: ast.Function):
+        self._cur_func = func
+        yield
+        self._cur_func = None
 
     def visit_Function(self, node: ast.Function) -> lisp_ast.Function:
-        name = self.get_mangled_name(
-            node) if not self._cur_class else self.get_mangled_name(node, self._cur_class)
+        with self.func_guard(node):
+            name = self.get_mangled_name(
+                node) if not self._cur_class else self.get_mangled_name(node, self._cur_class)
 
-        ret = lisp_ast.Function(
-            name=name,
-            args=[self.visit(arg) for arg in node.args],
-            body=self.visit(node.body),
-        )
-        ret.loc = node.loc
-        return ret
+            ret = lisp_ast.Function(
+                name=name,
+                args=[self.visit(arg) for arg in node.args],
+                body=self.visit(node.body),
+            )
+            ret.loc = node.loc
+            return ret
 
     def visit_Literal(self, node: ast.Literal) -> lisp_ast.Literal:
         ret = lisp_ast.Literal(
@@ -132,6 +149,8 @@ class LispTranslator(ast_visitor.IRMutator):
 
     def visit_VarRef(self, node: ast.VarRef) -> lisp_ast.VarRef:
         name = node.name if node.name else node.target.name  # type: ignore
+        if name.startswith('%'):  # lisp symbol
+            name = name[1:]
         ret = lisp_ast.VarRef(name=name)
         ret.loc = node.loc
         return ret
@@ -145,10 +164,14 @@ class LispTranslator(ast_visitor.IRMutator):
 
     def visit_If(self, node: ast.If) -> lisp_ast.If:
         if not node.elif_branches:
+            # Shadow Block to avoid `cl-block` in if-branches
+            then_block = self.visit(list(node.then_branch.stmts))
+            else_block = self.visit(
+                list(node.else_branch.stmts)) if node.else_branch else None
             ret = lisp_ast.If(
                 cond=self.visit(node.cond),
-                then_block=self.visit(node.then_branch),
-                else_block=self.visit(node.else_branch)
+                then_block=then_block,
+                else_block=else_block,
             )
             ret.loc = node.loc
             return ret
@@ -177,7 +200,7 @@ class LispTranslator(ast_visitor.IRMutator):
                         last_if = new_if
                     else:
                         assert last_if
-                        last_if.else_block = new_if
+                        last_if.else_block = new_if  # type: ignore
             assert root_if
             return root_if
 
@@ -232,7 +255,9 @@ class LispTranslator(ast_visitor.IRMutator):
         return ret
 
     def visit_Return(self, node: ast.Return) -> lisp_ast.Return:
+        assert self._cur_func
         ret = lisp_ast.Return(
+            block_name=self._cur_func.name,
             value=self.visit(node.value)
         )
         ret.loc = node.loc
@@ -339,5 +364,19 @@ class LispTranslator(ast_visitor.IRMutator):
 
     @multimethod  # type: ignore
     def get_mangled_name(self, func: ast.Function, class_node: ast.AnalyzedClass) -> str:
-        arg_type_list = '_'.join([str(arg.type) for arg in func.args])
+        arg_type_list = '_'.join(
+            [self.get_mangled_name(arg.type) for arg in func.args])
         return f"{class_node.name}--{func.name}--{arg_type_list}"
+
+    @multimethod  # type: ignore
+    def get_mangled_name(self, type_: ty.Type) -> str:
+        if isinstance(type_, ty.GenericType):
+            return f"{type_.name}"
+        elif isinstance(type_, ty.CompositeType):
+            param_repr = '-'.join([self.get_mangled_name(arg)
+                                  for arg in type_.params])
+            return f"{type_.name}~{param_repr}.~"
+        elif isinstance(type_, ty.PlaceholderType):
+            return f"{type_.name}"
+        else:
+            return f"{type_}"

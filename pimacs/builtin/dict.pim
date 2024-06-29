@@ -3,7 +3,7 @@ class Dict[K, V]:
 
     def __init__(self):
         "Initialize an empty dictionary."
-        self.-dict = %make-hash-table()
+        self.-dict = %make-hash-table(%:test, %'equal)
 
     def __init__(self, dict: Lisp):
         "Initialize an external hash-table."
@@ -16,7 +16,7 @@ class Dict[K, V]:
 
     def __setitem__(self, key: K, value: V):
         "Set the value for the key in the dictionary."
-        %pushhash(key, value, self.-dict)
+        %puthash(key, value, self.-dict)
 
     def __contains__(self, key: K) -> bool:
         "Check if the dictionary contains the key."
