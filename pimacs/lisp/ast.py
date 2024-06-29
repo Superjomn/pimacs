@@ -71,7 +71,9 @@ class Guard(Expr):
 
 @dataclass(slots=True)
 class Return(Expr):
-    ''' Return expression. '''
+    ''' Return expression.
+    This is a mapping for `cl-return` in LISP.'''
+    block_name: str
     value: Expr | None = field(default=None)
 
 
@@ -106,8 +108,8 @@ class Call(Expr):
 @dataclass(slots=True)
 class If(Expr):
     cond: VarDecl | Expr
-    then_block: Expr
-    else_block: Expr | None
+    then_block: _List[Expr]
+    else_block: _List[Expr] | None
 
 
 @dataclass(slots=True)
@@ -124,3 +126,10 @@ class Struct(Node):
 
     # These are global functions.
     methods: _List[Function] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class Block(Node):
+    ''' Block is a list of expressions. '''
+    name: str
+    stmts: _List[Expr]

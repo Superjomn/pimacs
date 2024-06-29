@@ -52,3 +52,9 @@ class App:
     # CHECK-NEXT:     (setq self (make-App :name nil :version nil))
     # CHECK-NEXT:     (setf (App-name self) name)
     # CHECK-NEXT:     (setf (App-version self) version)
+
+# CHECK: (setq app (App--Str_Int "apple" 1))
+var app = App("apple", 1)
+
+# CHECK: (message "app: %s" (App-name app))
+%message("app: %s", app.name)

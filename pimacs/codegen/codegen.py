@@ -23,13 +23,21 @@ class Codegen(PrinterBase):
     def generic_visit(self, node):
         raise NotImplementedError(f"No visit_{node.__class__.__name__} method")
 
-    def visit_list(self, nodes):
+    def visit_NoneType(self, node):
+        pass
+
+    def visit_list(self, nodes: list, put_indent: bool = False, delimiter: str = " "):
         if not nodes:
             return
 
         for node in nodes[:-1]:
+            if put_indent:
+                self.put_indent()
             self.visit(node)
-            self.put(" ")
+            self.put(delimiter)
+
+        if put_indent:
+            self.put_indent()
         self.visit(nodes[-1])
 
     def visit_str(self, node: str):
@@ -67,7 +75,7 @@ class Codegen(PrinterBase):
         self.visit_list(node.elements)
         self.put(")")
 
-    def visit_Let(self, node):
+    def visit_Let(self, node: Let):
         self.put("(let (")
         self.visit_list(node.vars)
         self.put(")")
@@ -82,8 +90,8 @@ class Codegen(PrinterBase):
         self.visit_list(node.body)
         self.put(")")
 
-    def visit_Return(self, node):
-        self.put("(cl-return ")
+    def visit_Return(self, node: Return):
+        self.put(f"(cl-return-from {node.block_name} ")
         self.visit(node.value)
         self.put(")")
 
@@ -102,6 +110,12 @@ class Codegen(PrinterBase):
         self.put("(")
         self.put(f"{node.class_name}-{node.attr} ")
         self.put(f"{node.target.name}")
+        self.put(")")
+
+    def visit_Block(self, node: Block):
+        self.put(f"(cl-block {node.name}\n")
+        with self.indent_guard():
+            self.visit_list(node.stmts, put_indent=True, delimiter="\n")
         self.put(")")
 
     def visit_Function(self, node: Function):
@@ -128,13 +142,15 @@ class Codegen(PrinterBase):
         """Visit an If node and generate code"""
         self.put("(if ")
         self.visit(node.cond)
-        self.put(" ")
+        self.put("\n")
 
         with self.indent_guard():
-            self.visit(node.then_block)
+            self.put_indent()
+            self.visit_list(node.then_block, put_indent=True, delimiter="\n")
             if node.else_block:
-                self.put(" else ")
-                self.visit(node.else_block)
+                self.put_indent()
+                self.visit_list(node.else_block,
+                                put_indent=True, delimiter="\n")
 
         self.put(")")
 
