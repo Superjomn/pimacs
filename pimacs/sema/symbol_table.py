@@ -26,7 +26,7 @@ class Scope:
 
     @multimethod
     def get(self, symbol: Symbol) -> SymbolItem | None:
-        ret = self._get_symbol(symbol)
+        ret = self.get_symbol_with_distance(symbol)
         if ret:
             return ret[0]
         return None
@@ -57,7 +57,7 @@ class Scope:
             raise KeyError(f"Symbol {symbol} already exists")
         self.data[symbol] = item
 
-    def _get_symbol(self, symbol: Symbol) -> Tuple[SymbolItem, int] | None:
+    def get_symbol_with_distance(self, symbol: Symbol) -> Tuple[SymbolItem, int] | None:
         ''' Get non-func record. '''
         scope: Scope = self
         level = 0
@@ -140,9 +140,12 @@ class SymbolTable(Scoped):
 
     @multimethod  # type: ignore
     def lookup(self, symbols: List[Symbol]) -> Optional[SymbolItem]:
+        items = []
         for symbol in symbols:
-            if ret := self.current_scope.get(symbol):
-                return ret
+            if item := self.current_scope.get_symbol_with_distance(symbol):
+                items.append(item)
+        items = sorted(items, key=lambda x: x[1])
+        return items[0][0] if items else None
 
     @multimethod  # type: ignore
     def lookup(self, name: str, kind: Symbol.Kind) -> Optional[SymbolItem]:
@@ -150,9 +153,8 @@ class SymbolTable(Scoped):
 
     @multimethod  # type: ignore
     def lookup(self, name: str, kind: List[Symbol.Kind]) -> Optional[SymbolItem]:
-        for k in kind:
-            if ret := self.lookup(name, k):
-                return ret
+        symbols = [Symbol(name=name, kind=k) for k in kind]
+        return self.lookup(symbols)
 
     def contains(self, symbol: Symbol) -> bool:
         return self.lookup(symbol) is not None

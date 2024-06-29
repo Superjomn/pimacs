@@ -234,3 +234,20 @@ def test_SymbolTable_scope_hierarchy():
                 assert len(st._scopes) == 4
                 assert st._scopes[-1].parent == st._scopes[-2]
                 assert st._scopes[-2].parent == st._scopes[-3]
+
+
+def test_SymbolTable_pick_by_distance():
+    st = SymbolTable()
+    with st.scope_guard():
+        a = Symbol("a", Symbol.Kind.Var)
+        var = ast.VarDecl(name="a", loc=None, init=ast.make_literal(1))
+        st.insert(a, var)
+
+        with st.scope_guard():
+            b = Symbol("a", Symbol.Kind.Class)
+            var1 = ast.VarDecl(name="a", loc=None, init=ast.make_literal(2))
+            st.insert(b, var1)
+
+            val = st.lookup([Symbol("a", Symbol.Kind.Var),
+                            Symbol("a", Symbol.Kind.Class)])
+            assert val is var1

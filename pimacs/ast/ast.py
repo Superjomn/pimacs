@@ -902,7 +902,7 @@ class Guard(Stmt):
                 self.body = new
 
 
-def make_literal(value: int | float | str | bool | None, loc: Location) -> Literal:
+def make_literal(value: int | float | str | bool | None, loc: Optional[Location] = None) -> Literal:
     return Literal(value=value, loc=loc)
 
 
