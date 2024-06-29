@@ -1003,3 +1003,36 @@ class LispCall(Expr):
         for i, arg in enumerate(self.args):
             if arg == old:
                 self.args[i] = new
+
+
+@dataclass
+class Import:
+    ''' Import statement.
+    e.g. from core import add # => Import(module='core', symbols=['add'])
+    e.g. import core # => Import(module='core', symbols=[])
+    e.g. from core import add as add2 # => Import(module='core', symbols=['add'], alias='add2')
+    e.g. import core as c # => Import(module='core', symbols=[], alias='c')
+    '''
+    module: str
+    symbols: List[str]
+    alias: str | None = None
+
+    def _refresh_users(self):
+        pass
+
+    def replace_child(self, old, new):
+        pass
+
+
+@dataclass
+class UModule(Unresolved, Stmt):
+    ''' Unresolved module.
+    This is used for the module that is not resolved in the current context.
+    '''
+    name: str
+
+    def _refresh_users(self):
+        pass
+
+    def replace_child(self, old, new):
+        pass

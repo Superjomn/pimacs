@@ -258,6 +258,28 @@ The target elisp code should be
 
 
 *** Inherient
+** Module and import
+Define a module:
+
+In pimacs, a module is bound to a file, this is quite similar to Python. In each package, there should be a ~__module__.pim~
+
+Import a module
+
+#+BEGIN_SRC python
+from A import hello
+import A.hello as hello
+#+END_SRC
+
+** Package
+
+#+BEGIN_SRC python
+class my_package:
+    let name = "my_package"
+    let version = "0.1.0",
+    let description = "A package that does something"
+#+END_SRC
+
+
 ** Visit elisp code
 *** Call elisp code
 
