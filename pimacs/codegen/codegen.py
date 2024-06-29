@@ -81,7 +81,7 @@ class Codegen(PrinterBase):
         self.put(")")
         self.put("\n")
         with self.indent_guard():
-            self.visit_stmts(node.body)
+            self.visit_stmts(node.body)  # type: ignore
         self.put(")")
 
     def visit_Guard(self, node: Guard):
@@ -169,4 +169,4 @@ class Codegen(PrinterBase):
             self.put("\n" * self.module_statment_newlines)
             # type: ignore
             self.visit_stmts(
-                node.methods, newlines=self.module_statment_newlines)
+                node.methods, newlines=self.module_statment_newlines)  # type: ignore

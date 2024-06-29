@@ -78,7 +78,8 @@ class LispTranslator(ast_visitor.IRMutator):
         assert self._cur_func
         content = self.visit_block(list(node.stmts))
         stmts = content if isinstance(content, list) else [content]
-        block = lisp_ast.Block(name=self._cur_func.name, stmts=stmts)
+        block = lisp_ast.Block(name=self._cur_func.name,
+                               stmts=stmts)  # type: ignore
         block.loc = node.loc
         return block
 
@@ -199,7 +200,7 @@ class LispTranslator(ast_visitor.IRMutator):
                         last_if = new_if
                     else:
                         assert last_if
-                        last_if.else_block = new_if
+                        last_if.else_block = new_if  # type: ignore
             assert root_if
             return root_if
 
