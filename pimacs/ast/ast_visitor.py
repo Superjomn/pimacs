@@ -168,6 +168,9 @@ class IRVisitor:
     def visit_LispType_(self, node: ty.LispType_):
         pass
 
+    def visit_ImportDecl(self, node: ast.ImportDecl):
+        pass
+
 
 class IRMutator:
     def visit(self, node: ast.Node | ty.Type | str | None | list | tuple):
@@ -311,4 +314,7 @@ class IRMutator:
     def visit_LispCall(self, node: ast.LispCall):
         with node.write_guard():
             node.args = self.visit(node.args)
+        return node
+
+    def visit_ImportDecl(self, node: ast.ImportDecl):
         return node

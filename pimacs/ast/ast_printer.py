@@ -355,3 +355,13 @@ class IRPrinter(IRVisitor, PrinterBase):
             self.put(" ")
             self.visit(arg)
         self.put(")")
+
+    def visit_ImportDecl(self, node: ast.ImportDecl):
+        if not node.symbols:
+            self.put(f"import {node.module}")
+            if node.alias:
+                self.put(f" as {node.alias}")
+        elif len(node.symbols) == 1:
+            self.put(f"from {node.module} import {node.symbols[0]}")
+        else:
+            self.put(f"from {node.module} import {', '.join(node.symbols)}")

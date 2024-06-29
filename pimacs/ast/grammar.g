@@ -16,9 +16,17 @@ file_input: (_NEWLINE | statement)*
           | return_stmt
           | assign_stmt
           | guard_stmt
+          | from_decl
+          | from_symbols_decl
+          | import_decl
 
 var_decl: VAR NAME [":" type] ["=" expr]
 let_decl: LET NAME [":" type] ["=" expr]
+
+from_decl: FROM dotted_name IMPORT NAME (AS NAME)?
+from_symbols_decl: FROM dotted_name IMPORT comma_names
+import_decl: IMPORT dotted_name (AS NAME)?
+comma_names: NAME ("," NAME)+
 
 if_stmt: IF expr ":" block elif_block* else_block?
 elif_block: ELIF expr ":" block
@@ -147,6 +155,9 @@ ELSE: "else"
 TEMPLATE: "template"
 QUESTION: "?"
 ELLIPSIS: "..."
+FROM: "from"
+IMPORT: "import"
+AS: "as"
 
 %import common.WS_INLINE
 %import common.LETTER

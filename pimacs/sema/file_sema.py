@@ -127,6 +127,51 @@ class FileSema(IRMutator):
         super().visit_File(node)
         return node
 
+    def visit_ImportDecl(self, node: ast.ImportDecl):
+        # verify the import statement
+        if self.sym_tbl.current_scope.kind is not ScopeKind.Global:
+            self.report_error(
+                node, f"import statement should be in the global scope")
+
+        if node.module == self.ctx.name:
+            self.report_error(node, f"Cannot import the current module itself")
+
+        if node.symbols:
+            if len(node.symbols) != len(set(node.symbols)):
+                self.report_error(
+                    node, f"Duplicate symbols in import statement")
+
+        # insert new symbols
+        module_node = ast.UModule(name=node.module, loc=node.loc)
+        if not node.symbols:
+            # `import a-module` or `import a-module as xx`
+            alias = node.alias if node.alias else node.module
+            self.sym_tbl.insert(
+                Symbol(name=alias, kind=Symbol.Kind.Module), module_node)
+
+        elif len(node.symbols) == 1:
+            # `from a-module import a-symbol` or `from a-module import a-symbol as xx`
+            alias = node.alias if node.alias else node.symbols[0]
+            module_node = ast.UModule(name=node.module, loc=node.loc)
+            symbol_node = ast.UAttr(value=module_node,
+                                    attr=node.symbols[0], loc=node.loc)
+
+            self.sym_tbl.insert(
+                Symbol(name=alias, kind=Symbol.Kind.Unk), symbol_node)
+            self.collect_unresolved(symbol_node)
+
+        else:
+            # `from a-module import a-symbol1, a-symbol2`
+            for symbol in node.symbols:
+                symbol_node = ast.UAttr(
+                    value=module_node, attr=symbol, loc=node.loc)
+                self.sym_tbl.insert(
+                    Symbol(name=symbol, kind=Symbol.Kind.Unk), symbol_node)
+
+                self.collect_unresolved(symbol_node)
+
+        self.collect_unresolved(module_node)
+
     def visit_UVarRef(self, node: ast.UVarRef):
         # case 0: self.attr within a class
         if node.name == "self":

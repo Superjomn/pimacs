@@ -550,13 +550,40 @@ class PimacsTransformer(Transformer):
         self._force_non_rule(items)
         return items[0]
 
+    def import_decl(self, items):
+        self._force_non_rule(items)
+        import_ = items[0]
+        module_name = items[1]
+        alias = None
+        if safe_get(items, 2):
+            alias = items[3]
+
+        ret = ast.ImportDecl(items[0].value,
+                             module_name, alias)
+        ret.loc = self._get_loc(items[0])
+        return ret
+
+    def from_decl(self, items):
+        self._force_non_rule(items)
+        from_ = items[0]
+        module_name = items[1]
+        import_ = items[2]
+        symbol = items[3] if isinstance(items[3], list) else [items[3]]
+        alias = None
+        if safe_get(items, 4):
+            alias = items[5]
+
+        ret = ast.ImportDecl(module=module_name, alias=alias,
+                             symbols=symbol, loc=self._get_loc(from_))
+        return ret
+
     def _force_non_rule(self, items):
         items = [items] if not isinstance(items, list) else items
         trees = list(filter(lambda x: isinstance(x, lark.Tree), items))
         assert not trees, f"Unknown rule {trees}"
 
 
-def safe_get(items, index, default):
+def safe_get(items, index, default=None):
     if len(items) > index:
         return items[index]
     return default

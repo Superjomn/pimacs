@@ -194,3 +194,7 @@ class NameBinder:
     def visit_UClass(self, node: ast.UClass):
         logger.debug(f"TODO Bind unresolved class {node}")
         return False
+
+    def visit_UModule(self, node: ast.UModule):
+        logger.debug(f"TODO Bind unresolved module {node}")
+        return False

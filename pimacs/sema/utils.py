@@ -82,6 +82,7 @@ class Symbol:
         Lisp = 4
         Arg = 5
         TypeAlas = 6
+        Module = 7
 
         def __str__(self):
             return self.name

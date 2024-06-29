@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # from multidispatch import dispatch
 from multimethod import multimethod
@@ -13,6 +13,7 @@ from .utils import (FuncSymbol, Scoped, ScopeKind, Symbol, SymbolItem, bcolors,
 
 class Scope:
     def __init__(self, kind: ScopeKind = ScopeKind.Local, parent: Optional["Scope"] = None):
+        # format: {symbol: (item, distance)}, the distance is the level of scopes to the current scope
         self.data: Dict[Symbol, SymbolItem] = {}
         self.kind = kind
         self.parent = parent
@@ -25,7 +26,10 @@ class Scope:
 
     @multimethod
     def get(self, symbol: Symbol) -> SymbolItem | None:
-        return self._get_symbol(symbol)
+        ret = self._get_symbol(symbol)
+        if ret:
+            return ret[0]
+        return None
 
     @multimethod  # type: ignore
     def get(self, kind: Symbol.Kind) -> List[SymbolItem]:
@@ -53,12 +57,14 @@ class Scope:
             raise KeyError(f"Symbol {symbol} already exists")
         self.data[symbol] = item
 
-    def _get_symbol(self, symbol: Symbol) -> SymbolItem | None:
+    def _get_symbol(self, symbol: Symbol) -> Tuple[SymbolItem, int] | None:
         ''' Get non-func record. '''
         scope: Scope = self
+        level = 0
         while scope is not None:
             if tmp := scope.get_local(symbol):
-                return tmp
+                return tmp, level
+            level += 1
             scope = scope.parent  # type: ignore
         return None
 

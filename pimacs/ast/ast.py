@@ -39,6 +39,8 @@ __all__ = ['Node',
            'UClass',
            'UFunction',
            'Template',
+           'ImportDecl',
+           'UModule',
            ]
 
 import os
@@ -59,7 +61,7 @@ class Node(ABC):
     loc: Optional["Location"] = field(repr=False, compare=False)
     # The nodes using this node
     users: WeakSet = field(default_factory=WeakSet,
-                           repr=False, init=False, hash=False)
+                           repr=False, init=False, hash=False, compare=False)
     sema_failed: bool = field(
         default=False, init=False, hash=False, repr=False, compare=False)
 
@@ -656,8 +658,8 @@ class Call(Expr):
             raise Exception(f"Unknown function type: {
                             type(self.target)}: {self.target}")
 
-    def __repr__(self):
-        return f"{self.target_name}({', '.join(str(arg) for arg in self.args)})"
+    # def __repr__(self):
+        # return f"{self.target_name}({', '.join(str(arg) for arg in self.args)})"
 
     @property
     def target_name(self) -> str:
@@ -933,7 +935,7 @@ class UVarRef(Unresolved, Expr):
 @dataclass(slots=True, unsafe_hash=True)
 class UAttr(Unresolved, Expr):
     ''' Unresolved attribute, such as `a.b` in `a.b.c` '''
-    value: VarRef | UVarRef
+    value: Union[VarRef, UVarRef, "UModule"]
     attr: str
 
     def _refresh_users(self):
@@ -1006,7 +1008,7 @@ class LispCall(Expr):
 
 
 @dataclass
-class Import:
+class ImportDecl(Stmt):
     ''' Import statement.
     e.g. from core import add # => Import(module='core', symbols=['add'])
     e.g. import core # => Import(module='core', symbols=[])
