@@ -40,13 +40,29 @@ def get_common_type(left: _ty.Type, right: _ty.Type):
 
 class FileSema(IRMutator):
     """
-    Performing Sema on a single File.
+    Performing Sema on a single File which is actually a module.
+    During Sema, it will resolve the symbols in the module, and type-infer the types of the nodes.
 
-    The algorithm:
+    The algorithm for resolving symbols(NameBinder) is as follows:
+    1. Doing a bottom-up traversal of the AST
+        a. It will insert the resolved sybmols into the symbol table, such as VarDecl, Function, Class, etc.
+        b. It will collect the unresolved symbols such as UVarRef, UAttr, UFunction, UClass, etc, ideally these symbols
+              should be resolved in the subsequent turn of name binding.
+    2. For the unresolved symbols, it will try to bind them eagerly until no more symbols are resolved. This is done by
+        the `NameBinder`.
 
-    1. Perform a bottom-up traversal to try type inference, and collect all unresolved nodes. The symbol table are also
-         created during this phase.
-    2. For each unresolved node, try to bind the symbol with the corresponding scope.
+    The algorithm for type-check(TypeChecker) is as follows:
+    1. For any newly resolved symbols, it will try to type-infer them.
+        a. It will first try to infer the type in an forward-push way, which means it will try to infer the children's
+            types. For instance, a VarDecl(init=Literal(1)), it will start from the VarDecl node, and recursively arrive
+            on the Literal node and update its type to Int.
+        b. Once any node's type is inferred, it will try to infer the parent's type in a backward-push way. For instance,
+            a VarDecl(init=Literal(1)), after the Literal's type is inferred, it will try to infer the VarDecl's type.
+
+    These two algorithms will be triggered in a chain, for example, once a symbol is newly resolved, it will trigger the
+    type-checking, and got a valid type, and all its users' types could be inferred. And once a node's type is inferred,
+    it could help name binding, for instance, a UAttr(node=self, attr="name"), once the type of self is inferred to some
+    Class, the attr could be resolved to a member of the Class.
     """
 
     # NOTE, the ir nodes should be created when visited.
@@ -418,6 +434,7 @@ class FileSema(IRMutator):
         match type(func):
             case ast.UFunction:  # call a global function
                 # Check if the function is imported from another module, and replace the Call with a UCallMethod
+                # The UCallMethod has a support for both Class.method and Module.function
                 if sym := self.sym_tbl.lookup(func.name, [Symbol.Kind.Unk]):
                     if isinstance(sym, ast.UAttr):
                         assert isinstance(sym.value, ast.UModule)
