@@ -7,12 +7,14 @@ import pimacs.ast.ast as ast
 import pimacs.lisp.ast as lisp_ast
 from pimacs.ast.parser import get_parser
 from pimacs.lisp.translator import LispTranslator
-from pimacs.logger import logger
+from pimacs.logger import get_logger
 from pimacs.sema.context import ModuleContext
 from pimacs.sema.file_sema import FileSema
 from pimacs.sema.type_checker import amend_placeholder_types
 
 from .codegen import Codegen
+
+logger = get_logger(__name__)
 
 
 def parse_ast(

@@ -7,9 +7,11 @@ from multimethod import multimethod
 
 import pimacs.ast.type as _ty
 from pimacs.ast.ast import Arg, CallParam, Expr, Function
-from pimacs.logger import logger
+from pimacs.logger import get_logger
 
 from .utils import FuncSymbol, Symbol
+
+logger = get_logger(__name__)
 
 
 # TODO: Make FuncDuplicationError accept the candidates, and make FuncOverloads.lookup return a single candidate

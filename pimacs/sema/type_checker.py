@@ -5,11 +5,13 @@ from multimethod import multimethod
 import pimacs.ast.type as _ty
 from pimacs.ast import ast
 from pimacs.ast.utils import WeakSet
-from pimacs.logger import logger
+from pimacs.logger import get_logger
 from pimacs.sema.context import ModuleContext
 
 from .ast_visitor import IRVisitor
 from .ast_walker import ASTWalker, Traversal
+
+logger = get_logger(__name__)
 
 
 class TypeChecker(IRVisitor):

@@ -238,6 +238,7 @@ Str = StrType()
 Nil = NilType()
 Unk = UnkType()
 LispType = LispType_()
+ModuleType = BasicType("Module")
 
 # container
 Set_ = CompositeType("Set", parent=GenericType, params=(PlaceholderType("T"),))

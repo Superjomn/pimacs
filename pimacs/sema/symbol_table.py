@@ -51,6 +51,11 @@ class Scope:
         else:
             return [item for symbol, item in self.data.items() if symbol.kind == kind]
 
+    def update_local(self, symbol: Symbol, item: SymbolItem):
+        ''' Update the local symbol table with the new item. '''
+        assert self.get_local(symbol) is not None
+        self.data[symbol] = item
+
     def _add_symbol(self, symbol: Symbol, item: SymbolItem):
         ''' Add non-func record. '''
         if symbol in self.data:

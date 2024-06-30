@@ -1,11 +1,11 @@
 """
 The FileSema module will scan the whole file and resolve the symbols in the file.
 """
-from typing import Tuple
+from typing import List, Tuple
 
 import pimacs.ast.type as _ty
 from pimacs.ast.utils import WeakSet
-from pimacs.logger import logger
+from pimacs.logger import get_logger
 
 from . import ast
 from .ast import MakeObject, UCallMethod
@@ -15,6 +15,8 @@ from .context import ModuleContext, Symbol, SymbolTable
 from .name_binder import NameBinder
 from .type_checker import TypeChecker, is_unk
 from .utils import FuncSymbol, ScopeKind
+
+logger = get_logger(__name__)
 
 
 def any_failed(*nodes: ast.Node) -> bool:
@@ -71,13 +73,18 @@ class FileSema(IRMutator):
         # First turn of type inference
         self.type_checker(tree)
 
-        # Try to bind the unresolved symbols repeatedly
-        remaining = self.bind_unresolved_symbols()
-        while remaining > 0 and self.bind_unresolved_symbols() < remaining:
-            remaining = self.bind_unresolved_symbols()
+        self._resolve_symbols_eagarly()
 
         # TODO: the root might be re-bound
         return tree
+
+    def _resolve_symbols_eagarly(self):
+        # Try to bind the unresolved symbols repeatedly until no more symbols are resolved
+        remaining = self.bind_unresolved_symbols()
+        while remaining > 0 and self.bind_unresolved_symbols() < remaining:
+            remaining = self.bind_unresolved_symbols()
+            # TODO: Unify the check_type timing
+            self.check_type()
 
     def visit(self, node):
         node = super().visit(node)
@@ -98,6 +105,9 @@ class FileSema(IRMutator):
         self._succeeded = False
 
     def collect_unresolved(self, node: ast.Node):
+        '''
+        Collect the unresolved symbol node for the second turn of name binding after the first AST traversal is done.
+        '''
         logger.debug(f"Collect unresolved symbol {node}")
         assert node.resolved is False, f"{node} is already resolved"
         # bind scope for second-turn name binding
@@ -105,10 +115,24 @@ class FileSema(IRMutator):
         self._unresolved_symbols.add(node)
 
     def collect_newly_resolved(self, node: ast.Node):
-        # Since the IRMutator cannot get parent in a single visit method, we need to collect the newly resolved symbols
-        # and type-infer them in the next turn.
+        '''
+        Collect the newly resolved symbol node for the second turn of type inference.
+        '''
+        # Since the IRMutator cannot get parent in a single visit method, we need to collect the newly resolved
+        # symbols and type-infer them in the next turn. The type-infer will trigger in chain.
         if (not node.sema_failed) and node.resolved:
             self._newly_resolved_symbols.add(node)
+
+    def link_modules(self, modules: List[ast.Module]):
+        # Insert the modules
+        for module in modules:
+            symbol = Symbol(name=module.name, kind=Symbol.Kind.Module)
+            if sym := self.sym_tbl.global_scope.get_local(symbol):
+                if isinstance(sym, ast.UModule):
+                    self.sym_tbl.global_scope.update_local(symbol, module)
+
+        # trigger the second turn of name binding
+        self._resolve_symbols_eagarly()
 
     def check_type(self):
         finished_nodes = []
@@ -392,8 +416,21 @@ class FileSema(IRMutator):
 
         func = node.target
         match type(func):
-            case ast.UFunction:
-                self.collect_unresolved(node.target)  # type: ignore
+            case ast.UFunction:  # call a global function
+                # Check if the function is imported from another module, and replace the Call with a UCallMethod
+                if sym := self.sym_tbl.lookup(func.name, [Symbol.Kind.Unk]):
+                    if isinstance(sym, ast.UAttr):
+                        assert isinstance(sym.value, ast.UModule)
+                        new_node = ast.UCallMethod(obj=sym.value, attr=sym.attr, args=node.args, loc=node.loc,
+                                                   type_spec=node.type_spec)
+                        node.replace_all_uses_with(new_node)
+                        self.collect_unresolved(new_node)
+                        return new_node
+                    else:
+                        raise NotImplementedError(f"call: {node}")
+                else:
+                    # normal function call
+                    self.collect_unresolved(node.target)  # type: ignore
 
             case ast.UAttr:
                 base = self.visit(func.value)
@@ -628,13 +665,16 @@ class FileSema(IRMutator):
     def bind_unresolved_symbols(self) -> int:
         '''
         Try to bind the unresolved symbols.
-        Return the number of resolved symbols.
+
+        Returns:
+            the number of resolved symbols.
         '''
         logger.debug(f"unresolved symbols: {self._unresolved_symbols}")
         resolved = []
         for node in self._unresolved_symbols:
-            if self.bind_unresolved(node):
+            if self.bind_unresolved(node) or not node.users:
                 resolved.append(node)
+                self.collect_newly_resolved(node)
         for node in resolved:
             self._unresolved_symbols.remove(node)
 

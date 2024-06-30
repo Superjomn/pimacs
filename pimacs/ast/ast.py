@@ -41,6 +41,7 @@ __all__ = ['Node',
            'Template',
            'ImportDecl',
            'UModule',
+           'Module',
            ]
 
 import os
@@ -48,6 +49,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pimacs.ast.type as ty
@@ -315,7 +317,8 @@ class File(Stmt):
     def _refresh_users(self):
         self.users.clear()
         for stmt in self.stmts:
-            stmt.add_user(self)
+            if stmt is not None:
+                stmt.add_user(self)
 
     def __post_init__(self):
         self._refresh_users()
@@ -1034,6 +1037,24 @@ class UModule(Unresolved, Expr):
     UModule is an Expr since it can be used as a module reference in the code.
     '''
     name: str
+
+    def _refresh_users(self):
+        pass
+
+    def replace_child(self, old, new):
+        pass
+
+
+@dataclass
+class Module(Expr):
+    ''' A module node. '''
+    name: str
+    path: Optional[Path] = None
+
+    def __post_init__(self):
+        from pimacs.sema.context import ModuleContext
+        self.ctx: Optional[ModuleContext] = None
+        self.type = ty.ModuleType
 
     def _refresh_users(self):
         pass

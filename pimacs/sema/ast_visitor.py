@@ -17,6 +17,9 @@ class IRVisitor(ast_visitor.IRVisitor):
     def visit_UCallMethod(self, node: UCallMethod):
         pass
 
+    def visit_CallMethod(self, node):
+        pass
+
 
 class IRMutator(ast_visitor.IRMutator):
     def visit_AnalyzedClass(self, node):

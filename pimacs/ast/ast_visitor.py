@@ -2,7 +2,9 @@ import logging
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as ty
-from pimacs.logger import logger
+from pimacs.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class IRVisitor:
@@ -174,6 +176,9 @@ class IRVisitor:
     def visit_UModule(self, node: ast.UModule):
         pass
 
+    def visit_Module(self, node: ast.Module):
+        pass
+
 
 class IRMutator:
     def visit(self, node: ast.Node | ty.Type | str | None | list | tuple):
@@ -323,4 +328,7 @@ class IRMutator:
         return node
 
     def visit_UModule(self, node: ast.UModule):
+        return node
+
+    def visit_Module(self, node: ast.Module):
         return node

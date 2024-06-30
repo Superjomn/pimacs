@@ -3,7 +3,7 @@ This file contains several additional AST nodes dedicated to semantic analysis.
 '''
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import pimacs.ast.type as ty
 from pimacs.ast.ast import *
@@ -84,7 +84,7 @@ class UCallMethod(Unresolved, Expr):
       app = App()
       app.time()      # => UCallAttr(app, attr='time')
     '''
-    obj: Optional[CallParam] = None  # self
+    obj: Optional[Union[CallParam, "UModule"]] = None  # self
     attr: str = ""
     args: Tuple[CallParam, ...] = field(default_factory=tuple)
 
