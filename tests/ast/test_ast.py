@@ -1,4 +1,3 @@
-
 from pimacs.ast.ast import *
 from pimacs.ast.utils import WeakSet
 

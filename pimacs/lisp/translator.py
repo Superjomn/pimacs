@@ -235,17 +235,30 @@ class LispTranslator(ast_visitor.IRMutator):
 
     def visit_CallMethod(self, node: ast.CallMethod) -> lisp_ast.List:
         obj = node.obj
-        class_name = obj.type.name  # type: ignore
-        class_node = self.ctx.get_symbol(
-            ast.Symbol(ast.Symbol.Kind.Class, class_name))  # type: ignore
-        assert class_node, f"Class {class_name} not found"
-        func_name = self.get_mangled_name(
-            node.target, class_node)  # type: ignore
-        ret = lisp_ast.List(
-            elements=[
-                func_name] + self.visit_list(node.args))  # type: ignore
-        ret.loc = node.loc
-        return ret
+
+        if isinstance(obj, ast.Class):
+            class_name = obj.type.name  # type: ignore
+            class_node = self.ctx.get_symbol(
+                ast.Symbol(ast.Symbol.Kind.Class, class_name))  # type: ignore
+            assert class_node, f"Class {class_name} not found"
+            func_name = self.get_mangled_name(
+                node.target, class_node)  # type: ignore
+            ret = lisp_ast.List(
+                elements=[
+                    func_name] + self.visit_list(node.args))  # type: ignore
+            ret.loc = node.loc
+            return ret
+
+        elif isinstance(obj, ast.Module):
+            func_name = self.get_mangled_name(node.method)
+            ret = lisp_ast.List(
+                elements=[
+                    func_name] + self.visit_list(node.args))
+            ret.loc = node.loc
+            return ret
+
+        else:
+            raise NotImplementedError(f"CallMethod: {node}")
 
     def visit_LispCall(self, node: ast.LispCall) -> lisp_ast.List:
         ret = lisp_ast.List(
@@ -352,21 +365,36 @@ class LispTranslator(ast_visitor.IRMutator):
         assert class_node, f"Class {name} not found"
         return class_node
 
+    @property
+    def module_prefix(self) -> str:
+        return self.get_mangled_name(self.ctx)
+
     @multimethod
+    def get_mangled_name(self, module: ModuleContext):
+        module_name = module.name
+        if module_name == "[main]":
+            return ""
+        return module_name
+
+    @multimethod  # type: ignore
     def get_mangled_name(self, class_node: ast.AnalyzedClass) -> str:
-        # TODO: Consider module scope later
-        return class_node.name
+        "Get the mangled name of a class node"
+        return class_node.name if not self.module_prefix else f"{self.module_prefix}--{class_node.name}"
 
     @multimethod  # type: ignore
     def get_mangled_name(self, func: ast.Function) -> str:
+        "Get the mangled name of a function node"
         arg_type_list = '_'.join([str(arg.type) for arg in func.args])
-        return f"{func.name}--{arg_type_list}"
+        func_name = f"{func.name}--{arg_type_list}"
+        return func_name if not self.module_prefix else f"{self.module_prefix}--{func_name}"
 
     @multimethod  # type: ignore
     def get_mangled_name(self, func: ast.Function, class_node: ast.AnalyzedClass) -> str:
+        "Get the mangled name of a method node"
         arg_type_list = '_'.join(
             [self.get_mangled_name(arg.type) for arg in func.args])
-        return f"{class_node.name}--{func.name}--{arg_type_list}"
+        class_name = self.get_mangled_name(class_node)
+        return f"{class_name}--{func.name}--{arg_type_list}"
 
     @multimethod  # type: ignore
     def get_mangled_name(self, type_: ty.Type) -> str:

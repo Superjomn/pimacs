@@ -152,7 +152,7 @@ def test_load_builtins():
 
     def load(path):
         ctx = ModuleContext(enable_exception=True)
-        file = parse_ast(filename=path)
+        file = parse_ast(file=path)
         file = perform_sema(ctx, file)
         return file
 

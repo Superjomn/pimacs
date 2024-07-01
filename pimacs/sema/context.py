@@ -28,7 +28,7 @@ class ModuleContext:
     The module context could be nested.
     """
 
-    def __init__(self, name: str = "main", enable_exception: bool = PIMACS_SEMA_RAISE_EXCEPTION):
+    def __init__(self, name: str = "[main]", enable_exception: bool = PIMACS_SEMA_RAISE_EXCEPTION):
         self._name = name
         # TODO: Prune the nested scopes when Sema finished
         self.symbols = SymbolTable()

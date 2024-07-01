@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 
 def parse_ast(
-    code: str | None = None, filename: str = "<pimacs>"
+    code: str | None = None, file: str = "<pimacs>"
 ) -> ast.File:
     """
     Parse the code and return the AST.
@@ -27,9 +27,9 @@ def parse_ast(
         source = ast.PlainCode(code)
         parser = get_parser(code=code)
     else:
-        code = open(filename).read()
-        source = ast.FileName(filename)  # type: ignore
-        parser = get_parser(code=None, filename=filename)
+        code = open(file).read()
+        source = ast.FileName(file)  # type: ignore
+        parser = get_parser(code=None, filename=file)
 
     try:
         stmts = parser.parse(code)

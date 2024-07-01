@@ -24,7 +24,7 @@ def cli():
 @click.option("--display-ast", type=bool, default=False)
 @click.option("--target", type=click.Choice(["ast", "lisp_ast", "lisp_code"]), default="ast")
 def parse(filename: str, sema: bool, mark_unresolved: bool, enable_exception: bool, display_ast: bool, target: str):
-    the_ast = parse_ast(filename=filename)
+    the_ast = parse_ast(file=filename)
     ctx = ModuleContext(enable_exception=enable_exception)
     if target in ("lisp_ast", "lisp_code"):
         sema = True
@@ -57,21 +57,37 @@ def parse(filename: str, sema: bool, mark_unresolved: bool, enable_exception: bo
 
 
 @click.command()
-@click.argument("root", type=str)
-@click.option("--files", type=str)
+@click.argument("paths", type=str)
 @click.option("--target", type=click.Choice(["ast", "lisp_ast", "lisp_code"]), default="ast")
 @click.option("--display-ast", type=bool, default=False)
-def link(root: str, files: str, target: str, display_ast: bool):
-    root = Path(root) if root else None  # type: ignore
-    paths_ = list(map(Path, files.split(":")))
+def link(paths: str, target: str, display_ast: bool):
+    '''
+    Link the files.
 
-    linker = Linker()
+    Args:
+        paths: The paths to search for the modules. The format is "root:path1:path2:..."
+        target: The target to display. The options are "ast", "lisp_ast", "lisp_code"
+        display_ast: Whether to display the AST
+    '''
+    groups = paths.split(";")
+    for group in groups:
+        if not group:
+            continue
 
-    if not files:
-        linker.add_module_root(root)
-    else:
-        for path in paths_:
-            linker.add_module_path(path, root)
+        paths_ = group.split(":")
+
+        root = Path(paths_[0]) if paths_[0] else None  # type: ignore
+        files = filter(lambda x: x,  map(Path, paths_[1:]))
+
+        linker = Linker()
+
+        if not files:
+            assert root
+            linker.add_module_root(root)
+        else:
+            for path in files:
+                print(f"Add path: {path}, root: {root}")
+                linker.add_module_path(path, root)
 
     linker()
 
