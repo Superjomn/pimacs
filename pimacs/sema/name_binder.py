@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pimacs.ast.type as _ty
 from pimacs.logger import get_logger
@@ -165,8 +165,8 @@ class NameBinder:
         return False
 
     def _bind_method(self, node: ast.UCallMethod,
-                     methods: FuncOverloads, args: List[ast.Arg],
-                     type_spec: Optional[Dict[str, _ty.Type]]) -> Optional[ast.CallMethod]:
+                     methods: FuncOverloads, args: List[ast.CallParam] | Tuple[ast.CallParam, ...],
+                     type_spec: Optional[Dict[str, _ty.Type]] | Tuple[_ty.Type, ...]) -> Optional[ast.CallMethod]:
         """ Bind the method to the node. """
 
         assert node.obj
@@ -202,6 +202,7 @@ class NameBinder:
         '''
         This method is called when the obj is a module, e.g. `math.sin()`
         '''
+        assert module_node.ctx
         methods = module_node.ctx.symbols.global_scope.get_local(
             FuncSymbol(node.attr))
         # TODO: Unify the following code with class method
@@ -242,7 +243,8 @@ class NameBinder:
         logger.debug(f"resolving UCallMethod with template_spec: {
                      template_spec}")
 
-        return self._bind_method(node, methods, args, template_spec)
+        # type: ignore
+        return bool(self._bind_method(node, methods, args, template_spec))
 
     def visit_UClass(self, node: ast.UClass):
         logger.debug(f"TODO Bind unresolved class {node}")

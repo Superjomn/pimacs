@@ -77,7 +77,8 @@ def link(paths: str, target: str, display_ast: bool, modules_to_dump: str) -> No
         modules_to_dump: The files to dump the AST and the lisp code, format: "module1:module2"
     '''
     linker = Linker()
-    modules_to_dump = set(filter(None, modules_to_dump.split(":")))
+    modules_to_dump = set(
+        filter(None, modules_to_dump.split(":")))  # type: ignore
 
     for group in filter(None, paths.split(";")):
         files = list(map(Path, group.split(":")))
@@ -85,7 +86,7 @@ def link(paths: str, target: str, display_ast: bool, modules_to_dump: str) -> No
         if root is None:
             root = extract_root_from_paths(group)
         else:
-            files = filter(None, files[1:])
+            files = filter(None, files[1:])  # type: ignore
 
         if not files:
             assert root

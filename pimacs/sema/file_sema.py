@@ -253,7 +253,7 @@ class FileSema(IRMutator):
             elif isinstance(sym, ast.VarRef):
                 var = sym
             elif isinstance(sym, ast.UModule):
-                var = sym
+                var = sym  # type: ignore
             else:
                 raise ValueError(f"{node.loc}\nUnknown symbol type {sym}")
 
@@ -436,11 +436,12 @@ class FileSema(IRMutator):
             case ast.UFunction:  # call a global function
                 # Check if the function is imported from another module, and replace the Call with a UCallMethod
                 # The UCallMethod has a support for both Class.method and Module.function
+                # type: ignore
                 if sym := self.sym_tbl.lookup(func.name, [Symbol.Kind.Unk]):
                     if isinstance(sym, ast.UAttr):
                         assert isinstance(sym.value, ast.UModule)
-                        new_node = ast.UCallMethod(obj=sym.value, attr=sym.attr, args=node.args, loc=node.loc,
-                                                   type_spec=node.type_spec)
+                        new_node = ast.UCallMethod(obj=sym.value, attr=sym.attr, args=node.args,  # type: ignore
+                                                   loc=node.loc, type_spec=node.type_spec)
                         node.replace_all_uses_with(new_node)
                         self.collect_unresolved(new_node)
                         return new_node
@@ -451,7 +452,7 @@ class FileSema(IRMutator):
                     self.collect_unresolved(node.target)  # type: ignore
 
             case ast.UAttr:
-                base = self.visit(func.value)
+                base = self.visit(func.value)  # type: ignore
                 new_node = UCallMethod(
                     obj=base, attr=func.attr,  # type: ignore
                     args=node.args, loc=func.loc,  # type: ignore
@@ -572,21 +573,25 @@ class FileSema(IRMutator):
                 return self.type_checker.convert_type(left, right)
 
             parent_node = self._cur_func or self._cur_class
+            assert parent_node
 
+            assert node.loc
             if left.is_concrete or right.is_concrete:
                 # one of them is concrete
                 con_ty = left if left.is_concrete else right
                 tpl_ty = right if left.is_concrete else left
+                assert isinstance(tpl_ty, _ty.PlaceholderType)
 
-                assert node.loc
                 return self.type_checker.convert_to_template_param_type(parent_node=parent_node,
                                                                         source=con_ty, target=tpl_ty, loc=node.loc)
 
             else:
                 # both are template params
+                assert isinstance(right, _ty.PlaceholderType)
                 return self.type_checker.convert_to_template_param_type(parent_node=parent_node,
                                                                         source=left, target=right, loc=node.loc)
 
+        assert node.left.type and node.right.type
         target_type = check_type_binary(node.left.type, node.right.type)
         if not target_type:
             self.report_error(

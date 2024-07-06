@@ -5,7 +5,7 @@ import pytest
 import pimacs.ast.type as _ty
 from pimacs.codegen.phases import *
 from pimacs.sema.context import SemaError
-from pimacs.sema.type_checker import *
+from pimacs.sema.type_checker import *  # type: ignore
 
 
 def test_VarDecl():

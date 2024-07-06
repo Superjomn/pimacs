@@ -116,7 +116,7 @@ class CallMethod(Expr):
       app = App()
       app.time()      # => CallAttr(app, attr='time')
     '''
-    obj: CallParam  # The object to call
+    obj: CallParam | UModule  # The object to call
     method: Function
     args: Tuple[CallParam, ...]
 

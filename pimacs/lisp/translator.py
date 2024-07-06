@@ -253,7 +253,7 @@ class LispTranslator(ast_visitor.IRMutator):
             func_name = self.get_mangled_name(node.method)
             ret = lisp_ast.List(
                 elements=[
-                    func_name] + self.visit_list(node.args))
+                    func_name] + self.visit_list(list(node.args)))
             ret.loc = node.loc
             return ret
 

@@ -64,7 +64,7 @@ class TypeChecker(IRVisitor):
 
         return None
 
-    def convert_to_template_param_type(self, parent_node: ast.Class | ast.Function, source: _ty.Type, target: _ty.PlaceholderType,
+    def convert_to_template_param_type(self, parent_node: ast.Class | ast.AnalyzedClass | ast.Function, source: _ty.Type, target: _ty.PlaceholderType,
                                        loc: ast.Location) -> _ty.Type:
         '''
         Convert the source type to the target template param type with some assumptions. Will check the assumptions when
@@ -94,6 +94,7 @@ class TypeChecker(IRVisitor):
         else:
             # Both source and target are template params, such as
             # a: T0 + b: T1, the return type is T1
+            assert isinstance(source, _ty.PlaceholderType)
             type_assumption = ast.TPAssumption(reasion=f"convert {source} to {target}",
                                                checker=lambda x: self.convert_type(
                                                    x[0], x[1]),

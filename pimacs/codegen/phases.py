@@ -41,9 +41,10 @@ def parse_ast(
 
         raise e
 
-    file = ast.File(stmts=stmts, loc=ast.Location(source, 0, 0))
+    file = ast.File(stmts=stmts, loc=ast.Location(
+        source, 0, 0))  # type: ignore
     amend_placeholder_types(file)
-    return file
+    return file  # type: ignore
 
 
 def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:
