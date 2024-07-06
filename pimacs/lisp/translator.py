@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple
 
 from multimethod import multimethod
 
+import pimacs.ast.type as ty
 import pimacs.lisp.ast as lisp_ast
 import pimacs.sema.ast as ast
 import pimacs.sema.ast_visitor as ast_visitor
@@ -17,6 +18,7 @@ class LispTranslator(ast_visitor.IRMutator):
     def __init__(self, ctx: ModuleContext):
         self.ctx = ctx
         self._cur_class: Optional[ast.AnalyzedClass] = None
+        self._cur_func: Optional[ast.Function] = None
 
     def __call__(self,  node) -> lisp_ast.Node:
         return self.visit(node)
@@ -55,7 +57,7 @@ class LispTranslator(ast_visitor.IRMutator):
 
         return None
 
-    def visit_block(self, node: List[ast.Node] | Tuple[ast.Node]):
+    def visit_block(self, node: List[ast.Node] | Tuple[ast.Node]) -> lisp_ast.Let | List[lisp_ast.Node]:
         ''' Visit stmts as a block '''
         # collect the VarDecls in the block
         var_decls = set()
@@ -63,27 +65,42 @@ class LispTranslator(ast_visitor.IRMutator):
             if isinstance(stmt, ast.VarDecl):
                 var_decls.add(stmt.name)
 
-        let = lisp_ast.Let(vars=[lisp_ast.VarDecl(name=var) for var in var_decls],
-                           body=[self.visit(stmt) for stmt in node])
-        let.loc = node[0].loc
-        return let
+        if var_decls:
+            let = lisp_ast.Let(vars=[lisp_ast.VarDecl(name=var) for var in var_decls],
+                               body=[self.visit(stmt) for stmt in node])
+            let.loc = node[0].loc
+            return let
+        else:
+            stmts = [self.visit(stmt) for stmt in node]
+            return stmts
 
-    def visit_Block(self, node: ast.Block) -> lisp_ast.Let:
-        ret = self.visit_block(list(node.stmts))
-        ret.loc = node.loc
-        return ret
+    def visit_Block(self, node: ast.Block) -> lisp_ast.Block:
+        assert self._cur_func
+        content = self.visit_block(list(node.stmts))
+        stmts = content if isinstance(content, list) else [content]
+        block = lisp_ast.Block(name=self._cur_func.name,
+                               stmts=stmts)  # type: ignore
+        block.loc = node.loc
+        return block
+
+    @contextmanager
+    def func_guard(self, func: ast.Function):
+        self._cur_func = func
+        yield
+        self._cur_func = None
 
     def visit_Function(self, node: ast.Function) -> lisp_ast.Function:
-        name = self.get_mangled_name(
-            node) if not self._cur_class else self.get_mangled_name(node, self._cur_class)
+        with self.func_guard(node):
+            name = self.get_mangled_name(
+                node) if not self._cur_class else self.get_mangled_name(node, self._cur_class)
 
-        ret = lisp_ast.Function(
-            name=name,
-            args=[self.visit(arg) for arg in node.args],
-            body=self.visit(node.body),
-        )
-        ret.loc = node.loc
-        return ret
+            ret = lisp_ast.Function(
+                name=name,
+                args=[self.visit(arg) for arg in node.args],
+                body=self.visit(node.body),
+            )
+            ret.loc = node.loc
+            return ret
 
     def visit_Literal(self, node: ast.Literal) -> lisp_ast.Literal:
         ret = lisp_ast.Literal(
@@ -132,6 +149,8 @@ class LispTranslator(ast_visitor.IRMutator):
 
     def visit_VarRef(self, node: ast.VarRef) -> lisp_ast.VarRef:
         name = node.name if node.name else node.target.name  # type: ignore
+        if name.startswith('%'):  # lisp symbol
+            name = name[1:]
         ret = lisp_ast.VarRef(name=name)
         ret.loc = node.loc
         return ret
@@ -145,10 +164,14 @@ class LispTranslator(ast_visitor.IRMutator):
 
     def visit_If(self, node: ast.If) -> lisp_ast.If:
         if not node.elif_branches:
+            # Shadow Block to avoid `cl-block` in if-branches
+            then_block = self.visit(list(node.then_branch.stmts))
+            else_block = self.visit(
+                list(node.else_branch.stmts)) if node.else_branch else None
             ret = lisp_ast.If(
                 cond=self.visit(node.cond),
-                then_block=self.visit(node.then_branch),
-                else_block=self.visit(node.else_branch)
+                then_block=then_block,
+                else_block=else_block,
             )
             ret.loc = node.loc
             return ret
@@ -177,7 +200,7 @@ class LispTranslator(ast_visitor.IRMutator):
                         last_if = new_if
                     else:
                         assert last_if
-                        last_if.else_block = new_if
+                        last_if.else_block = new_if  # type: ignore
             assert root_if
             return root_if
 
@@ -212,17 +235,40 @@ class LispTranslator(ast_visitor.IRMutator):
 
     def visit_CallMethod(self, node: ast.CallMethod) -> lisp_ast.List:
         obj = node.obj
-        class_name = obj.type.name  # type: ignore
-        class_node = self.ctx.get_symbol(
-            ast.Symbol(ast.Symbol.Kind.Class, class_name))  # type: ignore
-        assert class_node, f"Class {class_name} not found"
-        func_name = self.get_mangled_name(
-            node.target, class_node)  # type: ignore
-        ret = lisp_ast.List(
-            elements=[
-                func_name] + self.visit_list(node.args))  # type: ignore
-        ret.loc = node.loc
-        return ret
+
+        if isinstance(obj, ast.Class):
+            class_name = obj.type.name  # type: ignore
+            class_node = self.ctx.get_symbol(
+                ast.Symbol(ast.Symbol.Kind.Class, class_name))  # type: ignore
+            assert class_node, f"Class {class_name} not found"
+            func_name = self.get_mangled_name(
+                node.target, class_node)  # type: ignore
+            ret = lisp_ast.List(
+                elements=[
+                    func_name] + self.visit_list(node.args))  # type: ignore
+            ret.loc = node.loc
+            return ret
+
+        elif isinstance(obj, ast.Module):
+            func_name = self.get_mangled_name(node.method)
+            ret = lisp_ast.List(
+                elements=[
+                    func_name] + self.visit_list(list(node.args)))
+            ret.loc = node.loc
+            return ret
+
+        elif obj.type:
+
+            class_name = obj.type.name
+            # treat as class
+            class_node = self.get_class(class_name)
+
+            method_name = self.get_mangled_name(node.method, class_node)
+            return lisp_ast.List(
+                elements=[
+                    method_name] + [self.visit(arg) for arg in node.args])
+        else:
+            raise ValueError(f"Unknown object type: {obj}")
 
     def visit_LispCall(self, node: ast.LispCall) -> lisp_ast.List:
         ret = lisp_ast.List(
@@ -232,7 +278,9 @@ class LispTranslator(ast_visitor.IRMutator):
         return ret
 
     def visit_Return(self, node: ast.Return) -> lisp_ast.Return:
+        assert self._cur_func
         ret = lisp_ast.Return(
+            block_name=self._cur_func.name,
             value=self.visit(node.value)
         )
         ret.loc = node.loc
@@ -327,17 +375,43 @@ class LispTranslator(ast_visitor.IRMutator):
         assert class_node, f"Class {name} not found"
         return class_node
 
-    @multimethod
+    def module_prefix(self, node) -> Optional[str]:
+        return node.module_name
+
+    @multimethod  # type: ignore
     def get_mangled_name(self, class_node: ast.AnalyzedClass) -> str:
-        # TODO: Consider module scope later
-        return class_node.name
+        "Get the mangled name of a class node"
+        prefix = self.module_prefix(class_node)
+        return class_node.name if not prefix else f"{prefix}--{class_node.name}"
 
     @multimethod  # type: ignore
     def get_mangled_name(self, func: ast.Function) -> str:
+        "Get the mangled name of a function node"
         arg_type_list = '_'.join([str(arg.type) for arg in func.args])
-        return f"{func.name}--{arg_type_list}"
+        func_name = f"{func.name}--{arg_type_list}"
+        prefix = self.module_prefix(func)
+        return func_name if not prefix else f"{prefix}--{func_name}"
 
     @multimethod  # type: ignore
     def get_mangled_name(self, func: ast.Function, class_node: ast.AnalyzedClass) -> str:
-        arg_type_list = '_'.join([str(arg.type) for arg in func.args])
-        return f"{class_node.name}--{func.name}--{arg_type_list}"
+        "Get the mangled name of a method node"
+        try:
+            arg_type_list = '_'.join(
+                [self.get_mangled_name(arg.type) for arg in func.args])
+        except:
+            raise RuntimeError(f"Error in {func.name} args: {func.args}")
+        class_name = self.get_mangled_name(class_node)
+        return f"{class_name}--{func.name}--{arg_type_list}"
+
+    @multimethod  # type: ignore
+    def get_mangled_name(self, type_: ty.Type) -> str:
+        if isinstance(type_, ty.GenericType):
+            return f"{type_.name}"
+        elif isinstance(type_, ty.CompositeType):
+            param_repr = '-'.join([self.get_mangled_name(arg)
+                                  for arg in type_.params])
+            return f"{type_.name}~{param_repr}.~"
+        elif isinstance(type_, ty.PlaceholderType):
+            return f"{type_.name}"
+        else:
+            return f"{type_}"

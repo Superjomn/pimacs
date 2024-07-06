@@ -266,6 +266,12 @@ class IRPrinter(IRVisitor, PrinterBase):
     def visit_UVarRef(self, node: ast.UVarRef):
         self.put(f"{node.name}")
 
+    def visit_UModule(self, node: ast.UModule):
+        if self._mark_unresolved:
+            self.put(f"UModule<{node.name}>")
+        else:
+            self.put(f"{node.name}")
+
     def visit_UAttr(self, node: ast.UAttr):
         self.visit(node.value)
         self.put(".")
@@ -355,3 +361,13 @@ class IRPrinter(IRVisitor, PrinterBase):
             self.put(" ")
             self.visit(arg)
         self.put(")")
+
+    def visit_ImportDecl(self, node: ast.ImportDecl):
+        if not node.symbols:
+            self.put(f"import {node.module}")
+            if node.alias:
+                self.put(f" as {node.alias}")
+        elif len(node.symbols) == 1:
+            self.put(f"from {node.module} import {node.symbols[0]}")
+        else:
+            self.put(f"from {node.module} import {', '.join(node.symbols)}")

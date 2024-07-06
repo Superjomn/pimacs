@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # from multidispatch import dispatch
 from multimethod import multimethod
@@ -13,6 +13,7 @@ from .utils import (FuncSymbol, Scoped, ScopeKind, Symbol, SymbolItem, bcolors,
 
 class Scope:
     def __init__(self, kind: ScopeKind = ScopeKind.Local, parent: Optional["Scope"] = None):
+        # format: {symbol: (item, distance)}, the distance is the level of scopes to the current scope
         self.data: Dict[Symbol, SymbolItem] = {}
         self.kind = kind
         self.parent = parent
@@ -25,7 +26,10 @@ class Scope:
 
     @multimethod
     def get(self, symbol: Symbol) -> SymbolItem | None:
-        return self._get_symbol(symbol)
+        ret = self.get_symbol_with_distance(symbol)
+        if ret:
+            return ret[0]
+        return None
 
     @multimethod  # type: ignore
     def get(self, kind: Symbol.Kind) -> List[SymbolItem]:
@@ -47,18 +51,25 @@ class Scope:
         else:
             return [item for symbol, item in self.data.items() if symbol.kind == kind]
 
+    def update_local(self, symbol: Symbol, item: SymbolItem):
+        ''' Update the local symbol table with the new item. '''
+        assert self.get_local(symbol) is not None
+        self.data[symbol] = item
+
     def _add_symbol(self, symbol: Symbol, item: SymbolItem):
         ''' Add non-func record. '''
         if symbol in self.data:
             raise KeyError(f"Symbol {symbol} already exists")
         self.data[symbol] = item
 
-    def _get_symbol(self, symbol: Symbol) -> SymbolItem | None:
+    def get_symbol_with_distance(self, symbol: Symbol) -> Tuple[SymbolItem, int] | None:
         ''' Get non-func record. '''
         scope: Scope = self
+        level = 0
         while scope is not None:
             if tmp := scope.get_local(symbol):
-                return tmp
+                return tmp, level
+            level += 1
             scope = scope.parent  # type: ignore
         return None
 
@@ -134,9 +145,12 @@ class SymbolTable(Scoped):
 
     @multimethod  # type: ignore
     def lookup(self, symbols: List[Symbol]) -> Optional[SymbolItem]:
+        items = []
         for symbol in symbols:
-            if ret := self.current_scope.get(symbol):
-                return ret
+            if item := self.current_scope.get_symbol_with_distance(symbol):
+                items.append(item)
+        items = sorted(items, key=lambda x: x[1])
+        return items[0][0] if items else None
 
     @multimethod  # type: ignore
     def lookup(self, name: str, kind: Symbol.Kind) -> Optional[SymbolItem]:
@@ -144,9 +158,8 @@ class SymbolTable(Scoped):
 
     @multimethod  # type: ignore
     def lookup(self, name: str, kind: List[Symbol.Kind]) -> Optional[SymbolItem]:
-        for k in kind:
-            if ret := self.lookup(name, k):
-                return ret
+        symbols = [Symbol(name=name, kind=k) for k in kind]
+        return self.lookup(symbols)
 
     def contains(self, symbol: Symbol) -> bool:
         return self.lookup(symbol) is not None

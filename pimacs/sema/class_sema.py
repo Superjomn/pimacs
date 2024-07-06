@@ -5,13 +5,15 @@ from contextlib import contextmanager
 from typing import Any
 
 import pimacs.ast.type as _ty
-from pimacs.logger import logger
+from pimacs.logger import get_logger
 
 from . import ast
 from .ast import AnalyzedClass, MakeObject
 from .ast_visitor import IRMutator
 from .func import FuncSig
 from .symbol_table import FuncSymbol, ScopeKind, Symbol, SymbolTable
+
+logger = get_logger(__name__)
 
 
 class ClassVisitor(IRMutator):

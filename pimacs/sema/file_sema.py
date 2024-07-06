@@ -1,11 +1,12 @@
 """
 The FileSema module will scan the whole file and resolve the symbols in the file.
 """
-from typing import Tuple
+from contextlib import contextmanager
+from typing import List, Tuple
 
 import pimacs.ast.type as _ty
 from pimacs.ast.utils import WeakSet
-from pimacs.logger import logger
+from pimacs.logger import get_logger
 
 from . import ast
 from .ast import MakeObject, UCallMethod
@@ -15,6 +16,8 @@ from .context import ModuleContext, Symbol, SymbolTable
 from .name_binder import NameBinder
 from .type_checker import TypeChecker, is_unk
 from .utils import FuncSymbol, ScopeKind
+
+logger = get_logger(__name__)
 
 
 def any_failed(*nodes: ast.Node) -> bool:
@@ -38,13 +41,29 @@ def get_common_type(left: _ty.Type, right: _ty.Type):
 
 class FileSema(IRMutator):
     """
-    Performing Sema on a single File.
+    Performing Sema on a single File which is actually a module.
+    During Sema, it will resolve the symbols in the module, and type-infer the types of the nodes.
 
-    The algorithm:
+    The algorithm for resolving symbols(NameBinder) is as follows:
+    1. Doing a bottom-up traversal of the AST
+        a. It will insert the resolved sybmols into the symbol table, such as VarDecl, Function, Class, etc.
+        b. It will collect the unresolved symbols such as UVarRef, UAttr, UFunction, UClass, etc, ideally these symbols
+              should be resolved in the subsequent turn of name binding.
+    2. For the unresolved symbols, it will try to bind them eagerly until no more symbols are resolved. This is done by
+        the `NameBinder`.
 
-    1. Perform a bottom-up traversal to try type inference, and collect all unresolved nodes. The symbol table are also
-         created during this phase.
-    2. For each unresolved node, try to bind the symbol with the corresponding scope.
+    The algorithm for type-check(TypeChecker) is as follows:
+    1. For any newly resolved symbols, it will try to type-infer them.
+        a. It will first try to infer the type in an forward-push way, which means it will try to infer the children's
+            types. For instance, a VarDecl(init=Literal(1)), it will start from the VarDecl node, and recursively arrive
+            on the Literal node and update its type to Int.
+        b. Once any node's type is inferred, it will try to infer the parent's type in a backward-push way. For instance,
+            a VarDecl(init=Literal(1)), after the Literal's type is inferred, it will try to infer the VarDecl's type.
+
+    These two algorithms will be triggered in a chain, for example, once a symbol is newly resolved, it will trigger the
+    type-checking, and got a valid type, and all its users' types could be inferred. And once a node's type is inferred,
+    it could help name binding, for instance, a UAttr(node=self, attr="name"), once the type of self is inferred to some
+    Class, the attr could be resolved to a member of the Class.
     """
 
     # NOTE, the ir nodes should be created when visited.
@@ -57,6 +76,7 @@ class FileSema(IRMutator):
         self.name_binder = NameBinder(self, self.type_checker)
 
         self._cur_class: ast.AnalyzedClass | None = None
+        self._cur_func: ast.Function | None = None
         self._cur_file: ast.File | None = None
 
         # holds all the unresolved symbol instances
@@ -71,13 +91,18 @@ class FileSema(IRMutator):
         # First turn of type inference
         self.type_checker(tree)
 
-        # Try to bind the unresolved symbols repeatedly
-        remaining = self.bind_unresolved_symbols()
-        while remaining > 0 and self.bind_unresolved_symbols() < remaining:
-            remaining = self.bind_unresolved_symbols()
+        self._resolve_symbols_eagarly()
 
         # TODO: the root might be re-bound
         return tree
+
+    def _resolve_symbols_eagarly(self):
+        # Try to bind the unresolved symbols repeatedly until no more symbols are resolved
+        remaining = self.bind_unresolved_symbols()
+        while remaining > 0 and self.bind_unresolved_symbols() < remaining:
+            remaining = self.bind_unresolved_symbols()
+            # TODO: Unify the check_type timing
+            self.check_type()
 
     def visit(self, node):
         node = super().visit(node)
@@ -98,6 +123,9 @@ class FileSema(IRMutator):
         self._succeeded = False
 
     def collect_unresolved(self, node: ast.Node):
+        '''
+        Collect the unresolved symbol node for the second turn of name binding after the first AST traversal is done.
+        '''
         logger.debug(f"Collect unresolved symbol {node}")
         assert node.resolved is False, f"{node} is already resolved"
         # bind scope for second-turn name binding
@@ -105,10 +133,20 @@ class FileSema(IRMutator):
         self._unresolved_symbols.add(node)
 
     def collect_newly_resolved(self, node: ast.Node):
-        # Since the IRMutator cannot get parent in a single visit method, we need to collect the newly resolved symbols
-        # and type-infer them in the next turn.
-        if not node.sema_failed:
+        '''
+        Collect the newly resolved symbol node for the second turn of type inference.
+        '''
+        # Since the IRMutator cannot get parent in a single visit method, we need to collect the newly resolved
+        # symbols and type-infer them in the next turn. The type-infer will trigger in chain.
+        if (not node.sema_failed) and node.resolved:
             self._newly_resolved_symbols.add(node)
+
+    def link_modules(self, modules: List[ast.Module]):
+        self.name_binder.name_to_module = {
+            module.name: module for module in modules}
+
+        # trigger the second turn of name binding
+        self._resolve_symbols_eagarly()
 
     def check_type(self):
         finished_nodes = []
@@ -126,6 +164,51 @@ class FileSema(IRMutator):
         self._cur_file = node
         super().visit_File(node)
         return node
+
+    def visit_ImportDecl(self, node: ast.ImportDecl):
+        # verify the import statement
+        if self.sym_tbl.current_scope.kind is not ScopeKind.Global:
+            self.report_error(
+                node, f"import statement should be in the global scope")
+
+        if node.module == self.ctx.name:
+            self.report_error(node, f"Cannot import the current module itself")
+
+        if node.symbols:
+            if len(node.symbols) != len(set(node.symbols)):
+                self.report_error(
+                    node, f"Duplicate symbols in import statement")
+
+        # insert new symbols
+        module_node = ast.UModule(name=node.module, loc=node.loc)
+        if not node.symbols:
+            # `import a-module` or `import a-module as xx`
+            alias = node.alias if node.alias else node.module
+            self.sym_tbl.insert(
+                Symbol(name=alias, kind=Symbol.Kind.Module), module_node)
+
+        elif len(node.symbols) == 1:
+            # `from a-module import a-symbol` or `from a-module import a-symbol as xx`
+            alias = node.alias if node.alias else node.symbols[0]
+            module_node = ast.UModule(name=node.module, loc=node.loc)
+            symbol_node = ast.UAttr(value=module_node,
+                                    attr=node.symbols[0], loc=node.loc)
+
+            self.sym_tbl.insert(
+                Symbol(name=alias, kind=Symbol.Kind.Unk), symbol_node)
+            self.collect_unresolved(symbol_node)
+
+        else:
+            # `from a-module import a-symbol1, a-symbol2`
+            for symbol in node.symbols:
+                symbol_node = ast.UAttr(
+                    value=module_node, attr=symbol, loc=node.loc)
+                self.sym_tbl.insert(
+                    Symbol(name=symbol, kind=Symbol.Kind.Unk), symbol_node)
+
+                self.collect_unresolved(symbol_node)
+
+        self.collect_unresolved(module_node)
 
     def visit_UVarRef(self, node: ast.UVarRef):
         # case 0: self.attr within a class
@@ -158,7 +241,10 @@ class FileSema(IRMutator):
         # case 2: a local variable or argument
         elif sym := self.sym_tbl.lookup(
             [Symbol(name=node.name, kind=Symbol.Kind.Var),
-             Symbol(name=node.name, kind=Symbol.Kind.Arg)]
+             Symbol(name=node.name, kind=Symbol.Kind.Arg),
+             Symbol(name=node.name, kind=Symbol.Kind.Module),  # for import
+             Symbol(name=node.name, kind=Symbol.Kind.Unk),  # for import alias
+             ]
         ):
             if isinstance(sym, ast.VarDecl):
                 var = ast.VarRef(target=sym, loc=node.loc)  # type: ignore
@@ -166,6 +252,8 @@ class FileSema(IRMutator):
                 var = ast.VarRef(target=sym, loc=node.loc)
             elif isinstance(sym, ast.VarRef):
                 var = sym
+            elif isinstance(sym, ast.UModule):
+                var = sym  # type: ignore
             else:
                 raise ValueError(f"{node.loc}\nUnknown symbol type {sym}")
 
@@ -243,41 +331,44 @@ class FileSema(IRMutator):
         return node
 
     def visit_Function(self, node: ast.Function):
-        within_class = self.sym_tbl.current_scope.kind is ScopeKind.Class
-        if within_class:
-            assert self._cur_class
+        with self.cur_func_guard(node):
+            within_class = self.sym_tbl.current_scope.kind is ScopeKind.Class
 
-        with self.sym_tbl.scope_guard(kind=ScopeKind.Func):
-            node = super().visit_Function(node)
-            symbol = FuncSymbol(node.name)
-
-            # TODO[Superjomn]: support function overloading
-            if self.sym_tbl.contains_locally(symbol):
-                self.report_error(node, f"Function {node.name} already exists")
-
-            args = node.args if node.args else []
             if within_class:
-                # This function is a member function
-                if node.is_classmethod:
-                    cls_arg = args[0]  # cls placeholder
-                    if cls_arg.name != "cls":
-                        self.report_error(
-                            node, f"Class method should have the first arg named 'cls'"
-                        )
-                    cls_arg.kind = ast.Arg.Kind.cls_placeholder
-                elif not node.is_staticmethod:
-                    self_arg = args[0]  # self placeholder
-                    if self_arg.name != "self":
-                        self.report_error(
-                            node, f"Method should have the first arg named 'self'"
-                        )
-                    self_arg.kind = ast.Arg.Kind.self_placeholder
+                assert self._cur_class
 
-            if any_failed(*node.args, node.body, *node.decorators):
-                node.sema_failed = True
+            with self.sym_tbl.scope_guard(kind=ScopeKind.Func):
+                node = super().visit_Function(node)
+                symbol = FuncSymbol(node.name)
 
-        node = self.sym_tbl.insert(symbol, node)
-        return self.verify_Function(node)
+                # TODO[Superjomn]: support function overloading
+                if self.sym_tbl.contains_locally(symbol):
+                    self.report_error(node, f"Function {
+                                      node.name} already exists")
+
+                args = node.args if node.args else []
+                if within_class:
+                    # This function is a member function
+                    if node.is_classmethod:
+                        cls_arg = args[0]  # cls placeholder
+                        if cls_arg.name != "cls":
+                            self.report_error(
+                                node, f"Class method should have the first arg named 'cls'"
+                            )
+                        cls_arg.kind = ast.Arg.Kind.cls_placeholder
+                    elif not node.is_staticmethod:
+                        self_arg = args[0]  # self placeholder
+                        if self_arg.name != "self":
+                            self.report_error(
+                                node, f"Method should have the first arg named 'self'"
+                            )
+                        self_arg.kind = ast.Arg.Kind.self_placeholder
+
+                if any_failed(*node.args, node.body, *node.decorators):
+                    node.sema_failed = True
+
+            node = self.sym_tbl.insert(symbol, node)
+            return self.verify_Function(node)
 
     def verify_Function(self, node: ast.Function) -> ast.Function:
         if node.sema_failed:
@@ -342,12 +433,28 @@ class FileSema(IRMutator):
 
         func = node.target
         match type(func):
-            case ast.UFunction:
-                self.collect_unresolved(node.target)  # type: ignore
+            case ast.UFunction:  # call a global function
+                # Check if the function is imported from another module, and replace the Call with a UCallMethod
+                # The UCallMethod has a support for both Class.method and Module.function
+                assert hasattr(func, "name")
+                if sym := self.sym_tbl.lookup(func.name, [Symbol.Kind.Unk]):
+                    if isinstance(sym, ast.UAttr):
+                        assert isinstance(sym.value, ast.UModule)
+                        new_node = ast.UCallMethod(obj=sym.value, attr=sym.attr, args=node.args,  # type: ignore
+                                                   loc=node.loc, type_spec=node.type_spec)
+                        node.replace_all_uses_with(new_node)
+                        self.collect_unresolved(new_node)
+                        return new_node
+                    else:
+                        raise NotImplementedError(f"call: {node}")
+                else:
+                    # normal function call
+                    self.collect_unresolved(node.target)  # type: ignore
 
             case ast.UAttr:
+                base = self.visit(func.value)  # type: ignore
                 new_node = UCallMethod(
-                    obj=func.value, attr=func.attr,  # type: ignore
+                    obj=base, attr=func.attr,  # type: ignore
                     args=node.args, loc=func.loc,  # type: ignore
                     type_spec=node.type_spec)
                 node.replace_all_uses_with(new_node)
@@ -461,35 +568,39 @@ class FileSema(IRMutator):
             # Not all the operands's type are determined
             return node
 
-        op_to_op_check = {
-            ast.BinaryOperator.ADD: self.can_type_add,
-            ast.BinaryOperator.SUB: self.can_type_sub,
-            ast.BinaryOperator.MUL: self.can_type_mul,
-            ast.BinaryOperator.DIV: self.can_type_div,
-            ast.BinaryOperator.EQ: self.can_type_eq,
-            ast.BinaryOperator.NE: self.can_type_neq,
-        }
+        def check_type_binary(left: _ty.Type, right: _ty.Type):
+            if left.is_concrete and right.is_concrete:
+                return self.type_checker.convert_type(left, right)
 
-        for op, check in op_to_op_check.items():
-            if node.op is op:
-                if not check(node.left, node.right):
-                    self.report_error(
-                        node,
-                        f"Cannot {op.name} {node.left.get_type()} and {
-                            node.right.get_type()}",
-                    )
-                    node.sema_failed = True
-                    return node
+            parent_node = self._cur_func or self._cur_class
+            assert parent_node
 
-        if not is_type_compatible(node.left.get_type(), node.right.get_type()):
+            assert node.loc
+            if left.is_concrete or right.is_concrete:
+                # one of them is concrete
+                con_ty = left if left.is_concrete else right
+                tpl_ty = right if left.is_concrete else left
+                assert isinstance(tpl_ty, _ty.PlaceholderType)
+
+                return self.type_checker.convert_to_template_param_type(parent_node=parent_node,
+                                                                        source=con_ty, target=tpl_ty, loc=node.loc)
+
+            else:
+                # both are template params
+                assert isinstance(right, _ty.PlaceholderType)
+                return self.type_checker.convert_to_template_param_type(parent_node=parent_node,
+                                                                        source=left, target=right, loc=node.loc)
+
+        assert node.left.type and node.right.type
+        target_type = check_type_binary(node.left.type, node.right.type)
+        if not target_type:
             self.report_error(
                 node,
-                f"Cannot convert {node.left.get_type()} and {
-                    node.right.get_type()}",
+                f"Cannot convert {node.left.type} and {node.right.type}",
             )
+            return node
 
-        node.type = get_common_type(
-            node.left.get_type(), node.right.get_type())
+        node.type = target_type
         return node
 
     def can_type_add(self, left, right):
@@ -577,13 +688,16 @@ class FileSema(IRMutator):
     def bind_unresolved_symbols(self) -> int:
         '''
         Try to bind the unresolved symbols.
-        Return the number of resolved symbols.
+
+        Returns:
+            the number of resolved symbols.
         '''
         logger.debug(f"unresolved symbols: {self._unresolved_symbols}")
         resolved = []
         for node in self._unresolved_symbols:
-            if self.bind_unresolved(node):
+            if self.bind_unresolved(node) or not node.users:
                 resolved.append(node)
+                self.collect_newly_resolved(node)
         for node in resolved:
             self._unresolved_symbols.remove(node)
 
@@ -595,3 +709,9 @@ class FileSema(IRMutator):
         if node.resolved:
             return True
         return self.name_binder(node)
+
+    @contextmanager
+    def cur_func_guard(self, func: ast.Function):
+        self._cur_func = func
+        yield
+        self._cur_func = None

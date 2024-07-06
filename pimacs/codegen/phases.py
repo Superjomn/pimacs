@@ -7,16 +7,18 @@ import pimacs.ast.ast as ast
 import pimacs.lisp.ast as lisp_ast
 from pimacs.ast.parser import get_parser
 from pimacs.lisp.translator import LispTranslator
-from pimacs.logger import logger
+from pimacs.logger import get_logger
 from pimacs.sema.context import ModuleContext
 from pimacs.sema.file_sema import FileSema
 from pimacs.sema.type_checker import amend_placeholder_types
 
 from .codegen import Codegen
 
+logger = get_logger(__name__)
+
 
 def parse_ast(
-    code: str | None = None, filename: str = "<pimacs>"
+    code: str | None = None, file: str = "<pimacs>"
 ) -> ast.File:
     """
     Parse the code and return the AST.
@@ -25,9 +27,9 @@ def parse_ast(
         source = ast.PlainCode(code)
         parser = get_parser(code=code)
     else:
-        code = open(filename).read()
-        source = ast.FileName(filename)  # type: ignore
-        parser = get_parser(code=None, filename=filename)
+        code = open(file).read()
+        source = ast.FileName(file)  # type: ignore
+        parser = get_parser(code=None, filename=file)
 
     try:
         stmts = parser.parse(code)
@@ -39,9 +41,10 @@ def parse_ast(
 
         raise e
 
-    file = ast.File(stmts=stmts, loc=ast.Location(source, 0, 0))
+    file = ast.File(stmts=stmts, loc=ast.Location(
+        source, 0, 0))  # type: ignore
     amend_placeholder_types(file)
-    return file
+    return file  # type: ignore
 
 
 def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:

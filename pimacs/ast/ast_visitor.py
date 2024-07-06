@@ -1,8 +1,9 @@
-import logging
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as ty
-from pimacs.logger import logger
+from pimacs.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class IRVisitor:
@@ -12,7 +13,6 @@ class IRVisitor:
         if node is str:
             return node
         method_name = f"visit_{node.__class__.__name__}"
-        logging.debug(f"Visiting {method_name}: {node}")
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
@@ -168,6 +168,15 @@ class IRVisitor:
     def visit_LispType_(self, node: ty.LispType_):
         pass
 
+    def visit_ImportDecl(self, node: ast.ImportDecl):
+        pass
+
+    def visit_UModule(self, node: ast.UModule):
+        pass
+
+    def visit_Module(self, node: ast.Module):
+        pass
+
 
 class IRMutator:
     def visit(self, node: ast.Node | ty.Type | str | None | list | tuple):
@@ -311,4 +320,13 @@ class IRMutator:
     def visit_LispCall(self, node: ast.LispCall):
         with node.write_guard():
             node.args = self.visit(node.args)
+        return node
+
+    def visit_ImportDecl(self, node: ast.ImportDecl):
+        return node
+
+    def visit_UModule(self, node: ast.UModule):
+        return node
+
+    def visit_Module(self, node: ast.Module):
         return node

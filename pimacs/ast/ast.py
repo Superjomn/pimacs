@@ -39,6 +39,10 @@ __all__ = ['Node',
            'UClass',
            'UFunction',
            'Template',
+           'ImportDecl',
+           'UModule',
+           'Module',
+           'TPAssumption',
            ]
 
 import os
@@ -46,7 +50,8 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import pimacs.ast.type as ty
 from pimacs.ast.type import Type
@@ -59,7 +64,7 @@ class Node(ABC):
     loc: Optional["Location"] = field(repr=False, compare=False)
     # The nodes using this node
     users: WeakSet = field(default_factory=WeakSet,
-                           repr=False, init=False, hash=False)
+                           repr=False, init=False, hash=False, compare=False)
     sema_failed: bool = field(
         default=False, init=False, hash=False, repr=False, compare=False)
 
@@ -313,7 +318,8 @@ class File(Stmt):
     def _refresh_users(self):
         self.users.clear()
         for stmt in self.stmts:
-            stmt.add_user(self)
+            if stmt is not None:
+                stmt.add_user(self)
 
     def __post_init__(self):
         self._refresh_users()
@@ -344,6 +350,16 @@ class Function(Stmt, VisiableSymbol):
     # The `template_params` is (T0, T1)
     template_params: Optional[Tuple[Type, ...]] = field(
         default=None)
+
+    # The module name of the function, used for name mangling in codegen. Note, only the top-level function has the
+    # module_name
+    module_name: Optional[str] = None
+
+    # Hold the assumptions for the function template
+    tp_assumptions: List["TPAssumption"] = field(default_factory=list,
+                                                 hash=False,
+                                                 repr=False,
+                                                 init=False)
 
     class Kind(Enum):
         Unknown = -1
@@ -656,8 +672,8 @@ class Call(Expr):
             raise Exception(f"Unknown function type: {
                             type(self.target)}: {self.target}")
 
-    def __repr__(self):
-        return f"{self.target_name}({', '.join(str(arg) for arg in self.args)})"
+    # def __repr__(self):
+        # return f"{self.target_name}({', '.join(str(arg) for arg in self.args)})"
 
     @property
     def target_name(self) -> str:
@@ -804,6 +820,16 @@ class Class(Stmt, VisiableSymbol):
     template_params: Optional[Tuple[Type, ...]] = field(
         default=None)
 
+    # The module name of the class, used for name mangling in codegen.
+    module_name: Optional[str] = None
+
+    # used in Sema
+    # Hold the assumptions for the function template
+    tp_assumptions: List["TPAssumption"] = field(default_factory=list,
+                                                 hash=False,
+                                                 repr=False,
+                                                 init=False)
+
     def _refresh_users(self):
         for stmt in self.body:
             stmt.add_user(self)
@@ -900,7 +926,7 @@ class Guard(Stmt):
                 self.body = new
 
 
-def make_literal(value: int | float | str | bool | None, loc: Location) -> Literal:
+def make_literal(value: int | float | str | bool | None, loc: Optional[Location] = None) -> Literal:
     return Literal(value=value, loc=loc)
 
 
@@ -933,7 +959,7 @@ class UVarRef(Unresolved, Expr):
 @dataclass(slots=True, unsafe_hash=True)
 class UAttr(Unresolved, Expr):
     ''' Unresolved attribute, such as `a.b` in `a.b.c` '''
-    value: VarRef | UVarRef
+    value: Union[VarRef, UVarRef, "UModule"]
     attr: str
 
     def _refresh_users(self):
@@ -1003,3 +1029,66 @@ class LispCall(Expr):
         for i, arg in enumerate(self.args):
             if arg == old:
                 self.args[i] = new
+
+
+@dataclass
+class ImportDecl(Stmt):
+    ''' Import statement.
+    e.g. from core import add # => Import(module='core', symbols=['add'])
+    e.g. import core # => Import(module='core', symbols=[])
+    e.g. from core import add as add2 # => Import(module='core', symbols=['add'], alias='add2')
+    e.g. import core as c # => Import(module='core', symbols=[], alias='c')
+    '''
+    module: str
+    symbols: List[str]
+    alias: str | None = None
+
+    def _refresh_users(self):
+        pass
+
+    def replace_child(self, old, new):
+        pass
+
+
+@dataclass
+class UModule(Unresolved, Expr):
+    ''' Unresolved module.
+    This is used for the module that is not resolved in the current context.
+
+    UModule is an Expr since it can be used as a module reference in the code.
+    '''
+    name: str
+
+    def _refresh_users(self):
+        pass
+
+    def replace_child(self, old, new):
+        pass
+
+
+@dataclass
+class Module(Expr):
+    ''' A module node. '''
+    name: str
+    path: Optional[Path] = None
+
+    def __post_init__(self):
+        from pimacs.sema.context import ModuleContext
+        self.ctx: Optional[ModuleContext] = None
+        self.type = ty.ModuleType
+
+    def _refresh_users(self):
+        pass
+
+    def replace_child(self, old, new):
+        pass
+
+
+@dataclass
+class TPAssumption:
+    ''' TampletePlaceholder assumptions. '''
+    reasion: str
+    # The target type to check
+    param_type: List[ty.PlaceholderType]
+    checker: Callable[[List[ty.Type]], bool]
+    loc: Location
