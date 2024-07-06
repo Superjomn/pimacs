@@ -1,0 +1,11 @@
+import a-module
+from a-module import hello
+from dict import Dict
+
+# CHECK: (a-module--hello--)
+a-module.hello()
+# CHECK: (a-module--hello--)
+hello()
+
+# CHECK: (setq a-dict (dict--Dict--))
+var a-dict = Dict[Str, Int]()
