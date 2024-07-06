@@ -132,5 +132,25 @@ class App:
         assert isinstance(method.return_type, _ty.PlaceholderType)
 
 
+def test_convert_to_template_param_type():
+    ctx = ModuleContext()
+    code = '''
+def foo[T](a: T) -> T:
+    var b = a + 1
+    return a + b
+'''
+    tree = parse_ast(code.rstrip())
+
+    pprint(tree)
+
+    tree = perform_sema(ctx, tree)
+
+    func: ast.Function = tree.stmts[0]
+    pprint(func)
+
+    assert len(func.tp_assumptions) == 1
+
+
 if __name__ == '__main__':
-    test_amend_placeholder_types_class()
+    # test_amend_placeholder_types_class()
+    test_convert_to_template_param_type()

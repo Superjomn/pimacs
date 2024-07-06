@@ -1,6 +1,7 @@
 """
 The FileSema module will scan the whole file and resolve the symbols in the file.
 """
+from contextlib import contextmanager
 from typing import List, Tuple
 
 import pimacs.ast.type as _ty
@@ -75,6 +76,7 @@ class FileSema(IRMutator):
         self.name_binder = NameBinder(self, self.type_checker)
 
         self._cur_class: ast.AnalyzedClass | None = None
+        self._cur_func: ast.Function | None = None
         self._cur_file: ast.File | None = None
 
         # holds all the unresolved symbol instances
@@ -140,12 +142,8 @@ class FileSema(IRMutator):
             self._newly_resolved_symbols.add(node)
 
     def link_modules(self, modules: List[ast.Module]):
-        # Insert the modules
-        for module in modules:
-            symbol = Symbol(name=module.name, kind=Symbol.Kind.Module)
-            if sym := self.sym_tbl.global_scope.get_local(symbol):
-                if isinstance(sym, ast.UModule):
-                    self.sym_tbl.global_scope.update_local(symbol, module)
+        self.name_binder.name_to_module = {
+            module.name: module for module in modules}
 
         # trigger the second turn of name binding
         self._resolve_symbols_eagarly()
@@ -333,41 +331,44 @@ class FileSema(IRMutator):
         return node
 
     def visit_Function(self, node: ast.Function):
-        within_class = self.sym_tbl.current_scope.kind is ScopeKind.Class
-        if within_class:
-            assert self._cur_class
+        with self.cur_func_guard(node):
+            within_class = self.sym_tbl.current_scope.kind is ScopeKind.Class
 
-        with self.sym_tbl.scope_guard(kind=ScopeKind.Func):
-            node = super().visit_Function(node)
-            symbol = FuncSymbol(node.name)
-
-            # TODO[Superjomn]: support function overloading
-            if self.sym_tbl.contains_locally(symbol):
-                self.report_error(node, f"Function {node.name} already exists")
-
-            args = node.args if node.args else []
             if within_class:
-                # This function is a member function
-                if node.is_classmethod:
-                    cls_arg = args[0]  # cls placeholder
-                    if cls_arg.name != "cls":
-                        self.report_error(
-                            node, f"Class method should have the first arg named 'cls'"
-                        )
-                    cls_arg.kind = ast.Arg.Kind.cls_placeholder
-                elif not node.is_staticmethod:
-                    self_arg = args[0]  # self placeholder
-                    if self_arg.name != "self":
-                        self.report_error(
-                            node, f"Method should have the first arg named 'self'"
-                        )
-                    self_arg.kind = ast.Arg.Kind.self_placeholder
+                assert self._cur_class
 
-            if any_failed(*node.args, node.body, *node.decorators):
-                node.sema_failed = True
+            with self.sym_tbl.scope_guard(kind=ScopeKind.Func):
+                node = super().visit_Function(node)
+                symbol = FuncSymbol(node.name)
 
-        node = self.sym_tbl.insert(symbol, node)
-        return self.verify_Function(node)
+                # TODO[Superjomn]: support function overloading
+                if self.sym_tbl.contains_locally(symbol):
+                    self.report_error(node, f"Function {
+                                      node.name} already exists")
+
+                args = node.args if node.args else []
+                if within_class:
+                    # This function is a member function
+                    if node.is_classmethod:
+                        cls_arg = args[0]  # cls placeholder
+                        if cls_arg.name != "cls":
+                            self.report_error(
+                                node, f"Class method should have the first arg named 'cls'"
+                            )
+                        cls_arg.kind = ast.Arg.Kind.cls_placeholder
+                    elif not node.is_staticmethod:
+                        self_arg = args[0]  # self placeholder
+                        if self_arg.name != "self":
+                            self.report_error(
+                                node, f"Method should have the first arg named 'self'"
+                            )
+                        self_arg.kind = ast.Arg.Kind.self_placeholder
+
+                if any_failed(*node.args, node.body, *node.decorators):
+                    node.sema_failed = True
+
+            node = self.sym_tbl.insert(symbol, node)
+            return self.verify_Function(node)
 
     def verify_Function(self, node: ast.Function) -> ast.Function:
         if node.sema_failed:
@@ -566,35 +567,35 @@ class FileSema(IRMutator):
             # Not all the operands's type are determined
             return node
 
-        op_to_op_check = {
-            ast.BinaryOperator.ADD: self.can_type_add,
-            ast.BinaryOperator.SUB: self.can_type_sub,
-            ast.BinaryOperator.MUL: self.can_type_mul,
-            ast.BinaryOperator.DIV: self.can_type_div,
-            ast.BinaryOperator.EQ: self.can_type_eq,
-            ast.BinaryOperator.NE: self.can_type_neq,
-        }
+        def check_type_binary(left: _ty.Type, right: _ty.Type):
+            if left.is_concrete and right.is_concrete:
+                return self.type_checker.convert_type(left, right)
 
-        for op, check in op_to_op_check.items():
-            if node.op is op:
-                if not check(node.left, node.right):
-                    self.report_error(
-                        node,
-                        f"Cannot {op.name} {node.left.get_type()} and {
-                            node.right.get_type()}",
-                    )
-                    node.sema_failed = True
-                    return node
+            parent_node = self._cur_func or self._cur_class
 
-        if not is_type_compatible(node.left.get_type(), node.right.get_type()):
+            if left.is_concrete or right.is_concrete:
+                # one of them is concrete
+                con_ty = left if left.is_concrete else right
+                tpl_ty = right if left.is_concrete else left
+
+                assert node.loc
+                return self.type_checker.convert_to_template_param_type(parent_node=parent_node,
+                                                                        source=con_ty, target=tpl_ty, loc=node.loc)
+
+            else:
+                # both are template params
+                return self.type_checker.convert_to_template_param_type(parent_node=parent_node,
+                                                                        source=left, target=right, loc=node.loc)
+
+        target_type = check_type_binary(node.left.type, node.right.type)
+        if not target_type:
             self.report_error(
                 node,
-                f"Cannot convert {node.left.get_type()} and {
-                    node.right.get_type()}",
+                f"Cannot convert {node.left.type} and {node.right.type}",
             )
+            return node
 
-        node.type = get_common_type(
-            node.left.get_type(), node.right.get_type())
+        node.type = target_type
         return node
 
     def can_type_add(self, left, right):
@@ -703,3 +704,9 @@ class FileSema(IRMutator):
         if node.resolved:
             return True
         return self.name_binder(node)
+
+    @contextmanager
+    def cur_func_guard(self, func: ast.Function):
+        self._cur_func = func
+        yield
+        self._cur_func = None

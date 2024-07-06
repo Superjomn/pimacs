@@ -257,8 +257,18 @@ class LispTranslator(ast_visitor.IRMutator):
             ret.loc = node.loc
             return ret
 
+        elif obj.type:
+
+            class_name = obj.type.name
+            # treat as class
+            class_node = self.get_class(class_name)
+
+            method_name = self.get_mangled_name(node.method, class_node)
+            return lisp_ast.List(
+                elements=[
+                    method_name] + [self.visit(arg) for arg in node.args])
         else:
-            raise NotImplementedError(f"CallMethod: {node}")
+            raise ValueError(f"Unknown object type: {obj}")
 
     def visit_LispCall(self, node: ast.LispCall) -> lisp_ast.List:
         ret = lisp_ast.List(
@@ -365,34 +375,31 @@ class LispTranslator(ast_visitor.IRMutator):
         assert class_node, f"Class {name} not found"
         return class_node
 
-    @property
-    def module_prefix(self) -> str:
-        return self.get_mangled_name(self.ctx)
-
-    @multimethod
-    def get_mangled_name(self, module: ModuleContext):
-        module_name = module.name
-        if module_name == "[main]":
-            return ""
-        return module_name
+    def module_prefix(self, node) -> Optional[str]:
+        return node.module_name
 
     @multimethod  # type: ignore
     def get_mangled_name(self, class_node: ast.AnalyzedClass) -> str:
         "Get the mangled name of a class node"
-        return class_node.name if not self.module_prefix else f"{self.module_prefix}--{class_node.name}"
+        prefix = self.module_prefix(class_node)
+        return class_node.name if not prefix else f"{prefix}--{class_node.name}"
 
     @multimethod  # type: ignore
     def get_mangled_name(self, func: ast.Function) -> str:
         "Get the mangled name of a function node"
         arg_type_list = '_'.join([str(arg.type) for arg in func.args])
         func_name = f"{func.name}--{arg_type_list}"
-        return func_name if not self.module_prefix else f"{self.module_prefix}--{func_name}"
+        prefix = self.module_prefix(func)
+        return func_name if not prefix else f"{prefix}--{func_name}"
 
     @multimethod  # type: ignore
     def get_mangled_name(self, func: ast.Function, class_node: ast.AnalyzedClass) -> str:
         "Get the mangled name of a method node"
-        arg_type_list = '_'.join(
-            [self.get_mangled_name(arg.type) for arg in func.args])
+        try:
+            arg_type_list = '_'.join(
+                [self.get_mangled_name(arg.type) for arg in func.args])
+        except:
+            raise RuntimeError(f"Error in {func.name} args: {func.args}")
         class_name = self.get_mangled_name(class_node)
         return f"{class_name}--{func.name}--{arg_type_list}"
 

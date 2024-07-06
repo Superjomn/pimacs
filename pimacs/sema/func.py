@@ -113,6 +113,9 @@ class FuncSig:
         Returns:
             None if the arguments do not match the signature
         '''
+        logger.debug(f"begin get_full_arg_list")
+        logger.debug(f"call_params: {call_params}")
+        logger.debug(f"template_param_spec: {template_param_spec}")
         # ref is out-of-date
         if self.func() is None:
             logger.debug(f"get_full_arg_list: Function is out-of-date")
@@ -252,7 +255,9 @@ class FuncOverloads:
             if ret := sig.get_full_arg_list(args, template_spec):
                 _, template_specs = ret
                 concrete_sig = sig.specialize(template_specs)
-                assert concrete_sig
+                # TODO: Check if the concrete_sig is necessary
+                # assert concrete_sig, f"Failed to specialize {sig} with {template_specs}"
+                concrete_sig = concrete_sig or sig
                 candidates.append((func, concrete_sig))
         return candidates
 

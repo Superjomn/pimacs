@@ -7,21 +7,6 @@ class OrgElement:
     var elem: Lisp
 
     @pub
-    @classmethod
-    def create-at-point(cls) -> OrgElement:
-        "Create an OrgElement from current point."
-        return cls(%org-element-at-point())
-
-    # Support getattr
-    # @pub
-    # @classmethod
-    # def create-from-buffer(cls, buf: Buffer?=nil):
-    #     "Create an OrgElement from buffer"
-    #     var thebuf: Lisp = buf.buf if buf else %get-current-buffer()
-    #     guard %with-current-buffer(thebuf):
-    #         return cls(%org-element-parse-buffer())
-
-    @pub
     @property
     def content(self) -> Str:
         "Get the content of the element."

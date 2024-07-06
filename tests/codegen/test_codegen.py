@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from ..utils import filecheck
+from ..utils import check_codegen, filecheck
 
 workspace = Path(os.path.dirname(os.path.abspath(__file__)))
 
@@ -11,11 +11,11 @@ def test_basics_with_filecheck():
 
 
 def test_builtin_dict():
-    filecheck(workspace=workspace, file="../../pimacs/builtin/dict.pim")
+    check_codegen(workspace=workspace, file="../../pimacs/builtin/dict.pim")
 
 
 def test_builtin_list():
-    filecheck(workspace=workspace, file="../../pimacs/builtin/list.pim")
+    check_codegen(workspace=workspace, file="../../pimacs/builtin/list.pim")
 
 
 if __name__ == "__main__":

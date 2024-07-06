@@ -9,7 +9,7 @@ foo(2)
 
 # CHECK: (defun a-select--Int_Int (a b)
 def a-select(a: Int, b: Int) -> Int:
-    # CHECK:     (cl-return (if (< a b) a b))))
+    # CHECK:     (cl-return-from a-select (if (< a b) a b))))
     return a if a < b else b
 
 # templated function
@@ -21,7 +21,7 @@ var aa = a-select-template(1, 2)
 
 # CHECK: (defun a-select-template-called-- ()
 def a-select-template-called() -> Int:
-    # CHECK:     (cl-return (a-select-template--T_T 1 2))))
+    # CHECK:     (cl-return-from a-select-template-called (a-select-template--T_T 1 2))))
     return a-select-template(1, 2)
 
 # These functions offers default values to builtin types
@@ -46,15 +46,16 @@ class App:
     def run(self):
         %message("App [%s] on v-%d is running", self.name, self.version)
 
-    # The generated constructor for App
-    # CHECK: (defun App--Str_Int (name version)
-    # CHECK-NEXT:   (let (self)
-    # CHECK-NEXT:     (setq self (make-App :name nil :version nil))
-    # CHECK-NEXT:     (setf (App-name self) name)
-    # CHECK-NEXT:     (setf (App-version self) version)
-
 # CHECK: (setq app (App--Str_Int "apple" 1))
 var app = App("apple", 1)
 
 # CHECK: (message "app: %s" (App-name app))
 %message("app: %s", app.name)
+
+# The generated constructor for App
+# CHECK: (defun App--Str_Int (name version)
+# CHECK-NEXT: (cl-block App
+# CHECK-NEXT:   (let (self)
+# CHECK-NEXT:     (setq self (make-App :name nil :version nil))
+# CHECK-NEXT:     (setf (App-name self) name)
+# CHECK-NEXT:     (setf (App-version self) version)

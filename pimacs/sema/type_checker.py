@@ -3,9 +3,9 @@ from typing import *
 from multimethod import multimethod
 
 import pimacs.ast.type as _ty
-from pimacs.ast import ast
 from pimacs.ast.utils import WeakSet
 from pimacs.logger import get_logger
+from pimacs.sema import ast
 from pimacs.sema.context import ModuleContext
 
 from .ast_visitor import IRVisitor
@@ -39,7 +39,7 @@ class TypeChecker(IRVisitor):
             return None
 
         if source == target:
-            return source
+            return target
 
         if source == _ty.Int and target == _ty.Float:
             return target
@@ -52,17 +52,57 @@ class TypeChecker(IRVisitor):
         # Currently, the LispType works as an Any type
         # TODO: Add an dedicated Any type
         if source == _ty.LispType:
-            return True
+            return source
 
         # TODO: Any class types could be converted to bool if the method __bool__ is defined.
         if source.get_nosugar_type() == target.get_nosugar_type():
             # Convert Value to Value?
             if target.is_optional:
-                return True
+                return target
         if target.is_optional and source == _ty.Nil:
-            return True
+            return target
 
         return None
+
+    def convert_to_template_param_type(self, parent_node: ast.Class | ast.Function, source: _ty.Type, target: _ty.PlaceholderType,
+                                       loc: ast.Location) -> _ty.Type:
+        '''
+        Convert the source type to the target template param type with some assumptions. Will check the assumptions when
+        the type is determined.
+
+        Args:
+            parent_node: The parent node of the template param.
+            source: The type to convert.
+            target: The target template param type.
+        '''
+        if source == target:
+            return source
+        if source.get_nosugar_type() == target.get_nosugar_type():
+            return target
+
+        if source.is_concrete:
+            # The source is a concrete type, such as int, float, etc.
+            # e.g. 1 + a:T, this requires T could be converted to int.
+            type_assumption = ast.TPAssumption(reasion=f"convert {source} to {target}",
+                                               checker=lambda x: self.convert_type(
+                                                   x[0], target),
+                                               param_type=[target],
+                                               loc=loc)
+            parent_node.tp_assumptions.append(type_assumption)
+            return target
+
+        else:
+            # Both source and target are template params, such as
+            # a: T0 + b: T1, the return type is T1
+            type_assumption = ast.TPAssumption(reasion=f"convert {source} to {target}",
+                                               checker=lambda x: self.convert_type(
+                                                   x[0], x[1]),
+                                               param_type=[source, target],
+                                               loc=loc)
+            parent_node.tp_assumptions.append(type_assumption)
+            return target
+
+        return _ty.Unk
 
     @multimethod  # type: ignore
     def convert_type(self, source: List[_ty.Type], target: _ty.Type) -> List[_ty.Type]:
@@ -249,7 +289,7 @@ def amend_placeholder_types(node: ast.Node):
             self.visited_nodes: Set[ast.Class | ast.Function] = set()
 
         def walk_to_node_pre(self, node) -> bool:
-            if isinstance(node, (ast.Function, ast.Class)) and node.template_params:
+            if isinstance(node, (ast.Function, ast.Class, ast.AnalyzedClass)) and node.template_params:
                 if node in self.visited_nodes:
                     return False
 
@@ -292,11 +332,15 @@ def amend_placeholder_types(node: ast.Node | List[ast.Node], template_params: Di
                 return type.replace_with(template_params)
             return type
 
-        def walk_to_node_pre(self, node) -> bool:  # type: ignore
+        def visit_node(self, node):
             if hasattr(node, "type"):
                 node.type = self.overwrite_type(node.type)
             if hasattr(node, "return_type"):
                 node.return_type = self.overwrite_type(node.return_type)
+            return node
+
+        def walk_to_node_pre(self, node) -> bool:  # type: ignore
+            self.visit_node(node)
             return True
 
         def walk_to_node_post(self, node):  # type: ignore

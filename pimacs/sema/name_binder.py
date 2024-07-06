@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 import pimacs.ast.type as _ty
 from pimacs.logger import get_logger
@@ -20,6 +20,8 @@ class NameBinder:
     def __init__(self, file_sema: Any, type_checker: Any):
         self.type_checker = type_checker
         self.file_sema = file_sema
+
+        self.name_to_module: Dict[str, ast.Module] = {}
 
     def report_error(self, node: ast.Node, message: str):
         self.file_sema.report_error(node, message)
@@ -162,21 +164,24 @@ class NameBinder:
             return self.process_module_call_method(node, node.obj)
         return False
 
-    def process_module_call_method(self, node: ast.UCallMethod, module_node: ast.Module) -> bool:
-        methods = module_node.ctx.symbols.global_scope.get_local(
-            FuncSymbol(node.attr))
-        # TODO: Unify the following code with class method
-        if method_candidates := methods.lookup(node.args):
-            print(f"** method_candidates: {method_candidates}")
+    def _bind_method(self, node: ast.UCallMethod,
+                     methods: FuncOverloads, args: List[ast.Arg],
+                     type_spec: Optional[Dict[str, _ty.Type]]) -> Optional[ast.CallMethod]:
+        """ Bind the method to the node. """
+
+        assert node.obj
+        assert node.obj.type is not None
+
+        if method_candidates := methods.lookup(args, template_spec=type_spec):
 
             logger.debug(f"UCallAttr found method: {
                 method_candidates}")
             if len(method_candidates) > 1:
                 self.report_error(
                     node, f"Method {node.attr} has more than one candidates")
-                return False
+                return None
             elif not method_candidates:
-                return False
+                return None
 
             method, method_sig = method_candidates[0]
 
@@ -188,15 +193,29 @@ class NameBinder:
 
             self.type_checker(new_node, forward_push=False)
             self.file_sema.collect_newly_resolved(new_node)
-            return True
+            return new_node
         else:
-            self.report_error(node, f"Function {node.attr} not found in module {
-                              module_node.name}")
-            return False
+            self.report_error(node, f"Function {node.attr} not found")
+            return None
+
+    def process_module_call_method(self, node: ast.UCallMethod, module_node: ast.Module) -> bool:
+        '''
+        This method is called when the obj is a module, e.g. `math.sin()`
+        '''
+        methods = module_node.ctx.symbols.global_scope.get_local(
+            FuncSymbol(node.attr))
+        # TODO: Unify the following code with class method
+        if new_node := self._bind_method(node, methods, node.args, node.type_spec):
+            new_node.method.module_name = module_node.name
+            return True
+        return False
 
     def process_class_call_method(self, node: ast.UCallMethod, class_node: ast.AnalyzedClass) -> bool:
+        ''' This method is called when the obj is a class, e.g. `App.run()` `'''
         assert node.obj
         assert node.obj.type is not None
+
+        logger.debug(f"processing class call method {node}")
 
         func_symbol = FuncSymbol(node.attr)
         methods: Optional[FuncOverloads] = class_node.symbols.get(
@@ -207,53 +226,41 @@ class NameBinder:
             return False
 
         args = tuple([node.obj] + list(node.args))  # self + args
-
-        logger.debug(f"UCallMethod obj: {node.obj}")
         class_type = node.obj.type
 
         # check if is method
         template_spec = None
         if isinstance(class_type, _ty.CompositeType):
             if class_node.template_params:
-                assert len(class_node.template_params) == len(
-                    class_type.params), f"Template params mismatch: {class_node.template_params} vs {class_type.params}"
+                if len(class_node.template_params) != len(
+                        class_type.params):
+                    self.report_error(node, f"Template params mismatch: {
+                                      class_node.template_params} vs {class_type.params}")
                 template_spec = dict(
                     zip(class_node.template_params, class_type.params))
 
         logger.debug(f"resolving UCallMethod with template_spec: {
                      template_spec}")
 
-        if method_candidates := methods.lookup(args, template_spec):
-            logger.debug(f"UCallAttr found method: {
-                method_candidates}")
-            if len(method_candidates) > 1:
-                self.report_error(
-                    node, f"Method {node.attr} has more than one candidates")
-                return False
-
-            method, method_sig = method_candidates[0]
-
-            new_node = ast.CallMethod(
-                obj=node.obj, method=method, args=node.args, loc=node.loc)
-            new_node.type = method_sig.output_type
-
-            node.replace_all_uses_with(new_node)
-            self.type_checker(new_node, forward_push=False)
-            self.file_sema.collect_newly_resolved(new_node)
-            return True
-        else:
-            self.report_error(node, f"Method {node.attr} not found")
-            return False
+        return self._bind_method(node, methods, args, template_spec)
 
     def visit_UClass(self, node: ast.UClass):
         logger.debug(f"TODO Bind unresolved class {node}")
         return False
 
     def visit_UModule(self, node: ast.UModule):
+        # TODO: This path is deprecated
         if sym := node.scope.get(Symbol(name=node.name, kind=Symbol.Kind.Module)):
             if sym.resolved:
                 node.replace_all_uses_with(sym)
                 self.file_sema.collect_newly_resolved(sym)
                 return True
+
+        # The actual Module is set directly into the name_to_module
+        if node.name in self.name_to_module:
+            module = self.name_to_module[node.name]
+            node.replace_all_uses_with(module)
+            self.file_sema.collect_newly_resolved(module)
+            return True
 
         return False

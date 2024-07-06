@@ -1,4 +1,3 @@
-import logging
 
 import pimacs.ast.ast as ast
 import pimacs.ast.type as ty
@@ -14,7 +13,6 @@ class IRVisitor:
         if node is str:
             return node
         method_name = f"visit_{node.__class__.__name__}"
-        logging.debug(f"Visiting {method_name}: {node}")
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 

@@ -42,6 +42,7 @@ __all__ = ['Node',
            'ImportDecl',
            'UModule',
            'Module',
+           'TPAssumption',
            ]
 
 import os
@@ -50,7 +51,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import pimacs.ast.type as ty
 from pimacs.ast.type import Type
@@ -349,6 +350,16 @@ class Function(Stmt, VisiableSymbol):
     # The `template_params` is (T0, T1)
     template_params: Optional[Tuple[Type, ...]] = field(
         default=None)
+
+    # The module name of the function, used for name mangling in codegen. Note, only the top-level function has the
+    # module_name
+    module_name: Optional[str] = None
+
+    # Hold the assumptions for the function template
+    tp_assumptions: List["TPAssumption"] = field(default_factory=list,
+                                                 hash=False,
+                                                 repr=False,
+                                                 init=False)
 
     class Kind(Enum):
         Unknown = -1
@@ -809,6 +820,16 @@ class Class(Stmt, VisiableSymbol):
     template_params: Optional[Tuple[Type, ...]] = field(
         default=None)
 
+    # The module name of the class, used for name mangling in codegen.
+    module_name: Optional[str] = None
+
+    # used in Sema
+    # Hold the assumptions for the function template
+    tp_assumptions: List["TPAssumption"] = field(default_factory=list,
+                                                 hash=False,
+                                                 repr=False,
+                                                 init=False)
+
     def _refresh_users(self):
         for stmt in self.body:
             stmt.add_user(self)
@@ -1061,3 +1082,13 @@ class Module(Expr):
 
     def replace_child(self, old, new):
         pass
+
+
+@dataclass
+class TPAssumption:
+    ''' TampletePlaceholder assumptions. '''
+    reasion: str
+    # The target type to check
+    param_type: List[ty.PlaceholderType]
+    checker: Callable[[List[ty.Type]], bool]
+    loc: Location

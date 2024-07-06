@@ -21,7 +21,8 @@ class Codegen(PrinterBase):
         visitor(node)
 
     def generic_visit(self, node):
-        raise NotImplementedError(f"No visit_{node.__class__.__name__} method")
+        raise NotImplementedError(
+            f"No visit_{node.__class__.__name__} method for node {node}")
 
     def visit_NoneType(self, node):
         pass
