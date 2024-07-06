@@ -54,7 +54,7 @@ class IRPrinter(IRVisitor, PrinterBase):
             self.put(f"let {node.name}")
         if node.type is not None:
             self.put(" :")
-            self.put(str(node.type))
+            self.visit_Type(node.type)
         if node.init is not None:
             self.put(" = ")
             self.visit(node.init)
@@ -66,7 +66,15 @@ class IRPrinter(IRVisitor, PrinterBase):
             self.put("nil")
 
     def visit_Type(self, node: ast.Type):
-        self.put(str(node))
+        self.put(node.name)
+        if isinstance(node, ty.CompositeType):
+            assert node.params
+            self.put("[")
+            for i, p in enumerate(node.params):
+                if i > 0:
+                    self.put(", ")
+                self.visit_Type(p)
+            self.put("]")
 
     def visit_Function(self, node: ast.Function):
         for no, decorator in enumerate(node.decorators):
@@ -89,7 +97,7 @@ class IRPrinter(IRVisitor, PrinterBase):
 
         if node.return_type is not None:
             self.put(" -> ")
-            self.visit(node.return_type)
+            self.visit_Type(node.return_type)
 
         self.put(":\n")
 
@@ -99,7 +107,7 @@ class IRPrinter(IRVisitor, PrinterBase):
         self.put(f"{node.name}")
         if node.type is not None:
             self.put(" :")
-            self.visit(node.type)
+            self.visit_Type(node.type)
         if node.default is not None:
             self.put(" = ")
             self.visit(node.default)
@@ -141,7 +149,7 @@ class IRPrinter(IRVisitor, PrinterBase):
             for i, t in enumerate(node.type_spec):
                 if i > 0:
                     self.put(", ")
-                self.visit(t)
+                self.visit_Type(t)
             self.put("]")
 
         self.put("(")
@@ -242,7 +250,7 @@ class IRPrinter(IRVisitor, PrinterBase):
         for i, p in enumerate(params):
             if i > 0:
                 self.put(", ")
-            self.visit(p)
+            self.visit_Type(p)
         self.put("]")
 
     def visit_Class(self, node: ast.Class):
@@ -302,36 +310,6 @@ class IRPrinter(IRVisitor, PrinterBase):
             self.put(f"{node.name} = ")
         self.visit(node.value)
 
-    def visit_GenericType(self, node: ty.GenericType):
-        self.put(str(node))
-
-    def visit_CompositeType(self, node: ty.CompositeType):
-        self.put(str(node))
-
-    def visit_IntType(self, node: ty.IntType):
-        self.put(str(node))
-
-    def visit_FloatType(self, node: ty.FloatType):
-        self.put(str(node))
-
-    def visit_BoolType(self, node: ty.BoolType):
-        self.put(str(node))
-
-    def visit_StrType(self, node: ty.StrType):
-        self.put(str(node))
-
-    def visit_UnkType(self, node: ty.UnkType):
-        self.put(str(node))
-
-    def visit_NilType(self, node: ty.NilType):
-        self.put(str(node))
-
-    def visit_LispType_(self, node: ty.LispType_):
-        self.put(str(node))
-
-    def visit_PlaceholderType(self, node: ty.PlaceholderType):
-        self.put(str(node))
-
     def visit_Attribute(self, node: ast.Attribute):
         if isinstance(node.value, ast.VarRef):
             self.put(node.value.target.name)  # type: ignore
@@ -350,9 +328,6 @@ class IRPrinter(IRVisitor, PrinterBase):
             self.put(f"UClass<{node.name}>")
         else:
             self.put(f"{node.name}")
-
-    def visit_MakeObject(self, node):
-        self.put(f"{type}()")
 
     def visit_LispCall(self, node: ast.LispCall):
         self.put("%(")

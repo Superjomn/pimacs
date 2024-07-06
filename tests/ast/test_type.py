@@ -1,4 +1,6 @@
 import pimacs.ast.type as ty
+from pimacs.ast.ast import *
+from pimacs.sema.context import ModuleContext
 
 
 def test_BasicType():
@@ -45,3 +47,21 @@ def test_GenericType():
     T0_1 = ty.GenericType("T0")
 
     assert T0 is T0_1
+
+
+def test_Type_with_module():
+    ctx = ModuleContext(name="main")
+    module = Module(name=ctx.name, path=None, loc=None)
+
+    T0 = ty.GenericType("T0", module=module)
+    print(T0)
+    assert str(T0) == "main.T0"
+
+    T1 = ty.CompositeType("T1", params=(
+        ty.PlaceholderType("a"),), module=module)
+    print(T1)
+    assert str(T1) == "main.T1[a]"
+
+
+if __name__ == "__main__":
+    test_Type_with_module()

@@ -15,10 +15,11 @@ class Type:
             return super().__new__(cls)
 
     def __init__(self, name, parent=None, params: Optional[Tuple["Type", ...]] = None,
-                 is_concrete=True, is_optional: bool = False):
+                 is_concrete=True, is_optional: bool = False, module=None):
         self.name = name
         self.params = params or tuple()
         self.parent = parent
+        self.module = module
         self._is_concrete = is_concrete
         self._initialized = True
         self._is_optional = is_optional
@@ -74,7 +75,8 @@ class Type:
 
     def __str__(self):
         optional_repr = "?" if self.is_optional else ""
-        return self.name + (f"[{', '.join(str(p) for p in self.params)}]" if self.params else "") + optional_repr
+        module_repr = f"{self.module.name}." if self.module else ""
+        return module_repr + self.name + (f"[{', '.join(str(p) for p in self.params)}]" if self.params else "") + optional_repr
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, Type):
@@ -97,8 +99,8 @@ class BasicType(Type):
 
 
 class CompositeType(Type):
-    def __init__(self, name, parent=None, params: Optional[Tuple[Type, ...]] = None):
-        super().__init__(name, parent, params=params)
+    def __init__(self, name, parent=None, params: Optional[Tuple[Type, ...]] = None, module=None):
+        super().__init__(name, parent, params=params, module=module)
 
     def __hash__(self):
         return super().__hash__()
@@ -108,7 +110,7 @@ class CompositeType(Type):
         return all(param.is_concrete for param in self.params)
 
     def clone_with(self, *params):
-        return type(self)(self.name, self.parent, params)
+        return type(self)(self.name, self.parent, params=params, module=self.module)
 
     def replace_with(self, mapping: Dict[Type, Type]) -> "CompositeType":
         '''
@@ -123,7 +125,7 @@ class CompositeType(Type):
                 param = param.replace_with(mapping)
             the_params.append(param)
 
-        return CompositeType(self.name, self.parent, tuple(the_params))
+        return CompositeType(self.name, self.parent, params=tuple(the_params), module=self.module)
 
     def collect_placeholders(self) -> List["PlaceholderType"]:
         placeholders = []
@@ -168,16 +170,16 @@ class PlaceholderType(Type):
 
 
 class GenericType(Type):
-    def __init__(self, name, parent=None, *params):
-        super().__init__(name, parent, params=params)
+    def __init__(self, name, parent=None, module=None):
+        super().__init__(name, parent, module=module)
 
     def __repr__(self):
         return f"<G: {super().__str__()}>" + ("?" if self._is_optional else "")
 
 
 class FunctionType(Type):
-    def __init__(self, return_type, arg_types: List[Type], params: Optional[Tuple[Type, ...]] = None):
-        super().__init__("Function", params=params)
+    def __init__(self, return_type, arg_types: List[Type], params: Optional[Tuple[Type, ...]] = None, module=None):
+        super().__init__("Function", params=params, module=module)
         self.return_type = return_type
         self.arg_types = arg_types
 
@@ -257,3 +259,9 @@ def get_resultant_type(type1, type2):
         return type1
     else:
         return Unk
+
+
+def get_type(name: str, params: Optional[Tuple[Type, ...]] = None, module=None):
+    if params:
+        return CompositeType(name, params=params, module=module)
+    return GenericType(name, module=module)

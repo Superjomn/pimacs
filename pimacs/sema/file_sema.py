@@ -86,6 +86,9 @@ class FileSema(IRMutator):
 
         self._class_visitor = ClassVisitor(self)
 
+        self._cur_module = ast.Module(name=ctx.name, loc=None, path=None)
+        self._cur_module.ctx = ctx
+
     def __call__(self, node: ast.Node):
         tree = self.visit(node)
         # First turn of type inference

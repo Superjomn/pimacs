@@ -261,7 +261,7 @@ class LispTranslator(ast_visitor.IRMutator):
 
             class_name = obj.type.name
             # treat as class
-            class_node = self.get_class(class_name)
+            class_node = self.get_class(class_name, obj.type.module)
 
             method_name = self.get_mangled_name(node.method, class_node)
             return lisp_ast.List(
@@ -357,7 +357,7 @@ class LispTranslator(ast_visitor.IRMutator):
         class_name = node.type.name
         list_elements = [lisp_ast.VarRef(f"make-{class_name}")]
 
-        class_node = self.get_class(class_name)
+        class_node = self.get_class(class_name, node.type.module)
         for member in class_node.symbols.get_local(ast.Symbol.Kind.Member):
             member_name = member.name
             member_value = self.visit(
@@ -369,8 +369,10 @@ class LispTranslator(ast_visitor.IRMutator):
         ret.loc = node.loc
         return ret
 
-    def get_class(self, name: str) -> ast.AnalyzedClass:
-        class_node = self.ctx.get_symbol(
+    def get_class(self, name: str, module: Optional[ast.Module] = None) -> ast.AnalyzedClass:
+        ctx = self.ctx if not module else module.ctx
+        assert ctx
+        class_node = ctx.get_symbol(
             ast.Symbol(name, ast.Symbol.Kind.Class))
         assert class_node, f"Class {name} not found"
         return class_node

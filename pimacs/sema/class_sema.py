@@ -146,9 +146,11 @@ class ClassVisitor(IRMutator):
             args.append(arg)
 
         if node.template_params:
-            return_type = _ty.CompositeType(node.name, node.template_params)
+            return_type = _ty.get_type(
+                node.name, params=node.template_params, module=self.file_sema._cur_module)
         else:
-            return_type = _ty.GenericType(node.name)  # type: ignore
+            return_type = _ty.get_type(
+                node.name, module=self.file_sema._cur_module)
 
         # TODO: create the body of the constructor
         make_obj_expr = MakeObject(loc=node.loc)
@@ -172,8 +174,9 @@ class ClassVisitor(IRMutator):
         assert init_fn.args[0].name == "self"
         args = init_fn.args[1:]
         body = init_fn.body
-        return_type = _ty.CompositeType(
-            class_node.name, params=class_node.template_params)
+        assert self.file_sema._cur_module
+        return_type = _ty.get_type(
+            class_node.name, params=class_node.template_params, module=self.file_sema._cur_module)
 
         # parepare the body
         # Insert `self = make_object()`
