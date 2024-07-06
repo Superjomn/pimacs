@@ -152,13 +152,18 @@ class NameBinder:
             return False
 
         assert node.obj.type is not None
-        class_symbol = Symbol(
-            name=node.obj.type.name, kind=Symbol.Kind.Class)
 
-        if class_node := self.sym_tbl.global_scope.get(class_symbol):
-            return self.process_class_call_method(node, class_node)
+        if not isinstance(node.obj, ast.Module):
+            module = node.obj.type.module if node.obj.type.module else self.file_sema._cur_module
+            assert module
 
-        if isinstance(node.obj, ast.Module):
+            class_symbol = Symbol(
+                name=node.obj.type.name, kind=Symbol.Kind.Class)
+            # retrieve the class from the module
+            if class_node := module.ctx.symbols.global_scope.get(class_symbol):
+                return self.process_class_call_method(node, class_node)
+
+        else:
             module_symbol = Symbol(
                 name=node.obj.name, kind=Symbol.Kind.Module)
             return self.process_module_call_method(node, node.obj)

@@ -95,6 +95,8 @@ class UCallMethod(Unresolved, Expr):
 
     def _refresh_users(self):
         if self.obj:
+            print(f"refreshing users of {self}, obj: {
+                  self.obj}, type: {type(self.obj)}")
             self.obj.add_user(self)
         for arg in self.args:
             arg.add_user(self)

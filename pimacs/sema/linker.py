@@ -88,6 +88,7 @@ class ModuleMapping:
         assert module_path not in self.mapping, f"Module {
             module_path} already exists."
         module_name = ModuleMapping.get_module_name(module_root, module_path)
+        assert module_name
         self.name_to_root[module_name] = module_root
         logger.debug(f"got module: {module_name} from {module_path}")
         module = Module(name=module_name, path=module_path, loc=None)

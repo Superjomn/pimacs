@@ -50,7 +50,9 @@ class IRPrinter(_IRPrinter):
         self.visit_Class(node)
 
     def visit_MakeObject(self, node):
-        self.put(f"make_obj[{node.type}]()")
+        self.put(f"make_obj[")
+        self.visit_Type(node.type)
+        self.put("]()")
 
     def visit_UCallMethod(self, node):
         if self._mark_unresolved:

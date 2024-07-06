@@ -194,7 +194,7 @@ class IRMutator:
         return tuple([self.visit(_) for _ in node])
 
     def visit_list(self, node: list):
-        return [self.visit(_) for _ in node]
+        return [self.visit(_) for _ in filter(None, node)]
 
     def visit_FileName(self, node: ast.FileName):
         return node

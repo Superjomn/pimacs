@@ -1066,7 +1066,7 @@ class UModule(Unresolved, Expr):
         pass
 
 
-@dataclass
+@dataclass(slots=True, unsafe_hash=True)
 class Module(Expr):
     ''' A module node. '''
     name: str

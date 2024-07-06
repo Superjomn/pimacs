@@ -9,3 +9,6 @@ hello()
 
 # CHECK: (setq a-dict (dict--Dict--))
 var a-dict = Dict[Str, Int]()
+
+# CHECK: (Dict--__setitem__--Dict~K-V.~_K_V "a" 1)
+a-dict.__setitem__("a", 1)
