@@ -436,7 +436,7 @@ class FileSema(IRMutator):
             case ast.UFunction:  # call a global function
                 # Check if the function is imported from another module, and replace the Call with a UCallMethod
                 # The UCallMethod has a support for both Class.method and Module.function
-                # type: ignore
+                assert hasattr(func, "name")
                 if sym := self.sym_tbl.lookup(func.name, [Symbol.Kind.Unk]):
                     if isinstance(sym, ast.UAttr):
                         assert isinstance(sym.value, ast.UModule)
