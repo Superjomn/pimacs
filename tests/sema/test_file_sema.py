@@ -105,6 +105,7 @@ class App:
     var b = 2
 '''
     file = parse_ast(code.rstrip())
+    pprint(file)
     file = perform_sema(ModuleContext(), file)
     print(file)
     class_def = file.stmts[0]
