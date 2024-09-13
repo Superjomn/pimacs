@@ -61,12 +61,13 @@ from .utils import WeakSet
 
 @dataclass
 class Node(ABC):
-    loc: Optional["Location"] = field(repr=False, compare=False)
     # The nodes using this node
     users: WeakSet = field(default_factory=WeakSet,
                            repr=False, init=False, hash=False, compare=False)
     sema_failed: bool = field(
         default=False, init=False, hash=False, repr=False, compare=False)
+
+    loc: Optional["Location"] = field(repr=False, compare=False)
 
     @property
     def resolved(self) -> bool:
