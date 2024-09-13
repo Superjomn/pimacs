@@ -7,7 +7,7 @@ from pimacs.ast.ast_printer import IRPrinter as _IRPrinter
 from .ast import AnalyzedClass, UCallMethod
 
 
-class IRVisitor(ast_visitor.IRVisitor):
+class IRVisitor(ast_visitor.AstVisitor):
     def visit_AnalyzedClass(self, node):
         self.visit_Class(node)
 
@@ -21,7 +21,7 @@ class IRVisitor(ast_visitor.IRVisitor):
         pass
 
 
-class IRMutator(ast_visitor.IRMutator):
+class IRMutator(ast_visitor.AstMutator):
     def visit_AnalyzedClass(self, node):
         return self.visit_Class(node)
 

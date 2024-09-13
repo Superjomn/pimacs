@@ -3,14 +3,14 @@ from io import StringIO
 import pytest
 
 from pimacs.ast.ast_printer import IRPrinter
-from pimacs.ast.ast_visitor import IRVisitor
+from pimacs.ast.ast_visitor import AstVisitor
 from pimacs.ast.parser import get_parser
 from pimacs.codegen.phases import parse_ast
 
 from .code_snippets import snippets
 
 
-class MyIRVisitor(IRVisitor):
+class MyIRVisitor(AstVisitor):
     pass
 
 
