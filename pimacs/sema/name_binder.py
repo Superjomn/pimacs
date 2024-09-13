@@ -176,6 +176,7 @@ class NameBinder:
 
         assert node.obj
         assert node.obj.type is not None
+        assert methods
 
         if method_candidates := methods.lookup(args, template_spec=type_spec):
 
@@ -210,6 +211,7 @@ class NameBinder:
         assert module_node.ctx
         methods = module_node.ctx.symbols.global_scope.get_local(
             FuncSymbol(node.attr))
+
         # TODO: Unify the following code with class method
         if new_node := self._bind_method(node, methods, node.args, node.type_spec):
             new_node.method.module_name = module_node.name

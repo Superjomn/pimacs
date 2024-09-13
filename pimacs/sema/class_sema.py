@@ -93,11 +93,12 @@ class ClassVisitor(IRMutator):
 
         assert self._cur_file
         if overloads is None:
+            pass
             # add a default constructor
-            fn = self.class_create_default_constructor(node)
+            # fn = self.class_create_default_constructor(node)
 
             # append to the file for sema later
-            self._cur_file.stmts.append(fn)
+            # self._cur_file.stmts.append(fn)
         else:
             # add constructor for each __init__ method
             for init_fn in overloads:

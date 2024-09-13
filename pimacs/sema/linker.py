@@ -11,6 +11,7 @@ from tabulate import tabulate
 
 from pimacs.ast.ast import Module, Node
 from pimacs.logger import get_logger
+from pimacs.sema.type_checker import amend_compose_types_with_module
 
 from .context import ModuleContext
 from .file_sema import FileSema
@@ -146,6 +147,8 @@ class FileSemaMapping:
             path = root / path
             logger.debug(f"sema file: {path}")
             ast = parse_ast(file=path)  # type: ignore
+            amend_compose_types_with_module(node=ast, module=module)
+
             # logger.info(f"parse_ast: {path}")
             # pprint(ast)
             sema = FileSema(module.ctx)

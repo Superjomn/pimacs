@@ -34,9 +34,9 @@
    `(,(rx-to-string '(and bol "%" (not (any word "(" "["))))
      0 font-lock-constant-face)
    ;; Function names
-   '("\\<\\([_A-Za-z][A-Za-z0-9_]*\\)(" 1 font-lock-function-name-face)
+   '("\\<\\([_A-Za-z-%][A-Za-z0-9_-]*\\)(" 1 font-lock-function-name-face)
    ;; Variables and parameters
-   '("\\<\\([A-Za-z][A-Za-z0-9_]*\\):" 1 font-lock-variable-name-face)
+   '("\\<\\([A-Za-z-][A-Za-z0-9_-]*\\):" 1 font-lock-variable-name-face)
    ;; Comments
    '("#\\(?:.\\|\n\\)*?$" 0 font-lock-comment-face))
   "Font-lock keywords for `pimacs-mode`.")

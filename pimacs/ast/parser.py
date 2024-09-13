@@ -581,6 +581,16 @@ class PimacsTransformer(Transformer):
                              symbols=symbol, loc=self._get_loc(from_))
         return ret
 
+    def comma_names(self, items):
+        return items
+
+    def from_symbols_decl(self, items):
+        from_, module_, import_, symbols_ = items
+
+        symbols = list(map(lambda x: x.value, symbols_))
+        return ast.ImportDecl(module=module_.value,
+                              symbols=symbols, loc=self._get_loc(from_))
+
     def _force_non_rule(self, items):
         items = [items] if not isinstance(items, list) else items
         trees = list(filter(lambda x: isinstance(x, lark.Tree), items))
