@@ -1,4 +1,3 @@
-
 import pimacs.ast.ast as ast
 import pimacs.ast.type as ty
 from pimacs.logger import get_logger
@@ -6,7 +5,7 @@ from pimacs.logger import get_logger
 logger = get_logger(__name__)
 
 
-class IRVisitor:
+class AstVisitor:
     def visit(self, node: ast.Node | ty.Type | str | None):
         if node is None:
             return
@@ -178,7 +177,7 @@ class IRVisitor:
         pass
 
 
-class IRMutator:
+class AstMutator:
     def visit(self, node: ast.Node | ty.Type | str | None | list | tuple):
         if node is None:
             return

@@ -8,6 +8,9 @@ A DSL with modern features:
 2. Python-like core data structures
 3. class support
 
+* Design
+Pimacs is a transpiler, it parse the Pimacs code, generate AST, and then translate to Emacs Lisp code.
+
 * Syntax
 ** Basic Examples
 *** Builtin constants

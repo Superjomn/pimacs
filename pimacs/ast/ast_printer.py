@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import pimacs.ast.type as ty
 
 from . import ast
-from .ast_visitor import IRVisitor
+from .ast_visitor import AstVisitor
 
 
 class PrinterBase:
@@ -31,7 +31,7 @@ class PrinterBase:
         self._indent -= 1
 
 
-class IRPrinter(IRVisitor, PrinterBase):
+class IRPrinter(AstVisitor, PrinterBase):
 
     def __init__(self, os, mark_unresolved=False) -> None:
         PrinterBase.__init__(self, os)
