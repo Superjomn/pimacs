@@ -66,6 +66,7 @@ class Dict[K, V]:
 
 
 class hash-table[K, V]:
+
     def __getitem__(self, key: K) -> V:
         return %gethash(key, self)
 

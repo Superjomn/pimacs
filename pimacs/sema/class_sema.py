@@ -56,15 +56,24 @@ class ClassVisitor(IRMutator):
                 self.report_error(
                     node, f"Class should be declared in the global scope")
 
+            symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
+            if self.sym_tbl.contains_locally(symbol):
+                self.report_error(node, f"Class {node.name} already exists")
+            # Insert before visit_Class to support class as a type in methods
+            # e.g.
+            # class App:
+            #     def __init__(self) -> App: ...
+            # The App type as a return type should be replaced with the one mapping to the class.
+            placeholder = self.sym_tbl.insert(symbol, node)
+            the_scope = self.sym_tbl.current_scope
+
             with self.sym_tbl.scope_guard(kind=ScopeKind.Class):
                 with self.class_scope_guard(node):
                     node = super().visit_Class(node)
 
-            symbol = Symbol(name=node.name, kind=Symbol.Kind.Class)
-            if self.sym_tbl.contains_locally(symbol):
-                self.report_error(node, f"Class {node.name} already exists")
-
-            node = self.sym_tbl.insert(symbol, node)
+            # Update the placeholder with the real class in the global scope
+            assert self.sym_tbl.current_scope.kind is ScopeKind.Global
+            the_scope.update_local(symbol, node)
 
         # Add constructors to the class into the global scope
         self.class_add_constructors(node)

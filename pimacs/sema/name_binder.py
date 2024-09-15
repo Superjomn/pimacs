@@ -13,8 +13,7 @@ logger = get_logger(__name__)
 class NameBinder:
     '''
     NameBinder is a helper class to bind unresolved names in the AST.
-
-    It will be triggered after the AST finish traversal, and the symbol_table is built.
+    It requires the symbol-table is built before the binding, and the type-checker is ready to resolve the types.
     '''
 
     def __init__(self, file_sema: Any, type_checker: Any):
@@ -26,22 +25,39 @@ class NameBinder:
     def report_error(self, node: ast.Node, message: str):
         self.file_sema.report_error(node, message)
 
+    def collect_newly_resolved(self, node: ast.Node):
+        self.file_sema.collect_newly_resolved(node)
+
     @property
     def sym_tbl(self):
         return self.file_sema.sym_tbl
 
     def __call__(self, node: ast.Node) -> bool:
-        assert node.resolved is False, f"Node {node} is already resolved"
+        assert node.is_resolved() is False, f"Node {node} is already resolved"
         return self.bind_unresolved(node)
 
     def bind_unresolved(self, node: ast.Node) -> bool:
-        if node.resolved:
+        if node.is_resolved():
             return True
 
         method_name = f'visit_{type(node).__name__}'
         if method := self.__dict__.get(method_name):
             return getattr(self, method_name)(node)
         return getattr(self, method_name)(node)
+
+    def visit_VarRef(self, node: ast.VarRef) -> bool:
+        assert node.target and not node.target.is_resolved()
+        if self.bind_unresolved(node.target):
+            self.collect_newly_resolved(node)
+            return True
+        return False
+
+    def visit_VarDecl(self, node: ast.VarDecl) -> bool:
+        assert node.init and not node.init.is_resolved()
+        if self.bind_unresolved(node.init):
+            self.collect_newly_resolved(node)
+            return True
+        return False
 
     def visit_UFunction(self, node) -> bool:
         assert isinstance(node, ast.UFunction)  # pass the typing
@@ -96,12 +112,12 @@ class NameBinder:
         if sym := node.scope.get(symbol):
             node.replace_all_uses_with(sym)
             assert isinstance(sym, ast.VarDecl)
-            self.file_sema.collect_newly_resolved(sym)
+            self.collect_newly_resolved(sym)
             return True
         return False
 
     def visit_UAttr(self, node: ast.UAttr) -> bool:
-        if not node.value.resolved:
+        if not node.value.is_resolved():
             if isinstance(node.value, ast.UVarRef):
                 # UVarRef.scope is left None, since it is created in Lark parser.
                 node.value.scope = node.scope
@@ -144,12 +160,8 @@ class NameBinder:
         if node.obj.type in (None, _ty.Unk):
             node.obj.scope = node.scope  # type: ignore
             if not self.bind_unresolved(node.obj):
-                logger.debug(f"Cannot resolve {node.obj} for node {node}")
                 return False
-
-        # The node still got wrong types, postpone the binding to the next round
-        if node.obj.type in (None, _ty.Unk):
-            return False
+            # node.obj is resolved, and we can continue to resolve the UCallMethod.
 
         assert node.obj.type is not None
 
@@ -258,13 +270,13 @@ class NameBinder:
         logger.debug(f"TODO Bind unresolved class {node}")
         return False
 
-    def visit_UModule(self, node: ast.UModule):
+    def visit_UModule(self, node: ast.UModule) -> ast.Node | None:
         # TODO: This path is deprecated
         if sym := node.scope.get(Symbol(name=node.name, kind=Symbol.Kind.Module)):
-            if sym.resolved:
+            if sym.is_resolved():
                 node.replace_all_uses_with(sym)
                 self.file_sema.collect_newly_resolved(sym)
-                return True
+                return sym
 
         # The actual Module is set directly into the name_to_module
         if node.name in self.name_to_module:

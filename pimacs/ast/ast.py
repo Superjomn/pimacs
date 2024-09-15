@@ -69,18 +69,20 @@ class Node(ABC):
 
     loc: Optional["Location"] = field(repr=False, compare=False)
 
-    @property
-    def resolved(self) -> bool:
-        return True
+    @abstractmethod
+    def is_resolved(self) -> bool:
+        ''' Get whether the node is resolved. '''
+        raise NotImplementedError
 
     def add_user(self, user: "Node"):
+        ''' Add a user to this node. '''
         if user not in self.users:
             self.users.add(user)
 
     def replace_all_uses_with(self, new: "Node"):
-        for user in self.users:
+        ''' Replace all the users of this node with a new node.'''
+        for user in list(self.users):
             user.replace_child(self, new)
-        for user in self.users:
             new.add_user(user)
         self.users.clear()
 
@@ -104,7 +106,7 @@ class Node(ABC):
     @abstractmethod
     def replace_child(self, old, new):
         ''' Replace a child with a new node. '''
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 @dataclass(slots=True)
@@ -128,10 +130,14 @@ class Expr(Node):
     def get_type(self) -> Type:
         return self.type or ty.Unk
 
+    def is_resolved(self) -> bool:
+        return True
+
 
 @dataclass
 class Stmt(Node):
-    pass
+    def is_resolved(self) -> bool:
+        return True
 
 
 @dataclass(slots=True)
@@ -175,7 +181,7 @@ class Location:
 
 
 @dataclass(slots=True, unsafe_hash=True)
-class VarDecl(Stmt, VisiableSymbol):
+class VarDecl(Stmt):
     '''
     VarDecl is a variable declaration, such as `var a: int = 1` or `let a = 1`.
     '''
@@ -204,6 +210,11 @@ class VarDecl(Stmt, VisiableSymbol):
     def _refresh_users(self):
         if self.init:
             self.init.add_user(self)
+
+    def is_resolved(self) -> bool:
+        if self.init is not None:
+            return self.init.is_resolved()
+        return True
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -241,6 +252,9 @@ class VarRef(Expr):
     def _refresh_users(self):
         if self.target:
             self.target.add_user(self)
+
+    def is_resolved(self) -> bool:
+        return self.type is ty.LispType or (self.target is not None and self.target.is_resolved())
 
 
 @dataclass(slots=True, unsafe_hash=True)
@@ -875,6 +889,9 @@ class DocString(Node):
     def replace_child(self, old, new):
         pass
 
+    def is_resolved(self) -> bool:
+        return True
+
 
 @dataclass(slots=True, unsafe_hash=True)
 class Select(Expr):
@@ -936,13 +953,12 @@ class Unresolved:
     # The corresponding scope of the unresolved node is attached for name binding after the context is traversed.
     scope: Any = field(default=None, init=False, repr=False, hash=False)
 
-    @property
-    def resolved(self) -> bool:
+    def is_resolved(self) -> bool:
         return False
 
 
 @dataclass(slots=True, unsafe_hash=True)
-class UVarRef(Unresolved, Expr):
+class UVarRef(Expr, Unresolved):
     ''' Unresolved variable reference, such as `a` in `a.b`. '''
     name: str
     target_type: Type = field(default_factory=lambda: ty.Unk)
@@ -1041,7 +1057,7 @@ class ImportDecl(Stmt):
     e.g. import core as c # => Import(module='core', symbols=[], alias='c')
     '''
     module: str
-    symbols: List[str]
+    entities: List[str]
     alias: str | None = None
 
     def _refresh_users(self):

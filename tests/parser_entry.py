@@ -35,14 +35,14 @@ def parse(filename: str, sema: bool, mark_unresolved: bool, enable_exception: bo
         sema = True
 
     if display_ast:
-        print("AST:\n")
+        print_colored("AST:\n", bcolors.OKGREEN)
         pprint(the_ast)
 
     if sema:
         the_ast = perform_sema(ctx, the_ast)  # type: ignore
 
         if display_ast:
-            print("SEMA:\n")
+            print_colored("SEMA:\n", bcolors.OKGREEN)
             pprint(the_ast)
 
     if the_ast:
@@ -101,11 +101,12 @@ def link(paths: str, target: str, display_ast: bool, modules_to_dump: str) -> No
     for record in linker.mapping.records:
         to_dump = (not modules_to_dump) or record.sema.ctx.name in modules_to_dump
         if display_ast:
-            print(f"{record.sema.ctx.name}:\n\n")
+            print_colored(f"{record.sema.ctx.name}:\n\n", bcolors.OKGREEN)
             pprint(record.ast)
 
         if target in ("lisp_ast", "lisp_code"):
-            print(f"** translate {record.sema.ctx.name} to lisp **")
+            print_colored(
+                f"** translate {record.sema.ctx.name} to lisp **\n", bcolors.OKGREEN)
             ast = translate_to_lisp(record.sema.ctx, record.ast)
             if target == "lisp_ast":
                 if to_dump:

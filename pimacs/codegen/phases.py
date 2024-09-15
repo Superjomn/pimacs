@@ -9,7 +9,6 @@ from pimacs.lisp.translator import LispTranslator
 from pimacs.logger import get_logger
 from pimacs.sema.context import ModuleContext
 from pimacs.sema.file_sema import FileSema
-from pimacs.sema.type_checker import amend_compose_types_with_module
 
 from .codegen import Codegen
 
@@ -51,9 +50,6 @@ def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:
 
     It returns the IR if the semantic analysis succeeds.
     """
-    module = ast.Module(name=ctx.name, path=None, loc=None)
-    amend_compose_types_with_module(module, the_ast)
-
     sema = FileSema(ctx)
 
     the_ir = sema(the_ast)

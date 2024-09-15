@@ -5,16 +5,17 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from pprint import pprint
 from typing import Dict, Iterable, List, Optional
 
 from tabulate import tabulate
 
 from pimacs.ast.ast import Module, Node
 from pimacs.logger import get_logger
-from pimacs.sema.type_checker import amend_compose_types_with_module
 
 from .context import ModuleContext
 from .file_sema import FileSema
+from .utils import bcolors, print_colored
 
 logger = get_logger(__name__)
 
@@ -147,12 +148,11 @@ class FileSemaMapping:
             path = root / path
             logger.debug(f"sema file: {path}")
             ast = parse_ast(file=path)  # type: ignore
-            amend_compose_types_with_module(node=ast, module=module)
 
-            # logger.info(f"parse_ast: {path}")
-            # pprint(ast)
             sema = FileSema(module.ctx)
             ast = sema(ast)
+            # logger.info(f"sema: {path}")
+            # pprint(ast)
 
             self._mapping[path] = FileSemaMapping.Record(sema=sema, ast=ast)
 
@@ -212,5 +212,7 @@ class Linker:
         self.mapping.freeze()
 
         modules = self.mapping.modules
-        for sema in self.mapping.semas:
-            sema.link_modules(modules)
+        for record in self.mapping.records:
+            record.sema.link_modules(modules)
+            print_colored(f"sema: {record.sema.ctx.name}\n", bcolors.OKGREEN)
+            pprint(record.ast)
