@@ -5,7 +5,6 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from pprint import pprint
 from typing import Dict, Iterable, List, Optional
 
 from tabulate import tabulate
@@ -15,7 +14,6 @@ from pimacs.logger import get_logger
 
 from .context import ModuleContext
 from .file_sema import FileSema
-from .utils import bcolors, print_colored
 
 logger = get_logger(__name__)
 
@@ -151,8 +149,6 @@ class FileSemaMapping:
 
             sema = FileSema(module.ctx)
             ast = sema(ast)
-            # logger.info(f"sema: {path}")
-            # pprint(ast)
 
             self._mapping[path] = FileSemaMapping.Record(sema=sema, ast=ast)
 
@@ -214,5 +210,3 @@ class Linker:
         modules = self.mapping.modules
         for record in self.mapping.records:
             record.sema.link_modules(modules)
-            print_colored(f"sema: {record.sema.ctx.name}\n", bcolors.OKGREEN)
-            pprint(record.ast)
