@@ -21,7 +21,7 @@ def find_unresolved_symbols(node) -> Set[ast.Node]:
             return node
 
         def walk_to_node_pre(self, node) -> bool:
-            if isinstance(node, ast.Node) and not node.resolved:
+            if isinstance(node, ast.Node) and not node.is_resolved():
                 self.unresolved_symbols.add(node)
             return True
 
@@ -105,6 +105,7 @@ class App:
     var b = 2
 '''
     file = parse_ast(code.rstrip())
+    pprint(file)
     file = perform_sema(ModuleContext(), file)
     print(file)
     class_def = file.stmts[0]

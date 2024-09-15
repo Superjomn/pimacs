@@ -102,6 +102,9 @@ class Scope:
             record.insert(func)
             self.data[symbol] = record
 
+    def __iter__(self):
+        return iter(self.data.items())
+
     def __contains__(self, symbol: Symbol) -> bool:
         return self.get(symbol) is not None
 

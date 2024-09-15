@@ -338,11 +338,11 @@ class IRPrinter(AstVisitor, PrinterBase):
         self.put(")")
 
     def visit_ImportDecl(self, node: ast.ImportDecl):
-        if not node.symbols:
+        if not node.entities:
             self.put(f"import {node.module}")
             if node.alias:
                 self.put(f" as {node.alias}")
-        elif len(node.symbols) == 1:
-            self.put(f"from {node.module} import {node.symbols[0]}")
+        elif len(node.entities) == 1:
+            self.put(f"from {node.module} import {node.entities[0]}")
         else:
-            self.put(f"from {node.module} import {', '.join(node.symbols)}")
+            self.put(f"from {node.module} import {', '.join(node.entities)}")

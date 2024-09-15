@@ -32,6 +32,10 @@ class Type:
     def is_optional(self) -> bool:
         return self._is_optional
 
+    @is_optional.setter
+    def is_optional(self, v: bool):
+        self._is_optional = v
+
     def get_nosugar_type(self):
         '''
         Get the type without sugar, such as optional.
@@ -87,7 +91,7 @@ class Type:
             self._is_concrete == other._is_concrete
 
     def __hash__(self):
-        return hash((self.name, self.parent, self.params, self._is_concrete))
+        return hash((self.name, self.parent, self.params, self._is_concrete, self.module))
 
 
 class BasicType(Type):

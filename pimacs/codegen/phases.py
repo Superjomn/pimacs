@@ -1,5 +1,4 @@
 from io import StringIO
-from pprint import pprint
 
 from lark import UnexpectedToken
 
@@ -10,7 +9,6 @@ from pimacs.lisp.translator import LispTranslator
 from pimacs.logger import get_logger
 from pimacs.sema.context import ModuleContext
 from pimacs.sema.file_sema import FileSema
-from pimacs.sema.type_checker import amend_placeholder_types
 
 from .codegen import Codegen
 
@@ -43,7 +41,6 @@ def parse_ast(
 
     file = ast.File(stmts=stmts, loc=ast.Location(
         source, 0, 0))  # type: ignore
-    amend_placeholder_types(file)
     return file  # type: ignore
 
 
@@ -54,11 +51,10 @@ def perform_sema(ctx: ModuleContext, the_ast: ast.File) -> ast.File | None:
     It returns the IR if the semantic analysis succeeds.
     """
     sema = FileSema(ctx)
+
     the_ir = sema(the_ast)
     if sema.succeed:
         return the_ir
-
-    pprint(the_ir)
 
     return None
 

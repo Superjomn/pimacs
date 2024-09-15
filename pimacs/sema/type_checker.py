@@ -348,3 +348,38 @@ def amend_placeholder_types(node: ast.Node | List[ast.Node], template_params: Di
             return node
 
     Traversal(Walker()).visit(node)
+
+
+def amend_compose_types_with_module(node: ast.Node | List[ast.Node], module: ast.Module):
+    '''
+    Replace the mistakenly marked type Generic["T"] with PlaceholderType["T"].
+    This should be called before Sema.
+
+    Args:
+        node: The root node of the AST, it should be a templated class or function.
+        template_params: The mapping from the template parameter name to the actual type.
+    '''
+    class Walker(ASTWalker):
+        def overwrite_type(self, type) -> _ty.Type | List[_ty.Type]:
+            if isinstance(type, list):
+                return [self.overwrite_type(t) for t in type]  # type: ignore
+            if type and isinstance(type.get_nosugar_type(), (_ty.GenericType, _ty.CompositeType)):
+                assert False
+                type.module = module
+            return type
+
+        def visit_node(self, node):
+            if hasattr(node, "type"):
+                node.type = self.overwrite_type(node.type)
+            if hasattr(node, "return_type"):
+                node.return_type = self.overwrite_type(node.return_type)
+            return node
+
+        def walk_to_node_pre(self, node) -> bool:  # type: ignore
+            self.visit_node(node)
+            return True
+
+        def walk_to_node_post(self, node):  # type: ignore
+            return node
+
+    Traversal(Walker()).visit(node)

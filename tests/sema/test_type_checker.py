@@ -73,10 +73,8 @@ def foo() -> Int:
 
 
 def test_amend_placeholder_types():
-    ctx = ModuleContext()
     code = '''
-@template[T0, T1]
-def foo(a: T0, b: T1) -> T0:
+def foo[T0, T1](a: T0, b: T1) -> T0:
     var c: T0 = a + b
     return c
 '''
@@ -85,17 +83,8 @@ def foo(a: T0, b: T1) -> T0:
     func: ast.Function = tree.stmts[0]
     pprint(func)
 
-    mapping = {
-        _ty.GenericType('T0'): _ty.PlaceholderType('PT0'),
-        _ty.GenericType('T1'): _ty.PlaceholderType('PT1'),
-    }
-
-    amend_placeholder_types(tree, mapping)
-    print("after")
-    pprint(func)
-
     for arg in func.args:
-        assert isinstance(arg.type, _ty.PlaceholderType)
+        assert isinstance(arg.type, _ty.PlaceholderType), type(arg.type)
     assert isinstance(func.return_type, _ty.PlaceholderType)
     for stmt in func.body.stmts:
         if isinstance(stmt, ast.VarDecl):
@@ -103,7 +92,6 @@ def foo(a: T0, b: T1) -> T0:
 
 
 def test_amend_placeholder_types_class():
-    ctx = ModuleContext()
     code = '''
 @template[T]
 class App:
@@ -114,16 +102,6 @@ class App:
     tree = parse_ast(code.rstrip())
 
     cls: ast.Class = tree.stmts[0]
-    pprint(cls)
-
-    mapping = {
-        _ty.GenericType('T'): _ty.PlaceholderType('PT'),
-        _ty.GenericType('T0'): _ty.PlaceholderType('PT0'),
-        _ty.GenericType('T1'): _ty.PlaceholderType('PT1'),
-    }
-
-    amend_placeholder_types(tree, mapping)
-    print("after")
     pprint(cls)
 
     for method in cls.body:
@@ -152,5 +130,6 @@ def foo[T](a: T) -> T:
 
 
 if __name__ == '__main__':
-    # test_amend_placeholder_types_class()
+    test_amend_placeholder_types_class()
     test_convert_to_template_param_type()
+    test_amend_placeholder_types()

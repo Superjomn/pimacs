@@ -1,5 +1,6 @@
 import os
 from typing import *
+from typing import Any
 
 import lark
 from lark import Lark, Transformer
@@ -31,6 +32,52 @@ def get_parser(code: Optional[str] = None, filename: str = "<pimacs>"):
     )
 
 
+class PlaceholderContextManager:
+    '''
+    PlaceholderContextManager is used to store the placeholder types in the templated class or functions.
+
+    e.g.
+
+    def foo[T0, T1](a: T0, b: T1): ...
+
+    The `T0` and `T1` will be PlaceholderTypes in the manager, and will be used in the function, including the argument
+    list, return-type, and the function body.
+
+    e.g.
+    class App[T0]:
+        def foo[T1, T2](...):
+            var a: T0
+
+    The class's placeholder type `T0` will be stored in the manager, and will be alive in the class's body, and could be
+    used in all the members and methods, so there is a stack to manage the scope of the placeholder types.
+    '''
+
+    def __init__(self):
+        self.stack = []
+
+    def get_placeholder_type(self, name: str) -> Any:
+        for context in reversed(self.stack):
+            if name in context:
+                return context[name]
+        return None
+
+    def add_placeholder_type(self, type_: ty.PlaceholderType):
+        self.current_context[type_.name] = type_
+
+    def push_context(self):
+        self.stack.append({})
+
+    def pop_context(self):
+        self.stack.pop()
+
+    def __bool__(self):
+        return bool(self.stack)
+
+    @property
+    def current_context(self):
+        return self.stack[-1] if self.stack else {}
+
+
 class PimacsTransformer(Transformer):
     ''' This class is used to transform the AST from Lark to Pimacs AST.
     It only perform the transformation, and does not perform any semantic analysis, so lots of
@@ -39,6 +86,10 @@ class PimacsTransformer(Transformer):
 
     def __init__(self, source: ast.PlainCode | ast.FileName):
         self.source = source
+
+        # This is used to store the placeholder types in the templated function, it will be created once got a
+        # placeholder_list, used in the function def, and finally deleted after the function def.
+        self._placeholder_type_context = PlaceholderContextManager()
 
     def file_input(self, items):
         self._force_non_rule(items)
@@ -72,6 +123,10 @@ class PimacsTransformer(Transformer):
             raise Exception(f"{loc}:\nFunction {name} must have a block")
         if isinstance(args, list):
             args = tuple(args)
+
+        # Clear the placeholder types
+        if self._placeholder_type_context:
+            self._placeholder_type_context.pop_context()
 
         return ast.Function(
             name=name, args=args or tuple(), body=block, return_type=type, loc=loc,
@@ -108,14 +163,32 @@ class PimacsTransformer(Transformer):
         return items[0]
 
     def type(self, items):
+        def replace_placeholder_type(type_: ty.Type | Iterable[ty.Type]) -> ty.Type | Iterable[ty.Type]:
+            if isinstance(type_, ty.PlaceholderType):
+                return type_
+            elif isinstance(type_, ty.CompositeType):
+                params = tuple(replace_placeholder_type(
+                    type_.params))  # type: ignore
+                return type_.clone_with(*params)
+            elif isinstance(type_, ty.Type):
+                if placeholder := self._placeholder_type_context.get_placeholder_type(type_.name):
+                    return placeholder
+                return type_
+            return type_
+
         self._force_non_rule(items)
+        is_optional = False
         if len(items) == 1:
-            return items[0]
+            return replace_placeholder_type(items[0])
         elif len(items) == 2:
             if items[1]:
                 if items[1].value == "?":
                     items[0] = items[0].get_optional_type()
-            return items[0]
+                    is_optional = True
+            ret = replace_placeholder_type(items[0])
+            assert isinstance(ret, ty.Type)
+            ret.is_optional = is_optional
+            return ret
         else:
             raise ValueError(f"Unknown type {items}")
 
@@ -430,7 +503,6 @@ class PimacsTransformer(Transformer):
     def decorator(self, items):
         self._force_non_rule(items)
         action = None
-        args = []
         if isinstance(items[0], ast.Call):
             action: ast.Call = items[0]
             loc = action.loc
@@ -481,6 +553,9 @@ class PimacsTransformer(Transformer):
 
     def class_def(self, items):
         self._force_non_rule(items)
+        if self._placeholder_type_context:
+            self._placeholder_type_context.pop_context()
+
         template_params = tuple()
         if len(items) == 2:
             name = items[0].value
@@ -499,7 +574,7 @@ class PimacsTransformer(Transformer):
 
     def class_body(self, items):
         self._force_non_rule(items)
-        return filter(lambda x: x is not None, items)
+        return list(filter(lambda x: x is not None, items))
 
     def STRING(self, items):
         self._force_non_rule(items)
@@ -544,7 +619,22 @@ class PimacsTransformer(Transformer):
 
     def type_placeholders(self, items):
         self._force_non_rule(items)
-        return tuple([ty.PlaceholderType(name=item.value) for item in items])
+
+        # Add a new context for the placeholder-type scope, the function_def or class_def will pop_context later
+        self._placeholder_type_context.push_context()
+        placeholders = []
+        for item in items:
+            if isinstance(item, Token):
+                item = ty.PlaceholderType(name=item.value)
+            self._add_placeholder_type(item)
+            placeholders.append(item)
+        return tuple(placeholders)
+
+    def _add_placeholder_type(self, placeholder: ty.PlaceholderType):
+        assert isinstance(placeholder, ty.PlaceholderType)
+        assert not self._placeholder_type_context.get_placeholder_type(
+            placeholder.name), f"Placeholder {placeholder.name} already exists"
+        self._placeholder_type_context.add_placeholder_type(placeholder)
 
     def type_placeholder_list(self, items):
         self._force_non_rule(items)
@@ -578,8 +668,18 @@ class PimacsTransformer(Transformer):
             alias = items[5].value
 
         ret = ast.ImportDecl(module=module_name, alias=alias,
-                             symbols=symbol, loc=self._get_loc(from_))
+                             entities=symbol, loc=self._get_loc(from_))
         return ret
+
+    def comma_names(self, items):
+        return items
+
+    def from_symbols_decl(self, items):
+        from_, module_, import_, symbols_ = items
+
+        symbols = list(map(lambda x: x.value, symbols_))
+        return ast.ImportDecl(module=module_.value,
+                              entities=symbols, loc=self._get_loc(from_))
 
     def _force_non_rule(self, items):
         items = [items] if not isinstance(items, list) else items

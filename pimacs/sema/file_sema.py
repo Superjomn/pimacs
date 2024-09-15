@@ -41,29 +41,30 @@ def get_common_type(left: _ty.Type, right: _ty.Type):
 
 class FileSema(IRMutator):
     """
-    Performing Sema on a single File which is actually a module.
-    During Sema, it will resolve the symbols in the module, and type-infer the types of the nodes.
+    Performs Semantic Analysis (Sema) on a single File, which is treated as a module.
+    During Sema, symbols within the module are resolved, and types of the nodes are inferred.
 
-    The algorithm for resolving symbols(NameBinder) is as follows:
-    1. Doing a bottom-up traversal of the AST
-        a. It will insert the resolved sybmols into the symbol table, such as VarDecl, Function, Class, etc.
-        b. It will collect the unresolved symbols such as UVarRef, UAttr, UFunction, UClass, etc, ideally these symbols
-              should be resolved in the subsequent turn of name binding.
-    2. For the unresolved symbols, it will try to bind them eagerly until no more symbols are resolved. This is done by
-        the `NameBinder`.
+    The symbol resolution algorithm (NameBinder) follows these steps:
+    1. Bottom-up traversal of the Abstract Syntax Tree (AST):
+       - Inserts resolved symbols (e.g., VarDecl, Function, Class) into the symbol table.
+       - Collects unresolved symbols (e.g., UVarRef, UAttr, UFunction, UClass), which are ideally resolved in subsequent
+        name binding iterations.
 
-    The algorithm for type-check(TypeChecker) is as follows:
-    1. For any newly resolved symbols, it will try to type-infer them.
-        a. It will first try to infer the type in an forward-push way, which means it will try to infer the children's
-            types. For instance, a VarDecl(init=Literal(1)), it will start from the VarDecl node, and recursively arrive
-            on the Literal node and update its type to Int.
-        b. Once any node's type is inferred, it will try to infer the parent's type in a backward-push way. For instance,
-            a VarDecl(init=Literal(1)), after the Literal's type is inferred, it will try to infer the VarDecl's type.
+    2. For unresolved symbols, attempts to bind them eagerly until no more symbols are resolved.
 
-    These two algorithms will be triggered in a chain, for example, once a symbol is newly resolved, it will trigger the
-    type-checking, and got a valid type, and all its users' types could be inferred. And once a node's type is inferred,
-    it could help name binding, for instance, a UAttr(node=self, attr="name"), once the type of self is inferred to some
-    Class, the attr could be resolved to a member of the Class.
+    The type-checking algorithm (TypeChecker) is as follows:
+    1. For newly resolved symbols, attempts to infer types:
+       - First, it infers the children's types in a forward-push manner. For example, in a `VarDecl(init=Literal(1))`,
+         it starts from the `VarDecl`, arrives recursively at the `Literal` node, and updates its type to `Int`.
+       - Once a node's type is inferred, it attempts to infer the parent's type in a backward-push manner. For example,
+         in `VarDecl(init=Literal(1))`, after the `Literal` node's type is inferred, it attempts to infer the `VarDecl`
+         node's type.
+
+    These two algorithms are interconnected and triggered in a chain:
+    1. Once a symbol is newly resolved, it triggers type-checking and may infer valid types or help infer the types
+       of its users.
+    2. Once a node's type is inferred, it can aid in symbol resolution. For instance, a `UAttr(node=self, attr="name")`
+       node can resolve `attr` to a member of a class once `self` is inferred to be a class.
     """
 
     # NOTE, the ir nodes should be created when visited.
@@ -106,6 +107,8 @@ class FileSema(IRMutator):
             remaining = self.bind_unresolved_symbols()
             # TODO: Unify the check_type timing
             self.check_type()
+        assert remaining == 0, f"Failed to resolve {
+            remaining} symbols:\n{self._unresolved_symbols}"
 
     def visit(self, node):
         node = super().visit(node)
@@ -130,7 +133,7 @@ class FileSema(IRMutator):
         Collect the unresolved symbol node for the second turn of name binding after the first AST traversal is done.
         '''
         logger.debug(f"Collect unresolved symbol {node}")
-        assert node.resolved is False, f"{node} is already resolved"
+        assert node.is_resolved() is False, f"{node} is already resolved"
         # bind scope for second-turn name binding
         node.scope = self.sym_tbl.current_scope  # type: ignore
         self._unresolved_symbols.add(node)
@@ -141,7 +144,7 @@ class FileSema(IRMutator):
         '''
         # Since the IRMutator cannot get parent in a single visit method, we need to collect the newly resolved
         # symbols and type-infer them in the next turn. The type-infer will trigger in chain.
-        if (not node.sema_failed) and node.resolved:
+        if (not node.sema_failed) and node.is_resolved():
             self._newly_resolved_symbols.add(node)
 
     def link_modules(self, modules: List[ast.Module]):
@@ -177,25 +180,25 @@ class FileSema(IRMutator):
         if node.module == self.ctx.name:
             self.report_error(node, f"Cannot import the current module itself")
 
-        if node.symbols:
-            if len(node.symbols) != len(set(node.symbols)):
+        if node.entities:
+            if len(node.entities) != len(set(node.entities)):
                 self.report_error(
                     node, f"Duplicate symbols in import statement")
 
         # insert new symbols
         module_node = ast.UModule(name=node.module, loc=node.loc)
-        if not node.symbols:
+        if not node.entities:
             # `import a-module` or `import a-module as xx`
             alias = node.alias if node.alias else node.module
             self.sym_tbl.insert(
                 Symbol(name=alias, kind=Symbol.Kind.Module), module_node)
 
-        elif len(node.symbols) == 1:
+        elif len(node.entities) == 1:
             # `from a-module import a-symbol` or `from a-module import a-symbol as xx`
-            alias = node.alias if node.alias else node.symbols[0]
+            alias = node.alias if node.alias else node.entities[0]
             module_node = ast.UModule(name=node.module, loc=node.loc)
             symbol_node = ast.UAttr(value=module_node,
-                                    attr=node.symbols[0], loc=node.loc)
+                                    attr=node.entities[0], loc=node.loc)
 
             self.sym_tbl.insert(
                 Symbol(name=alias, kind=Symbol.Kind.Unk), symbol_node)
@@ -203,7 +206,7 @@ class FileSema(IRMutator):
 
         else:
             # `from a-module import a-symbol1, a-symbol2`
-            for symbol in node.symbols:
+            for symbol in node.entities:
                 symbol_node = ast.UAttr(
                     value=module_node, attr=symbol, loc=node.loc)
                 self.sym_tbl.insert(
@@ -270,6 +273,7 @@ class FileSema(IRMutator):
 
     def visit_VarDecl(self, node: ast.VarDecl):
         node = super().visit_VarDecl(node)
+
         if self.sym_tbl.current_scope.kind is ScopeKind.Class:
             # Declare a member
             symbol = Symbol(name=node.name, kind=Symbol.Kind.Member)
@@ -301,6 +305,11 @@ class FileSema(IRMutator):
                 node.type = node.init.get_type()
                 return node
             else:
+                # Update the type to a local-defined class eagerly.
+                # e.g.
+                # `var a: App` will be converted to `var a: my-model.App`
+                node.type = self.attach_type(node.type)
+
                 if not self.type_checker.convert_type(node.init.get_type(), node.type):
                     if is_unk(node.init.get_type()):
                         logger.warning(
@@ -332,6 +341,16 @@ class FileSema(IRMutator):
             )
             return node
         return node
+
+    def attach_type(self, _type: _ty.Type) -> _ty.Type:
+        ''' Get a type instance from the symbol-table. '''
+        # Try to retrieve a class from the symbol table with the given name
+        class_symbol = Symbol(name=_type.name, kind=Symbol.Kind.Class)
+        if class_ := self.sym_tbl.lookup(class_symbol):
+            # TODO: Consider the type placeholders
+            _type.module = self._cur_module
+            return _type
+        return _type
 
     def visit_Function(self, node: ast.Function):
         with self.cur_func_guard(node):
@@ -409,6 +428,7 @@ class FileSema(IRMutator):
                     f"Function which returns non-nil values should set return type",
                 )
         elif node.body.return_type and node.body.return_type is not _ty.Nil:
+            node.return_type = self.attach_type(node.return_type)
             if not self.type_checker.convert_type(node.body.return_type, node.return_type):
                 self.report_error(
                     node,
@@ -655,6 +675,7 @@ class FileSema(IRMutator):
         return node
 
     def visit_UAttr(self, node: ast.UAttr):
+        # Resolve the value of the UAttr first
         if isinstance(node.value, ast.UVarRef):
             node.value = self.visit_UVarRef(node.value)
             if node.value is None:
@@ -662,11 +683,14 @@ class FileSema(IRMutator):
                 self.report_error(node, f"Cannot resolve {node.value}")
         elif isinstance(node.value, (ast.VarRef, ast.VarDecl, ast.Arg)):
             pass
+        elif isinstance(node.value, ast.UModule):
+            node.value = self.visit(node.value)
         else:
             raise NotImplementedError(
                 f"UAttr: {node}, type: {type(node.value)}")
 
-        if not node.value.resolved:
+        # Get the attribute.
+        if not node.value.is_resolved():
             self.sym_tbl.print_summary()
             self_arg = self.sym_tbl.lookup(
                 Symbol(name=node.value.name, kind=Symbol.Kind.Arg))
@@ -709,7 +733,7 @@ class FileSema(IRMutator):
     utypes = ast.UVarRef | ast.UAttr | ast.UFunction | ast.UClass
 
     def bind_unresolved(self, node: ast.Node) -> bool:
-        if node.resolved:
+        if node.is_resolved():
             return True
         return self.name_binder(node)
 

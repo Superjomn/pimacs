@@ -1,6 +1,6 @@
 import a-module
 from a-module import hello
-from dict import Dict
+from dict import Dict, hash-table
 
 # CHECK: (a-module--hello--)
 a-module.hello()
@@ -12,3 +12,7 @@ var a-dict = Dict[Str, Int]()
 
 # CHECK: (Dict--__setitem__--Dict~K-V.~_K_V "a" 1)
 a-dict.__setitem__("a", 1)
+
+
+var b-dict = hash-table[Str, Int]()
+b-dict.__setitem__("a", 1)

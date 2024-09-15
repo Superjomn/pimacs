@@ -28,6 +28,10 @@ class Pet:
     var name: Str
     var age: Int
 
+    def __init__(self, name: Str, age: Int):
+        self.name = name
+        self.age = age
+
     def hello(self):
         # CHECK: %(message "%s" self.name)
         %message("%s", self.name)

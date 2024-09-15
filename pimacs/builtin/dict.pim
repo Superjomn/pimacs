@@ -63,3 +63,19 @@ class Dict[K, V]:
         "Update the dictionary with the key/value pairs from other, overwriting existing keys."
         # TODO support lambda, map
         return
+
+
+class hash-table[K, V]:
+
+    def __getitem__(self, key: K) -> V:
+        return %gethash(key, self)
+
+    def __setitem__(self, key: K, value: V):
+        %puthash(key, value, self)
+
+    def __contains__(self, key: K) -> bool:
+        return %not(%eq(%gethash(key, self, %'no-value), %'no-value))
+
+
+def hash-table[K, V]() -> hash-table[K, V]:
+    return %make-hash-table(%:test, %'equal)

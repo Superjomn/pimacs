@@ -14,6 +14,10 @@ class Node:
     loc: Optional[ast.Location] = field(
         compare=False, repr=False, init=False, default=None)
 
+    def add_user(self, user: "Node"):
+        # To adapt the interface of the AST nodes.
+        pass
+
 
 @dataclass(slots=True)
 class Module(Node):

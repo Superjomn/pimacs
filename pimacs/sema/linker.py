@@ -146,8 +146,7 @@ class FileSemaMapping:
             path = root / path
             logger.debug(f"sema file: {path}")
             ast = parse_ast(file=path)  # type: ignore
-            # logger.info(f"parse_ast: {path}")
-            # pprint(ast)
+
             sema = FileSema(module.ctx)
             ast = sema(ast)
 
@@ -209,5 +208,5 @@ class Linker:
         self.mapping.freeze()
 
         modules = self.mapping.modules
-        for sema in self.mapping.semas:
-            sema.link_modules(modules)
+        for record in self.mapping.records:
+            record.sema.link_modules(modules)
