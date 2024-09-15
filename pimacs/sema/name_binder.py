@@ -270,7 +270,7 @@ class NameBinder:
         logger.debug(f"TODO Bind unresolved class {node}")
         return False
 
-    def visit_UModule(self, node: ast.UModule) -> ast.Node | None:
+    def visit_UModule(self, node: ast.UModule) -> bool:
         # TODO: This path is deprecated
         if sym := node.scope.get(Symbol(name=node.name, kind=Symbol.Kind.Module)):
             if sym.is_resolved():

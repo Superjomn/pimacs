@@ -362,7 +362,7 @@ def amend_compose_types_with_module(node: ast.Node | List[ast.Node], module: ast
     class Walker(ASTWalker):
         def overwrite_type(self, type) -> _ty.Type | List[_ty.Type]:
             if isinstance(type, list):
-                return [self.overwrite_type(t) for t in type]
+                return [self.overwrite_type(t) for t in type]  # type: ignore
             if type and isinstance(type.get_nosugar_type(), (_ty.GenericType, _ty.CompositeType)):
                 assert False
                 type.module = module
