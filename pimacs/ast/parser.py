@@ -167,7 +167,9 @@ class PimacsTransformer(Transformer):
             if isinstance(type_, ty.PlaceholderType):
                 return type_
             elif isinstance(type_, ty.CompositeType):
-                return type_.clone_with(replace_placeholder_type(type_.params))
+                params = tuple(replace_placeholder_type(
+                    type_.params))  # type: ignore
+                return type_.clone_with(*params)
             elif isinstance(type_, ty.Type):
                 if placeholder := self._placeholder_type_context.get_placeholder_type(type_.name):
                     return placeholder
