@@ -51,7 +51,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 import pimacs.ast.type as ty
 from pimacs.ast.type import Type
@@ -85,14 +85,6 @@ class Node(ABC):
             user.replace_child(self, new)
             new.add_user(user)
         self.users.clear()
-
-    def get_updated_type(self, old: ty.Type, mapping: Dict[ty.Type, ty.Type]) -> ty.Type:
-        if isinstance(old, ty.PlaceholderType):
-            if target := mapping.get(old, None):
-                return target
-        elif isinstance(old, ty.CompositeType):
-            return old.replace_with(mapping)
-        return old
 
     @contextmanager
     def write_guard(self):
@@ -1093,6 +1085,8 @@ class Module(Expr):
         from pimacs.sema.context import ModuleContext
         self.ctx: Optional[ModuleContext] = None
         self.type = ty.ModuleType
+        if self.path:
+            self.path = self.path.resolve()
 
     def _refresh_users(self):
         pass
@@ -1103,7 +1097,17 @@ class Module(Expr):
 
 @dataclass
 class TPAssumption:
-    ''' TampletePlaceholder assumptions. '''
+    ''' TampletePlaceholder assumptions.
+    When the template placeholder is used, the type is assumed to be the given type.
+
+    e.g.
+    def foo[T0, T1](a:T0, b:T1):
+        return a + b
+
+    The `a + b` adds an assumption that T0 could be converted to T1, the Sema will add a TpAssumption, and when the foo
+    is used with specific types, the Sema will check the assumption instead of performing a complete type check on the
+    function's body again.
+    '''
     reasion: str
     # The target type to check
     param_type: List[ty.PlaceholderType]

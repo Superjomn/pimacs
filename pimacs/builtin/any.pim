@@ -1,0 +1,22 @@
+class Any:
+    "A type that can be any type.
+    This is useful for type hinting when the type is not known at compile time."
+
+    @ignore-type-check
+    @compile-time
+    def as-int(self) -> Int:
+        return self
+
+    def as-float(self) -> Float:
+        return self
+
+    def as-str(self) -> Str:
+        return self
+
+    def as[T]() -> T:
+        return self
+
+class Any_:
+    "A type that can be any type.
+    This adds a type check compared to `any`."
+    def as_int(self) -> Int:

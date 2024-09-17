@@ -1,6 +1,6 @@
 import a-module
 from a-module import hello
-from dict import Dict, hash-table
+from dict import Dict, dico bs0]t
 
 # CHECK: (a-module--hello--)
 a-module.hello()
