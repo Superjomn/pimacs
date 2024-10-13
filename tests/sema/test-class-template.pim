@@ -1,28 +1,28 @@
 class List[T]:
     var list: Lisp
 
-    def __init__(self):
+    fun __init__(self):
         self.list = %list()
 
-    def __init__(self, list:Lisp):
+    fun __init__(self, list:Lisp):
         self.list = list
 
-    def append(self, v: T):
+    fun append(self, v: T):
         %push(v, self.list)
 
-    def __getitem__(self, idx: Int) -> T:
+    fun __getitem__(self, idx: Int) -> T:
         return %nth(self.list, idx)
 
     # This tests operation with two templated objects
-    # CHECK: def __add__ (self :List[T], other :List[T]) -> List[T]:
+    # CHECK: fun __add__ (self :List[T], other :List[T]) -> List[T]:
     # CHECK-NEXT: return List[T](%(append self.list other.__aslisp__()))
-    def __add__(self, other: List[T]) -> List[T]:
+    fun __add__(self, other: List[T]) -> List[T]:
         return List[T](%append(self.list, other.__aslisp__()))
 
-    def size(self) -> Int:
+    fun size(self) -> Int:
         return %length(self.list)
 
-    def __aslisp__(self) -> Lisp:
+    fun __aslisp__(self) -> Lisp:
         return self.list
 
 # CHECK: var a :List[Int] = List[Int]()
@@ -35,8 +35,8 @@ var a-size = a.size()
 # CHECK: var a-item :Int = a.__getitem__(0)
 var a-item = a.__getitem__(0)
 
-# The Sema will create default constructors for classes
-# CHECK: def List[T] () -> List[T]:
+# The Sema will create fun constructors for classes
+# CHECK: fun List[T] () -> List[T]:
 # CHECK-NEXT:     var self :List[T] = make_obj[List[T]]()
 # CHECK-NEXT:     self.list = %(list)
 # CHECK-NEXT:     return self

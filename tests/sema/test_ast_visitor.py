@@ -34,12 +34,12 @@ def test_IRPrinter_func():
     assert (
         output.strip()
         == """
-def hello-0 (name :Str) -> nil:
+fun hello-0 (name :Str) -> nil:
     var a :Unk = "Hello " + name
     print("hello %s", a)
 
 
-def fib (n :Int) -> Int:
+fun fib (n :Int) -> Int:
     if n <= 1:
         return n
 
@@ -56,7 +56,7 @@ def fib (n :Int) -> Int:
             """
 @some-decorator(100, 200)
 @interactive("P:")
-def hello (name :Str) -> nil:
+fun hello (name :Str) -> nil:
     print("Hello %s", name)
 """,
         ),
@@ -64,7 +64,7 @@ def hello (name :Str) -> nil:
             "decorator_case",
             """
 @interactive
-def hello (name :Str) -> nil:
+fun hello (name :Str) -> nil:
     print("Hello %s", name)
 """,
         ),
@@ -86,26 +86,26 @@ class Person:
     var name :Str
     var age :Int
 
-    def __init__ (self, name :Str, age :Int) -> nil:
+    fun __init__ (self, name :Str, age :Int) -> nil:
         self.name = name
         self.age = age
 
 
-    def get-name (self) -> Str:
+    fun get-name (self) -> Str:
         return self.name
 
 
-    def get-age (self) -> Int:
+    fun get-age (self) -> Int:
         return self.age
 """,
         ),
         (
             "func_with_docstring_case",
             """
-def hello (name :Str) -> nil:
+fun hello (name :Str) -> nil:
     "Some docs"
     return
-        """,
+""",
         ),
     ],
 )

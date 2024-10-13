@@ -28,7 +28,7 @@ var a: Int = 1
 
 def test_Function():
     code = '''
-def min(a:Int, b:Int) -> Int:
+fun min(a:Int, b:Int) -> Int:
     return a if a < b else b
     '''
 

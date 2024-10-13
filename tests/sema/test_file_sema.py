@@ -70,7 +70,7 @@ a = 2'''
 def test_UVarRefScope():
     code = '''
 var a = 1
-def foo():
+fun foo():
     a = 2'''
 
     file = parse_ast(code)
@@ -85,7 +85,7 @@ def foo():
 
 def test_func_binding():
     code = '''
-def foo():
+fun foo():
     return
 
 foo()'''
@@ -124,7 +124,7 @@ class App:
     var a: T0
     var b: T1
 
-    def __init__(self, a: T0, b: T1):
+    fun __init__(self, a: T0, b: T1):
         self.a = a
         self.b = b
 

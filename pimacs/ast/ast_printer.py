@@ -85,7 +85,7 @@ class IRPrinter(AstVisitor, PrinterBase):
         if node.decorators:
             self.put_indent()
 
-        self.put(f"def {node.name}")
+        self.put(f"fun {node.name}")
         self.print_template_params(node.template_params)
         self.put(" (")
         if node.args:

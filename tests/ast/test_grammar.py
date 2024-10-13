@@ -7,7 +7,7 @@ parser = get_parser()
 
 def test_basic():
     basic_code = """
-def hello-world(name:Str) -> nil:
+fun hello-world(name:Str) -> nil:
     print("Hello, world!")
 """
     for token in lark_parser.lex(basic_code):
@@ -30,17 +30,17 @@ var c = nil
 
 def test_function_def():
     code = """
-def hello-world(name:Str):
+fun hello-world(name:Str):
     return
 
-def hello-world(name:Str, age:Int):
+fun hello-world(name:Str, age:Int):
     return
 
-def hello-world(name:Str, age:Int) -> nil:
+fun hello-world(name:Str, age:Int) -> nil:
     # some comment
     return
 
-def hello-world(name:Str, age:Int) -> nil:
+fun hello-world(name:Str, age:Int) -> nil:
     "Some docs"
     # some comment
     return format("Hello %s, age: %d", name, age)
@@ -117,17 +117,17 @@ var c: MyType[Int, MyType[Float, Bool]]
 def test_decorator():
     code = """
 @decorator
-def hello-world():
+fun hello-world():
     return
 
 @decorator(1, 2, 3)
 @decorator1
 @decorator2
-def hello-world():
+fun hello-world():
     return
 
 @template [ T ]
-def templated_fn(a: T):
+fun templated_fn(a: T):
     return
 """
     for token in lark_parser.lex(code):
