@@ -63,11 +63,11 @@ else:
 ### Declare a function
 ```python
 # Note, all the arguments and return types of a function must be explicitly declared
-def foo(x: Int, y: Int) -> Int:
+fun foo(x: Int, y: Int) -> Int:
     return x + y
 
 # Declare a templated function
-def foo[T](x: T, y: T) -> T:
+fun foo[T](x: T, y: T) -> T:
     return x
 ```
 
@@ -79,11 +79,11 @@ class Point:
     var y: Int
 
     # The constructor is similar to Python's.
-    def __init__(self, x: Int, y: Int):
+    fun __init__(self, x: Int, y: Int):
         self.x = x
         self.y = y
 
-    def move(self, dx: Int, dy: Int):
+    fun move(self, dx: Int, dy: Int):
         self.x += dx
         self.y += dy
 
@@ -95,16 +95,16 @@ Separate Constructor to power OOP wrapper for existing Emacs Lisp functions.
 ```python
 class hash-table[K, V]:
 
-    def __getitem__(self, key: K) -> V:
+    fun __getitem__(self, key: K) -> V:
         return %gethash(key, self)
 
-    def __setitem__(self, key: K, value: V):
+    fun __setitem__(self, key: K, value: V):
         %puthash(key, value, self)
 
-    def __contains__(self, key: K) -> bool:
+    fun __contains__(self, key: K) -> bool:
         return %not(%eq(%gethash(key, self, %'no-value), %'no-value))
 
-def hash-table[K, V]() -> hash-table[K, V]:
+fun hash-table[K, V]() -> hash-table[K, V]:
     return %make-hash-table(%:test, %'equal)
 ```
 
