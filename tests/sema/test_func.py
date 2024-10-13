@@ -97,7 +97,7 @@ def test_func_sig():
 def test_func_sig_template():
     code = '''
 @template[T0, T1]
-def foo(x: T0, y: T1) -> T0:
+fun foo(x: T0, y: T1) -> T0:
     return x
 
 var a = foo(1, 2)

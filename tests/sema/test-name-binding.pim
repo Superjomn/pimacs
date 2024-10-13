@@ -15,28 +15,28 @@ let a-float = 1.0
 var c = foo(a-int, a-float)
 
 
-def foo() -> Int:
+fun foo() -> Int:
     return 1
 
-def foo(a: Int) -> Float:
+fun foo(a: Int) -> Float:
     return 1.0
 
-def foo(a: Int, b :Float) -> Float:
+fun foo(a: Int, b :Float) -> Float:
     return a-float
 
 class Pet:
     var name: Str
     var age: Int
 
-    def __init__(self, name: Str, age: Int):
+    fun __init__(self, name: Str, age: Int):
         self.name = name
         self.age = age
 
-    def hello(self):
+    fun hello(self):
         # CHECK: %(message "%s" self.name)
         %message("%s", self.name)
 
-    def get-age(self) -> Int:
+    fun get-age(self) -> Int:
         return self.age
 
 # CHECK: var a-pet :Pet = Pet("hello", 1)
@@ -49,13 +49,13 @@ var age-2 = a-pet.get-age()
 # CHECK-NEXT: a-pet.hello()
 a-pet.hello()
 
-def foo-2[T0, T1](a:T0, b:T1) -> T0:
+fun foo-2[T0, T1](a:T0, b:T1) -> T0:
     return a + b + 1
 
 # CHECK: var call-foo-2 :Int = foo-2(1, 2)
 var call-foo-2 = foo-2(1, 2)
 
-def min[T](a: T, b: T) -> T:
+fun min[T](a: T, b: T) -> T:
     return a if a < b else b
 
 var ab = min(1, 2)

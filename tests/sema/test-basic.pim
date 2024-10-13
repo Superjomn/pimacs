@@ -1,31 +1,31 @@
-# CHECK: def foo () -> Nil:
-def foo():
+# CHECK: fun foo () -> Nil:
+fun foo():
     # CHECK-NEXT: var a0 :Int = 0
     var a0: Int = 0
     var a1 = 0
     var a2: Int
 
-# CHECK: def basic-types () -> Nil:
+# CHECK: fun basic-types () -> Nil:
 # CHECK-NEXT: var a :List[Int]
 # CHECK-NEXT: var b :Set[Int]
 # CHECK-NEXT: var c :Dict[Str, Int]
-def basic-types():
+fun basic-types():
     var a: [Int] # list
     var b: {Int} # set
     var c: {Str : Int} # dict
 
-# CHECK: def basic-control-flow (a :Int, b :Int) -> Int:
-def basic-control-flow(a:Int, b:Int) -> Int:
+# CHECK: fun basic-control-flow (a :Int, b :Int) -> Int:
+fun basic-control-flow(a:Int, b:Int) -> Int:
     # CHECK-NEXT: return a if a > b else b
     return a if a > b else b
 
-# CHECK: def basic-emacs-call (name :Str, age :Int) -> Nil:
-def basic-emacs-call(name:Str, age:Int) -> Nil:
+# CHECK: fun basic-emacs-call (name :Str, age :Int) -> Nil:
+fun basic-emacs-call(name:Str, age:Int) -> Nil:
     # CHECK-NEXT: %(message %(format-string "name: %s, age: %s" name age))
     %message(%format-string("name: %s, age: %s", name, age))
 
-# CHECK: def basic-if-else (v :Int) -> Nil:
-def basic-if-else(v: Int):
+# CHECK: fun basic-if-else (v :Int) -> Nil:
+fun basic-if-else(v: Int):
     if v < 0:
         %message("v < 0")
     # CHECK: elif v < 10:
@@ -43,8 +43,8 @@ class Fruit:
     var -weight: Int
     var -name: Str
 
-    # CHECK: def __init__ (self :Fruit, name :Str, size :Int) -> Nil:
-    def __init__(self, name:Str, size:Int):
+    # CHECK: fun __init__ (self :Fruit, name :Str, size :Int) -> Nil:
+    fun __init__(self, name:Str, size:Int):
         # CHECK-NEXT: var self :Fruit = make_obj[Fruit]()
         # CHECK-NEXT: self.-name = name
         self.-name = name
@@ -52,36 +52,36 @@ class Fruit:
         self.-size = size
 
     @property
-    def name(self) -> Str:
+    fun name(self) -> Str:
         return self.-name
 
     @property
-    def size(self) -> Int:
+    fun size(self) -> Int:
         return self.-size
 
 let apple = Fruit("Apple", 12)
 
 @pub
-def pub-foo():
+fun pub-foo():
     return
 
 # CHECK: @pub(tolisp = "basic-module-foo")
 @pub(tolisp = "basic-module-foo")
-# CHECK-NEXT: def pub-foo-renamed () -> Nil:
-def pub-foo-renamed():
+# CHECK-NEXT: fun pub-foo-renamed () -> Nil:
+fun pub-foo-renamed():
     return
 
 @pub
 let pub-var = 0
 
 # Function Overloadding
-def foo0 ():
+fun foo0 ():
     return
 
-def foo0 (x :Int) -> Int:
+fun foo0 (x :Int) -> Int:
     return 0
 
-def foo0 (x: Int, y: Int) -> Int:
+fun foo0 (x: Int, y: Int) -> Int:
     return 0
 
 let call-foo0 = foo0()
@@ -95,6 +95,6 @@ let call-foo0-2 = foo0(1, 2)
 @pub(tolisp = "basic-module-pub-var")
 let pub-var-1 = 0
 
-# CHECK: def ty_foo[T0, T1] (a :T0, b :T1) -> T0:
-def ty_foo[T0, T1](a: T0, b: T1) -> T0:
+# CHECK: fun ty_foo[T0, T1] (a :T0, b :T1) -> T0:
+fun ty_foo[T0, T1](a: T0, b: T1) -> T0:
     return

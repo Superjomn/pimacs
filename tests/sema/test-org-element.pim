@@ -8,7 +8,7 @@ class OrgElement:
 
     @pub
     @property
-    def content(self) -> Str:
+    fun content(self) -> Str:
         "Get the content of the element."
         # CHECK: let begin :Int = %(org-element-property %:contents-begin self.elem)
         let begin: Int = %org-element-property(%:contents-begin, self.elem)

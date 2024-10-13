@@ -49,7 +49,7 @@ type_placeholder_list: "[" type_placeholders "]"
 type_placeholders: NAME ("," NAME)*
 
 // function related
-func_def: "def" NAME type_placeholder_list? "(" [func_args] ")" ["->" type] ":" block
+func_def: "fun" NAME type_placeholder_list? "(" [func_args] ")" ["->" type] ":" block
 func_args: func_arg ("," func_arg)*
 func_arg: NAME [":" type] ["=" expr]
 

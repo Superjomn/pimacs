@@ -45,7 +45,7 @@ var a = foo()
 var b = a
 var c = a + b
 
-def foo() -> Int:
+fun foo() -> Int:
     return 1
     '''
     tree = parse_ast(code.rstrip())
@@ -61,7 +61,7 @@ def test_call_conflict():
     ctx = ModuleContext(enable_exception=True)
     code = '''
 var a: Bool = foo()
-def foo() -> Int:
+fun foo() -> Int:
     return 1
 '''
     tree = parse_ast(code.rstrip())
@@ -74,7 +74,7 @@ def foo() -> Int:
 
 def test_amend_placeholder_types():
     code = '''
-def foo[T0, T1](a: T0, b: T1) -> T0:
+fun foo[T0, T1](a: T0, b: T1) -> T0:
     var c: T0 = a + b
     return c
 '''
@@ -96,7 +96,7 @@ def test_amend_placeholder_types_class():
 @template[T]
 class App:
     @template[T0, T1]
-    def foo(a: T0, b: T1) -> T:
+    fun foo(a: T0, b: T1) -> T:
         return a + b
 '''
     tree = parse_ast(code.rstrip())
@@ -113,7 +113,7 @@ class App:
 def test_convert_to_template_param_type():
     ctx = ModuleContext()
     code = '''
-def foo[T](a: T) -> T:
+fun foo[T](a: T) -> T:
     var b = a + 1
     return a + b
 '''

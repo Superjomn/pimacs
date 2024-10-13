@@ -1,5 +1,5 @@
 # CHECK-LABEL: (defun a-module--hello-- ()
 # CHECK:          (cl-block hello
 # CHECK-NEXT:       (message "Hello world")))
-def hello():
+fun hello():
     %message("Hello world")
