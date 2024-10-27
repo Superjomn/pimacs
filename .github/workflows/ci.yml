@@ -33,7 +33,7 @@ jobs:
 
       - name: mypy
         run: |
-          mypy . --exclude ./pimacs/sema/ast_walker.py
+          mypy .
 
       - name: Test with pytest
         run: |
