@@ -128,6 +128,36 @@ foo()
 gloo()
 ```
 
+## Examples
+The examples locates in `./examples`, to run the example, let's take `./basic.pim` for instance, the command is like `./script/pimacs_entry.py transpile ./basic.pim`, and you will get the transpiled elisp code:
+
+``` emacs-lisp
+(setq a 1)
+
+(defun add--Int_Int (a b)
+  (cl-block add
+    (cl-return-from add (+ a b))))
+
+(setq c (add--Int_Int a 2))
+
+(message "Hell world")
+
+(cl-defstruct Fruit name weight)
+
+(defun create-apple-- ()
+  (cl-block create-apple
+    (let (apple)
+      (setq apple (Fruit--Str_Int "Apple" 12)))))
+
+(defun Fruit--Str_Int (name weight)
+  (cl-block Fruit
+    (let (self)
+      (setq self (make-Fruit :name nil :weight nil))
+      (setf (Fruit-name self) name)
+      (setf (Fruit-weight self) weight)
+      (cl-return-from Fruit self))))
+```
+
 ## Contributing
 
 Contributions are welcome! If you encounter any issues or have suggestions for improvements, please open an issue or submit a pull request.
