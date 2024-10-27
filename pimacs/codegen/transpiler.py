@@ -64,9 +64,11 @@ class Transpiler:
 
         code_modules = []
 
+        assert target.module_path is not None
         linker.add_module_path(target.module_path, target.root)
 
         for module in self._builtin_modules:
+            assert module.module_path is not None
             linker.add_module_path(module.module_path, module.root)
 
         linker()

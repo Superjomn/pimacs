@@ -17,7 +17,7 @@
   "Syntax table for `pimacs-mode`.")
 
 (setq pimacs-keywords
-      '("def" "class" "var" "let" "return" "if" "else" "while" "for" "in"))
+      '("fun" "class" "var" "let" "return" "if" "else" "while" "for" "in"))
 (setq pimacs-builtin-type-keywords
       '("Int" "Float" "Str" "Dict" "List" "Tuple" "Any"))
 
@@ -49,7 +49,7 @@
       (beginning-of-line)
       (skip-chars-forward " \t")
       (cond
-       ((looking-at-p "def[ \t]*\\([^)]+\\)") (setq indent-level 4))
+       ((looking-at-p "fun[ \t]*\\([^)]+\\)") (setq indent-level 4))
        ((looking-at-p "class[ \t]*\\([^)]+\\)") (setq indent-level 4))
        ((looking-at-p "if[ \t]*\\([^)]+\\)") (setq indent-level 4))
        ((looking-at-p "else[ \t]*\\([^)]+\\)") (setq indent-level 4))

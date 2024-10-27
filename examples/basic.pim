@@ -1,0 +1,25 @@
+# Define a variable
+var a = 1
+
+# Define a function
+fun add(a:Int, b:Int) -> Int:
+    return a + b
+
+# Call a function
+var c = add(a, 2)
+
+# Use an emacs-lisp symbol, e.g. message
+%message("Hell world")
+
+# Define a class with methods, this will translate to a native cl-defstruct
+class Fruit:
+  var name: Str
+  var weight: Int
+
+  fun __init__(self, name: Str, weight: Int):
+      self.name = name
+      self.weight = weight
+
+# Create an instance
+fun create-apple () -> Nil:
+    var apple = Fruit("Apple", 12)
